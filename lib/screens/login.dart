@@ -26,7 +26,12 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
+    print('=== INICIANDO LOGIN ===');
+    print('Usuario: ${_usernameController.text}');
+    print('Contraseña: ${_passwordController.text}');
+
     if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
+      print('Error: Campos vacíos');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Por favor completa todos los campos')),
       );
@@ -36,6 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
+      print('Realizando petición a: http://$baseUrl/api/v1/auth/login');
       final response = await http.post(
         Uri.parse('http://$baseUrl/api/v1/auth/login'),
         headers: {'Content-Type': 'application/json'},
@@ -45,45 +51,61 @@ class _LoginScreenState extends State<LoginScreen> {
         }),
       );
 
+      print('Respuesta recibida - Código: ${response.statusCode}');
+      print('Headers: ${response.headers}');
+      print('Body: ${response.body}');
+
       final responseBody = json.decode(response.body);
 
       if (response.statusCode == 200 && responseBody['code'] == 200) {
         final token = response.headers['tokenauth'];
+        print('Token recibido: $token');
 
         if (token != null) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('tokenauth', token);
+          print('Token almacenado en SharedPreferences');
 
+          print('Navegando a HomeScreen');
+          // En el método de login exitoso:
           Navigator.pushNamedAndRemoveUntil(
             context,
             AppRoutes.navigation,
             (route) => false,
             arguments: {
               'username': responseBody['usuario'][0]['nombreCompleto'],
-              'rol': responseBody['usuario'][0]['roles'].isNotEmpty
-                  ? responseBody['usuario'][0]['roles'][0]
-                  : 'sin_rol',
+              'rol':
+                  responseBody['usuario'][0]['roles'].isNotEmpty
+                      ? responseBody['usuario'][0]['roles'][0]
+                      : 'sin_rol',
               'userId': responseBody['usuario'][0]['idusuarios'],
-              'userType': responseBody['usuario'][0]['tipoUsuario']
+              'userType': responseBody['usuario'][0]['tipoUsuario'],
             },
           );
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: Colors.green,
-              content: Text('Bienvenido ${responseBody['usuario'][0]['nombreCompleto']}'),
+              content: Text(
+                'Bienvenido ${responseBody['usuario'][0]['nombreCompleto']}',
+              ),
             ),
           );
         } else {
+          print('Error: Token no encontrado en headers');
           throw Exception('Token no encontrado en los headers');
         }
       } else {
-        final errorMessage = responseBody['Error']?['Message'] ??
+        // Modificación aquí para extraer el mensaje correctamente
+        final errorMessage =
+            responseBody['Error']?['Message'] ??
             responseBody['message'] ??
             'Error desconocido';
+        print('Error en respuesta del servidor: $errorMessage');
         throw Exception(errorMessage);
       }
     } catch (e) {
+      print('Excepción capturada: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceAll('Exception: ', '')),
@@ -95,6 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+      print('=== FIN DEL PROCESO DE LOGIN ===');
     }
   }
 
@@ -102,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
-    
+
     return Scaffold(
       body: Stack(
         children: [
@@ -111,10 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
               gradient: LinearGradient(
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
-                colors: [
-                  Color(0xFFF0EFFF),
-                  Colors.white,
-                ],
+                colors: [Color(0xFFF0EFFF), Colors.white],
               ),
             ),
             child: SafeArea(
@@ -146,11 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Image.asset(
-          'assets/finora_hzt.png',
-          height: 100,
-          fit: BoxFit.contain,
-        ),
+        Image.asset('assets/finora_hzt.png', height: 100, fit: BoxFit.contain),
         const SizedBox(height: 50),
         _buildTextField(
           label: 'Usuario',
@@ -202,7 +218,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return StatefulBuilder(
       builder: (context, setState) {
         bool obscurePassword = isPassword;
-        
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -223,32 +239,38 @@ class _LoginScreenState extends State<LoginScreen> {
               textInputAction: textInputAction,
               decoration: InputDecoration(
                 prefixIcon: Icon(icon, color: Colors.grey[500]),
-                suffixIcon: isPassword
-                    ? IconButton(
-                        icon: Icon(
-                          obscurePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          color: Colors.grey[500],
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            obscurePassword = !obscurePassword;
-                          });
-                        },
-                      )
-                    : null,
+                suffixIcon:
+                    isPassword
+                        ? IconButton(
+                          icon: Icon(
+                            obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: Colors.grey[500],
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              obscurePassword = !obscurePassword;
+                            });
+                          },
+                        )
+                        : null,
                 filled: true,
                 fillColor: Colors.white,
-                contentPadding:
-                    const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 16,
+                ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: Colors.grey[300]!, width: 1.5),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF5162F6), width: 2),
+                  borderSide: const BorderSide(
+                    color: Color(0xFF5162F6),
+                    width: 2,
+                  ),
                 ),
                 hintText: 'Ingrese su ${label.toLowerCase()}',
                 hintStyle: TextStyle(color: Colors.grey[400]),

@@ -1,8 +1,10 @@
+import 'package:finora_app/screens/creditos.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'constants/routes.dart';
 import 'providers/theme_provider.dart';
+import 'package:finora_app/screens/home.dart';
 
 class NavigationScreen extends StatefulWidget {
   final String username;
@@ -25,7 +27,7 @@ class NavigationScreen extends StatefulWidget {
 class _NavigationScreenState extends State<NavigationScreen> {
   int _selectedIndex = 0;
   late List<NavigationItem> _navigationItems;
-  
+
   @override
   void initState() {
     super.initState();
@@ -35,38 +37,19 @@ class _NavigationScreenState extends State<NavigationScreen> {
   void _initNavigationItems() {
     _navigationItems = [
       NavigationItem(
-        title: 'Dashboard',
-        icon: Icons.dashboard_outlined,
-        selectedIcon: Icons.dashboard,
-        screen: _buildPlaceholderScreen('Dashboard'),
+        title: 'Home',
+        icon: Icons.home,
+        selectedIcon: Icons.home,
+        screen: HomeScreen(username: widget.username, tipoUsuario: widget.rol),
       ),
-    ];
-
-    // Añade elementos de navegación basados en el rol del usuario
-    if (widget.rol == 'administrador' || widget.rol == 'superadmin') {
-      _navigationItems.addAll([
-        NavigationItem(
-          title: 'Usuarios',
-          icon: Icons.people_outline,
-          selectedIcon: Icons.people,
-          screen: _buildPlaceholderScreen('Usuarios'),
-        ),
-        NavigationItem(
-          title: 'Configuración',
-          icon: Icons.settings_outlined,
-          selectedIcon: Icons.settings,
-          screen: _buildPlaceholderScreen('Configuración'),
-        ),
-      ]);
-    }
-
-    // Elementos comunes para todos los roles
-    _navigationItems.addAll([
       NavigationItem(
         title: 'Créditos',
         icon: Icons.account_balance_wallet_outlined,
         selectedIcon: Icons.account_balance_wallet,
-        screen: _buildPlaceholderScreen('Créditos'),
+        screen: SeguimientoScreenMobile(
+          username: widget.username,
+          tipoUsuario: widget.rol,
+        ),
       ),
       NavigationItem(
         title: 'Pagos',
@@ -80,7 +63,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         selectedIcon: Icons.bar_chart,
         screen: _buildPlaceholderScreen('Reportes'),
       ),
-    ]);
+    ];
   }
 
   Widget _buildPlaceholderScreen(String title) {
@@ -107,36 +90,50 @@ class _NavigationScreenState extends State<NavigationScreen> {
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('tokenauth');
-    
+
     Navigator.pushNamedAndRemoveUntil(
-      context, 
-      AppRoutes.login, 
-      (route) => false
+      context,
+      AppRoutes.login,
+      (route) => false,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    bool isLargeScreen = MediaQuery.of(context).size.width > 600;
+    final currentScreenTitle = _navigationItems[_selectedIndex].title;
+    final size = MediaQuery.of(context).size;
+    final bool isSmallScreen = size.width < 600;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Finora'),
+        title: Row(
+          children: [
+            // Logo o título principal
+            Expanded(
+              child: Text(
+                currentScreenTitle,
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
         actions: [
-          // Botón para cambiar entre modo claro/oscuro
           IconButton(
-            icon: Icon(themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            icon: Icon(
+              themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+            ),
             onPressed: () {
-              
-            }
+              themeProvider.toggleDarkMode(!themeProvider.isDarkMode);
+            },
           ),
-          // Menú de usuario
           PopupMenuButton<String>(
             icon: CircleAvatar(
               backgroundColor: Theme.of(context).primaryColor,
               child: Text(
-                widget.username.isNotEmpty ? widget.username[0].toUpperCase() : 'U',
+                widget.username.isNotEmpty
+                    ? widget.username[0].toUpperCase()
+                    : 'U',
                 style: TextStyle(color: Colors.white),
               ),
             ),
@@ -145,131 +142,60 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 _logout();
               }
             },
-            itemBuilder: (BuildContext context) => [
-              PopupMenuItem<String>(
-                value: 'profile',
-                child: ListTile(
-                  leading: Icon(Icons.person),
-                  title: Text(widget.username),
-                  subtitle: Text(widget.rol),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem<String>(
-                value: 'logout',
-                child: ListTile(
-                  leading: Icon(Icons.logout),
-                  title: Text('Cerrar sesión'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ],
+            itemBuilder:
+                (BuildContext context) => [
+                  PopupMenuItem<String>(
+                    value: 'profile',
+                    child: ListTile(
+                      leading: Icon(Icons.person),
+                      title: Text(widget.username),
+                      subtitle: Text(widget.rol),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'logout',
+                    child: ListTile(
+                      leading: Icon(Icons.logout),
+                      title: Text('Cerrar sesión'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
           ),
           SizedBox(width: 10),
         ],
       ),
-      // Mostrar un drawer en pantallas pequeñas o botones de navegación lateral en pantallas grandes
-      drawer: isLargeScreen ? null : _buildDrawer(),
-      // Contenido principal
-      body: Row(
-        children: [
-          // Navegación lateral para pantallas grandes
-          if (isLargeScreen) _buildSideNavigation(),
-          // Contenido principal
-          Expanded(
-            child: _navigationItems[_selectedIndex].screen,
-          ),
-        ],
-      ),
-      // Barra de navegación inferior para pantallas pequeñas
-      bottomNavigationBar: isLargeScreen ? null : _buildBottomNavBar(),
-    );
-  }
-
-  Widget _buildDrawer() {
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          UserAccountsDrawerHeader(
-            accountName: Text(widget.username),
-            accountEmail: Text(widget.rol),
-            currentAccountPicture: CircleAvatar(
-              backgroundColor: Colors.white,
-              child: Text(
-                widget.username.isNotEmpty ? widget.username[0].toUpperCase() : 'U',
-                style: TextStyle(fontSize: 24, color: Colors.blue),
-              ),
-            ),
-          ),
-          ..._navigationItems.map((item) => ListTile(
-            leading: Icon(
-              _selectedIndex == _navigationItems.indexOf(item)
-                ? item.selectedIcon
-                : item.icon,
-            ),
-            title: Text(item.title),
-            selected: _selectedIndex == _navigationItems.indexOf(item),
-            onTap: () {
-              setState(() {
-                _selectedIndex = _navigationItems.indexOf(item);
-              });
-              Navigator.pop(context); // Cierra el drawer
-            },
-          )).toList(),
-          Divider(),
-          ListTile(
-            leading: Icon(Icons.logout),
-            title: Text('Cerrar sesión'),
-            onTap: _logout,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSideNavigation() {
-    return NavigationRail(
-      selectedIndex: _selectedIndex,
-      onDestinationSelected: (int index) {
-        setState(() {
-          _selectedIndex = index;
-        });
-      },
-      labelType: NavigationRailLabelType.all,
-      destinations: _navigationItems
-          .map((item) => NavigationRailDestination(
-                icon: Icon(item.icon),
-                selectedIcon: Icon(item.selectedIcon),
-                label: Text(item.title),
-              ))
-          .toList(),
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      elevation: 6,
+      body: _navigationItems[_selectedIndex].screen,
+      bottomNavigationBar: _buildBottomNavBar(),
     );
   }
 
   Widget _buildBottomNavBar() {
-    // Si hay muchos elementos, mostramos solo los primeros 5 en el bottom bar
-    List<NavigationItem> visibleItems = _navigationItems.length > 5
-        ? _navigationItems.sublist(0, 5)
-        : _navigationItems;
-        
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+
     return BottomNavigationBar(
-      currentIndex: _selectedIndex > visibleItems.length - 1 ? 0 : _selectedIndex,
+      currentIndex: _selectedIndex,
       onTap: (index) {
         setState(() {
           _selectedIndex = index;
         });
       },
       type: BottomNavigationBarType.fixed,
-      items: visibleItems
-          .map((item) => BottomNavigationBarItem(
-                icon: Icon(item.icon),
-                activeIcon: Icon(item.selectedIcon),
-                label: item.title,
-              ))
-          .toList(),
+      backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+      selectedItemColor: Theme.of(context).primaryColor,
+      unselectedItemColor: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+      items:
+          _navigationItems
+              .map(
+                (item) => BottomNavigationBarItem(
+                  icon: Icon(item.icon),
+                  activeIcon: Icon(item.selectedIcon),
+                  label: item.title,
+                ),
+              )
+              .toList(),
     );
   }
 }
