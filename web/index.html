@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -18,21 +19,66 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+
+  <meta name="description" content="Tu asistente financiero para controlar gastos e ingresos.">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <!-- iOS meta tags & icons -->
-  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="finora_app">
+
+  <!-- CAMBIAR ESTO: Usa el nombre de tu app. -->
+  <meta name="apple-mobile-web-app-title" content="Finora">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" href="favicon.png" />
 
-  <title>finora_app</title>
+  <!-- CAMBIAR ESTO: Usa el nombre de tu app. -->
+  <title>Finora</title>
   <link rel="manifest" href="manifest.json">
+  <meta id="theme-color-meta" name="theme-color" content="#F9FAFC">
+
 </head>
+
 <body>
   <script src="flutter_bootstrap.js" async></script>
+
+  <script>
+    function updatePwaThemeColor(color) {
+      document.getElementById('theme-color-meta').setAttribute('content', color);
+    }
+
+    // Variable global para guardar la referencia al nuevo Service Worker.
+    let newWorker;
+
+    // 1. Definimos una función que Flutter podrá llamar.
+    //    Esta función será llamada desde Dart para mostrar el SnackBar de actualización.
+    window.showUpdateSnackbar = (event) => {
+      // Cuando el Service Worker nos notifica, no hacemos nada directamente.
+      // En su lugar, guardamos la referencia al nuevo worker.
+      newWorker = event.detail;
+
+      // Disparamos un evento personalizado que nuestra app de Flutter puede escuchar.
+      // Esto es más limpio que llamar directamente a una función de Dart.
+      document.dispatchEvent(new CustomEvent('new-version-ready'));
+    };
+
+    // 2. Escuchamos el evento 'NewServiceWorker' que el Service Worker de Flutter emite.
+    //    Cuando se detecta una nueva versión lista, llamamos a nuestra función puente.
+    window.addEventListener('NewServiceWorker', window.showUpdateSnackbar);
+
+
+    // 3. Definimos la función que activará la actualización.
+    //    Flutter llamará a esta función cuando el usuario presione el botón "Actualizar".
+    window.activateNewWorker = () => {
+      if (newWorker) {
+        // Le decimos al nuevo Service Worker que se salte la espera y se active ahora.
+        newWorker.postMessage({ type: 'SKIP_WAITING' });
+      }
+    };
+  </script>
 </body>
+
 </html>

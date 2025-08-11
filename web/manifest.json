@@ -1,11 +1,11 @@
 {
-    "name": "finora_app",
-    "short_name": "finora_app",
+    "name": "Finora App",
+    "short_name": "Finora",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
+    "background_color": "#0D1015",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Tu asistente financiero para controlar tu financiera.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

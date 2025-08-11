@@ -1,10 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:finora_app/constants/colors.dart';
 import 'package:finora_app/ip.dart';
 import 'package:finora_app/providers/theme_provider.dart';
+import 'package:finora_app/screens/login.dart';
+import 'package:finora_app/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../utils/app_logger.dart';
+
 
 class HomeScreen extends StatefulWidget {
   final String username;
@@ -25,46 +32,40 @@ class _HomeScreenState extends State<HomeScreen> {
   bool isLoading = true;
   String errorMessage = '';
   bool _isRefreshing = false;
+  final ApiService _apiService = ApiService();
+
+  final AppColors colors = AppColors();
 
   @override
   void initState() {
     super.initState();
-    _fetchHomeData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _apiService.setContext(context);
+      _fetchHomeData();
+    });
   }
 
-  Future<void> _fetchHomeData() async {
-    if (!mounted) return;
-
+   Future<void> _fetchHomeData() async {
+    if(!mounted) return;
     setState(() {
-      _isRefreshing = true;
+      isLoading = true;
+      errorMessage = '';
     });
 
-    final Uri url = Uri.parse('http://$baseUrl/api/v1/home');
-    try {
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
-      if (!mounted) return;
+    final response = await _apiService.get<HomeData>(
+      '/api/v1/home',
+      parser: (json) => HomeData.fromJson(json),
+    );
 
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = json.decode(response.body);
-        setState(() {
-          homeData = HomeData.fromJson(responseData);
-          isLoading = false;
-          _isRefreshing = false;
-          errorMessage = '';
-        });
-      } else {
-        setState(() {
-          errorMessage = 'Error del servidor: ${response.statusCode}';
-          isLoading = false;
-          _isRefreshing = false;
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
+    if (mounted) {
       setState(() {
-        errorMessage = 'Error de conexión';
         isLoading = false;
-        _isRefreshing = false;
+        if (response.success) {
+          homeData = response.data;
+          AppLogger.log('📦 Datos cargados correctamente');
+        } else {
+          errorMessage = response.error ?? 'Error desconocido';
+        }
       });
     }
   }
@@ -73,11 +74,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
+    colors.setDarkMode(isDarkMode);
     final size = MediaQuery.of(context).size;
     final bool isSmallScreen = size.width < 600;
 
     return Scaffold(
-      backgroundColor: isDarkMode ? Colors.grey[900] : const Color(0xFFF7F8FA),
+      backgroundColor: colors.backgroundPrimary,
       body: RefreshIndicator(
         onRefresh: _fetchHomeData,
         child: _buildBody(isSmallScreen),
@@ -85,40 +87,41 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // CAMBIO 1: Envuelto en SingleChildScrollView para evitar overflow.
   Widget _buildBody(bool isSmallScreen) {
     return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: isSmallScreen ? 12.0 : 16.0,
-          vertical: 12.0,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            welcomeCard(),
-            const SizedBox(height: 16),
-            _buildSummaryHeader(),
-            const SizedBox(height: 12),
-            Expanded(child: statCardsList(isSmallScreen)),
-          ],
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: isSmallScreen ? 12.0 : 24.0, // Más padding en desktop
+            vertical: 12.0,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              welcomeCard(),
+              const SizedBox(height: 24),
+              _buildSummaryHeader(),
+              const SizedBox(height: 16),
+              // CAMBIO 2: Se quitó el Expanded. El GridView ahora tomará su tamaño natural.
+              statCardsList(isSmallScreen),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildSummaryHeader() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.isDarkMode;
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           'Resumen',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 20, // Un poco más grande
             fontWeight: FontWeight.bold,
-            color: isDarkMode ? Colors.white : Colors.black87,
+            color: colors.textPrimary,
           ),
         ),
         if (_isRefreshing)
@@ -137,8 +140,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget welcomeCard() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.isDarkMode;
     final size = MediaQuery.of(context).size;
     final bool isSmallScreen = size.width < 600;
 
@@ -149,28 +150,21 @@ class _HomeScreenState extends State<HomeScreen> {
         width: double.infinity,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              isDarkMode ? Colors.blueGrey[800]! : Color(0xFF6A88F7),
-              isDarkMode ? Colors.blueGrey[900]! : Color(0xFF5162F6),
-            ],
-          ),
+          gradient: colors.homeWelcomeGradient,
         ),
-        padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+        padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Icon(Icons.waving_hand_rounded, color: Colors.white, size: 24),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Flexible(
                   child: Text(
                     "Hola, ${widget.username}!",
                     style: TextStyle(
-                      fontSize: isSmallScreen ? 20 : 22,
+                      fontSize: isSmallScreen ? 20 : 24,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
@@ -179,7 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text(
               "Bienvenido a tu panel de control",
               style: TextStyle(
@@ -187,7 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: Colors.white.withOpacity(0.9),
               ),
             ),
-            SizedBox(height: 4),
+            const SizedBox(height: 4),
             Text(
               DateFormat('EEEE, d MMMM yyyy', 'es').format(DateTime.now()),
               style: TextStyle(
@@ -203,7 +197,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget statCardsList(bool isSmallScreen) {
     if (isLoading && !_isRefreshing) {
-      return const Center(child: CircularProgressIndicator());
+      // Un poco de padding para que el loader no esté pegado al borde
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
     }
 
     if (errorMessage.isNotEmpty) {
@@ -211,79 +211,111 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
-            SizedBox(height: 16),
+            Icon(Icons.error_outline, size: 48, color: colors.homeErrorIcon),
+            const SizedBox(height: 16),
             Text(
               errorMessage,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16),
+              style: const TextStyle(fontSize: 16),
             ),
-            SizedBox(height: 24),
+            const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: _fetchHomeData,
-              icon: Icon(Icons.refresh),
-              label: Text('Reintentar'),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
             ),
           ],
         ),
       );
     }
 
-    // Adaptar la cuadricula según el tamaño de la pantalla
-    final crossAxisCount = isSmallScreen ? 2 : 3;
-    final childAspectRatio = isSmallScreen ? 1.0 : 1.2;
+    // Usaremos LayoutBuilder para una mejor responsividad
+      // Usamos LayoutBuilder para tomar decisiones basadas en el ancho real
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      // Definimos nuestros breakpoints y configuraciones
+      final double width = constraints.maxWidth;
+      int crossAxisCount;
+      double childAspectRatio;
 
-    return GridView.count(
-      crossAxisCount: crossAxisCount,
-      childAspectRatio: childAspectRatio,
-      crossAxisSpacing: isSmallScreen ? 8 : 12,
-      mainAxisSpacing: isSmallScreen ? 8 : 12,
-      children: [
-        _buildStatCard(
-          title: 'Créditos Activos',
-          value: homeData?.creditosActFin.first.creditos_activos ?? '0',
-          icon: Icons.group_work_rounded,
-          color: const Color(0xFF5162F6),
-          isSmallScreen: isSmallScreen,
-        ),
-        _buildStatCard(
-          title: 'Créditos Finalizados',
-          value: homeData?.creditosActFin.first.creditos_finalizados ?? '0',
-          icon: Icons.check_circle_rounded,
-          color: const Color(0xFF6BC950),
-          isSmallScreen: isSmallScreen,
-        ),
-        _buildStatCard(
-          title: 'Grupos Individuales',
-          value: homeData?.gruposIndGrupos.first.grupos_individuales ?? '0',
-          icon: Icons.person,
-          color: const Color(0xFF4ECDC4),
-          isSmallScreen: isSmallScreen,
-        ),
-        _buildStatCard(
-          title: 'Grupos Grupales',
-          value: homeData?.gruposIndGrupos.first.grupos_grupales ?? '0',
-          icon: Icons.group,
-          color: const Color(0xFF4ECDC4),
-          isSmallScreen: isSmallScreen,
-        ),
-        _buildStatCard(
-          title: 'Acumulado Semanal',
-          value:
-              '\$${formatearNumero(double.tryParse(homeData?.sumaPagos.first.sumaDepositos ?? '0') ?? 0.0)}',
-          icon: Icons.payments,
-          color: const Color(0xFFFF6B6B),
-          isSmallScreen: isSmallScreen,
-        ),
-      ],
-    );
-  }
+      if (width < 700) {
+        // --- BREAKPOINT 1: MÓVIL ---
+        // Pantallas pequeñas (móviles en vertical)
+        crossAxisCount = 2;
+        childAspectRatio = 1.0; // Tarjetas casi cuadradas, se ve bien
+      } else if (width < 1100) {
+        // --- BREAKPOINT 2: TABLET / LAPTOP PEQUEÑA ---
+        // Este es el que resuelve tu problema principal.
+        // Mantiene 3 columnas pero con una proporción que las hace más anchas.
+        crossAxisCount = 3;
+        childAspectRatio = 1.25; // Hacemos las tarjetas más anchas que altas
+      } else {
+        // --- BREAKPOINT 3: DESKTOP GRANDE ---
+        // Aprovechamos todo el espacio para poner las 5 tarjetas en una fila.
+        crossAxisCount = 5;
+        childAspectRatio = 1.1; // Ajustamos la proporción para 5 columnas
+      }
+
+      return GridView.count(
+        crossAxisCount: crossAxisCount,
+        childAspectRatio: childAspectRatio,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        shrinkWrap: true, // Crucial para que funcione dentro de SingleChildScrollView
+        physics: const NeverScrollableScrollPhysics(), // El scroll lo maneja el padre
+        children: [
+          _buildStatCard(
+            title: 'Créditos Activos',
+            value: homeData?.creditosActFin.first.creditos_activos ?? '0',
+            icon: Icons.group_work_rounded,
+            color: AppColors.statCardCreditos,
+            isSmallScreen: isSmallScreen,
+          ),
+          _buildStatCard(
+            title: 'Créditos Finalizados',
+            value: homeData?.creditosActFin.first.creditos_finalizados ?? '0',
+            icon: Icons.check_circle_rounded,
+            color: AppColors.statCardSuccess,
+            isSmallScreen: isSmallScreen,
+          ),
+          _buildStatCard(
+            title: 'Créditos Individuales',
+            value: (homeData?.gruposIndGrupos.isNotEmpty ?? false)
+                ? homeData!.gruposIndGrupos.first.creditos_individuales ?? '0'
+                : '0',
+            icon: Icons.person,
+            color: AppColors.statCardTeal,
+            isSmallScreen: isSmallScreen,
+          ),
+          _buildStatCard(
+            title: 'Créditos Grupales',
+            value: (homeData?.gruposIndGrupos.isNotEmpty ?? false)
+                ? homeData!.gruposIndGrupos.first.creditos_grupales ?? '0'
+                : '0',
+            icon: Icons.group,
+            color: AppColors.statCardTeal,
+            isSmallScreen: isSmallScreen,
+          ),
+          _buildStatCard(
+            title: 'Acumulado Semanal',
+            value:
+                '\$${formatearNumero(double.tryParse(homeData?.sumaPagos.first.sumaDepositos ?? '0') ?? 0.0)}',
+            icon: Icons.payments,
+            color: AppColors.statCardPayments,
+            isSmallScreen: isSmallScreen,
+          ),
+        ],
+      );
+    },
+  );
+}
 
   String formatearNumero(double numero) {
-    final formatter = NumberFormat("#,##0.00", "en_US"); // Formato español
+    final formatter = NumberFormat("#,##0.00", "en_US");
     return formatter.format(numero);
   }
 
+  // CAMBIO 3: El contenido se ve mejor ahora que la tarjeta no se estira
   Widget _buildStatCard({
     required String title,
     required String value,
@@ -291,15 +323,12 @@ class _HomeScreenState extends State<HomeScreen> {
     required Color color,
     required bool isSmallScreen,
   }) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.isDarkMode;
-
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), // Bordes más redondeados
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -308,18 +337,18 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween, // Esto ahora se ve bien
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: color, size: isSmallScreen ? 24 : 28),
+            Icon(icon, color: color, size: isSmallScreen ? 28 : 32), // Iconos un poco más grandes
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: isSmallScreen ? 12 : 14,
-                    color: isDarkMode ? Colors.white70 : Colors.grey[600],
+                    fontSize: isSmallScreen ? 13 : 15,
+                    color: colors.textSecondary,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -328,9 +357,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: isSmallScreen ? 14 : 20,
+                    fontSize: isSmallScreen ? 18 : 22,
                     fontWeight: FontWeight.bold,
-                    color: isDarkMode ? Colors.white : Colors.black,
+                    color: colors.textPrimary,
                   ),
                 ),
               ],
@@ -341,6 +370,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
 
 // Modelos de datos
 class HomeData {
@@ -390,18 +420,27 @@ class CreditosActFin {
 }
 
 class GruposIndGrupos {
-  final String? grupos_individuales;
-  final String? grupos_grupales;
+  final int total_grupos;
+  final String? creditos_individuales;
+  final String? creditos_grupales;
+  final String? grupos_activos;
+  final String? grupos_finalizados;
 
   GruposIndGrupos({
-    required this.grupos_individuales,
-    required this.grupos_grupales,
+    required this.total_grupos,
+    required this.creditos_individuales,
+    required this.creditos_grupales,
+    required this.grupos_activos,
+    required this.grupos_finalizados,
   });
 
   factory GruposIndGrupos.fromJson(Map<String, dynamic> json) {
     return GruposIndGrupos(
-      grupos_individuales: json['grupos_individuales']?.toString() ?? '0',
-      grupos_grupales: json['grupos_grupales']?.toString() ?? '0',
+      total_grupos: json['total_grupos'] ?? 0,
+      creditos_individuales: json['creditos_individuales']?.toString() ?? '0',
+      creditos_grupales: json['creditos_grupales']?.toString() ?? '0',
+      grupos_activos: json['grupos_activos']?.toString() ?? '0',
+      grupos_finalizados: json['grupos_finalizados']?.toString() ?? '0',
     );
   }
 }
