@@ -375,16 +375,19 @@ class ApiService {
     }
   }
 
-  Future<ApiResponse<T>> _handleHttpError<T>(
+    Future<ApiResponse<T>> _handleHttpError<T>(
     http.Response response, {
     bool showErrorDialog = true,
     required Map<String, String> headers,
   }) async {
     String errorMessage = 'Error del servidor: ${response.statusCode}.';
+    bool isSilentError = false; // <<< PASO 1: Flag para controlar errores "silenciosos"
+
     try {
       if (response.body.isNotEmpty) {
         final errorData = json.decode(response.body);
 
+        // Extraer el mensaje de error de manera más robusta
         if (errorData is Map &&
             errorData.containsKey("Error") &&
             errorData["Error"] is Map &&
@@ -396,6 +399,15 @@ class ApiService {
           errorMessage = errorData;
         }
 
+        // <<< PASO 2: La Lógica Clave >>>
+        // Verificamos si es el error específico que no queremos que muestre un diálogo.
+        // Lo hacemos después de haber extraído el mensaje.
+        if (response.statusCode == 400 && errorMessage.toLowerCase().contains('no hay')) {
+          AppLogger.log('ℹ️  Status 400 ("${errorMessage}") detectado como error silencioso. No se mostrará diálogo.');
+          isSilentError = true; // Marcamos este error como silencioso
+        }
+
+        // Manejo de errores de autenticación (401)
         if (response.statusCode == 401 ||
             errorMessage.toLowerCase().contains("sesión ha cambiado") ||
             errorMessage.toLowerCase().contains("jwt expired") ||
@@ -409,12 +421,10 @@ class ApiService {
                   : (errorMessage.toLowerCase().contains("sesión ha cambiado")
                       ? 'La sesión ha cambiado. Por favor, inicia sesión nuevamente.'
                       : 'No autorizado. Por favor, inicia sesión.');
-
-          if (showErrorDialog) {
-            handleAuthError(
-              authErrorMessage,
-              redirectToLogin: true,
-            ); // <--- CAMBIO
+          
+          // Solo mostramos el diálogo de auth si no es un error silencioso (poco probable pero seguro)
+          if (showErrorDialog && !isSilentError) {
+            handleAuthError(authErrorMessage, redirectToLogin: true);
           }
 
           return ApiResponse<T>(
@@ -431,12 +441,13 @@ class ApiService {
       );
     }
 
-    if (showErrorDialog) {
-      this.showErrorDialog(
-        errorMessage,
-      ); // <--- CAMBIO (this. es opcional pero ayuda a la claridad)
+    // <<< PASO 3: Condicionar la llamada al diálogo genérico >>>
+    // Solo mostramos el diálogo si está habilitado Y NO es un error silencioso.
+    if (showErrorDialog && !isSilentError) {
+      this.showErrorDialog(errorMessage);
     }
 
+    // La respuesta sigue siendo un error, pero controlado.
     return ApiResponse<T>(
       success: false,
       error: errorMessage,

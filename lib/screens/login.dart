@@ -14,7 +14,7 @@ import 'package:url_launcher/url_launcher.dart'; // Necesario para el link del f
 import '../providers/theme_provider.dart';
 import '../constants/routes.dart';
 import '../../utils/app_logger.dart';
-
+import '../utils/localVersion.dart';
 
 // Definimos un punto de quiebre para decidir cuándo mostrar el layout de desktop.
 const double kDesktopBreakpoint = 800.0;
@@ -217,15 +217,12 @@ class _LoginScreenState extends State<LoginScreen> {
   // --- WIDGETS DE LAYOUT ---
 
   /// Construye el layout para pantallas anchas (Desktop)
-    /// Construye el layout para pantallas anchas (Desktop)
+  /// Construye el layout para pantallas anchas (Desktop)
   Widget _buildDesktopLayout(bool isDarkMode) {
     return Row(
       children: [
         // Parte izquierda: El Slider (sin cambios)
-        Expanded(
-          flex: 2,
-          child: SliderWidget(slides: _slides),
-        ),
+        Expanded(flex: 2, child: SliderWidget(slides: _slides)),
         // Parte derecha: El formulario y el footer (MODIFICADA)
         Expanded(
           flex: 3,
@@ -259,7 +256,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   /// Construye el layout para pantallas estrechas (Mobile)
-    /// Construye el layout para pantallas estrechas (Mobile)
+  /// Construye el layout para pantallas estrechas (Mobile)
   Widget _buildMobileLayout(bool isDarkMode) {
     return SafeArea(
       child: Padding(
@@ -419,7 +416,7 @@ class _LoginScreenState extends State<LoginScreen> {
         // Asumimos que getLocalVersion() existe en tu proyecto.
         // Si no, puedes reemplazarlo por un texto fijo o quitar el FutureBuilder.
         FutureBuilder<String>(
-          future: Future.value("1.0.0"), // Placeholder para la versión
+          future: getLocalVersion(), // Función que obtiene la versión
           builder: (context, snapshot) {
             String finoraText = 'Finora';
             if (snapshot.connectionState == ConnectionState.done &&
@@ -466,86 +463,87 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildTextField({
-  required String label,
-  required IconData icon,
-  required TextEditingController controller,
-  required bool isDarkMode,
-  bool isPassword = false,
-  // ESTA LÍNEA ES LA QUE CAMBIA:
-  void Function(String)? onFieldSubmitted,
-  TextInputAction? textInputAction,
-}) {
-  final theme = Theme.of(context);
-
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        label,
-        style: TextStyle(
-          fontWeight: FontWeight.w600,
-          color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
-          fontSize: 15,
-        ),
-      ),
-      const SizedBox(height: 8),
-      TextFormField(
-        controller: controller,
-        obscureText: isPassword ? _obscurePassword : false,
-        style: TextStyle(
-          color: isDarkMode ? Colors.white : Colors.grey[800],
-        ),
-        // Se pasa directamente el parámetro recibido
-        onFieldSubmitted: onFieldSubmitted,
-        textInputAction: textInputAction,
-        decoration: InputDecoration(
-          prefixIcon: Icon(
-            icon,
-            color: isDarkMode ? Colors.grey[400] : Colors.grey[500],
-          ),
-          suffixIcon: isPassword
-              ? Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                      color: isDarkMode ? Colors.grey[400] : Colors.grey[500],
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
-                  ),
-                )
-              : null,
-          filled: true,
-          fillColor: isDarkMode ? Colors.grey[800] : Colors.white,
-          contentPadding:
-              const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
-            borderSide: BorderSide(
-              color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
-              width: 1.5,
-            ),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
-            borderSide: const BorderSide(color: Color(0xFF5162F6), width: 2),
-          ),
-          hintText: 'Ingrese su ${label.toLowerCase()}',
-          hintStyle: TextStyle(
-            color: isDarkMode ? Colors.grey[500] : Colors.grey[400],
+    required String label,
+    required IconData icon,
+    required TextEditingController controller,
+    required bool isDarkMode,
+    bool isPassword = false,
+    // ESTA LÍNEA ES LA QUE CAMBIA:
+    void Function(String)? onFieldSubmitted,
+    TextInputAction? textInputAction,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: isDarkMode ? Colors.grey[300] : Colors.grey[700],
             fontSize: 15,
           ),
         ),
-      ),
-    ],
-  );
-}
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          obscureText: isPassword ? _obscurePassword : false,
+          style: TextStyle(color: isDarkMode ? Colors.white : Colors.grey[800]),
+          // Se pasa directamente el parámetro recibido
+          onFieldSubmitted: onFieldSubmitted,
+          textInputAction: textInputAction,
+          decoration: InputDecoration(
+            prefixIcon: Icon(
+              icon,
+              color: isDarkMode ? Colors.grey[400] : Colors.grey[500],
+            ),
+            suffixIcon:
+                isPassword
+                    ? Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color:
+                              isDarkMode ? Colors.grey[400] : Colors.grey[500],
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
+                    )
+                    : null,
+            filled: true,
+            fillColor: isDarkMode ? Colors.grey[800] : Colors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              vertical: 18,
+              horizontal: 20,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: BorderSide(
+                color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+                width: 1.5,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+              borderSide: const BorderSide(color: Color(0xFF5162F6), width: 2),
+            ),
+            hintText: 'Ingrese su ${label.toLowerCase()}',
+            hintStyle: TextStyle(
+              color: isDarkMode ? Colors.grey[500] : Colors.grey[400],
+              fontSize: 15,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   /// Función para abrir URL (del código desktop)
   Future<void> _launchURL() async {

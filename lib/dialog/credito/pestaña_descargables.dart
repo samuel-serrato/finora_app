@@ -15,12 +15,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:finora_app/models/creditos.dart';
 import 'package:finora_app/providers/theme_provider.dart';
 import '../../utils/app_logger.dart';
+import 'package:finora_app/helpers/save_file.dart';
+
 
 
 // ----- NUEVOS IMPORTS PARA LA COMPATIBILIDAD WEB -----
-import 'package:flutter/foundation.dart' show kIsWeb;
+//import 'package:flutter/foundation.dart' show kIsWeb;
 // dart:html solo se importará en web, evitando errores de compilación en móvil.
-import 'dart:html' as html;
+//import 'dart:html' as html;
 // --------------------------------------------------------
 
 class PaginaDescargablesMobile extends StatefulWidget {
@@ -42,7 +44,7 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
   /// NUEVA FUNCIÓN UNIVERSAL PARA GUARDAR/DESCARGAR ARCHIVOS
   /// Recibe los bytes del archivo y el nombre, y decide qué hacer
   /// según la plataforma (web o nativa).
-  Future<void> _guardarYProcesarArchivo(Uint8List bytes, String fileName) async {
+ /*  Future<void> _guardarYProcesarArchivo(Uint8List bytes, String fileName) async {
     if (kIsWeb) {
       // --- LÓGICA PARA WEB ---
       // Creamos un "ancla" <a> en el HTML para iniciar la descarga.
@@ -64,7 +66,7 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
       // 3. Abrir el archivo con una app externa
       await _abrirArchivoGuardado(savePath);
     }
-  }
+  } */
 
   /// Función para descargar documentos (DOCX) desde el servidor.
   Future<void> _descargarDocumento(String documento) async {
@@ -89,7 +91,7 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
       if (response.statusCode == 200) {
         final fileName = '${documento}_${widget.credito.folio}.docx';
         // Usamos nuestra nueva función universal para manejar la descarga/guardado.
-        await _guardarYProcesarArchivo(response.bodyBytes, fileName);
+        await saveFilePlatform(response.bodyBytes, fileName);
       } else {
         _mostrarError('Error del servidor: ${response.statusCode}. Inténtalo de nuevo.');
       }
@@ -118,7 +120,7 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
       final fileName = '${tipoDocumento}_${widget.credito.folio}.pdf';
 
       // 2. Usa nuestra función universal para manejar la descarga/guardado.
-      await _guardarYProcesarArchivo(pdfBytes, fileName);
+      await saveFilePlatform(pdfBytes, fileName);
 
     } catch (e, s) {
       AppLogger.log('<<<<< ERROR AL GENERAR PDF: $tipoDocumento >>>>>\n$e\n$s');

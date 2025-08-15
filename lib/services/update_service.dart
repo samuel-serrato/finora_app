@@ -1,30 +1,5 @@
-// services/update_service.dart
+// Este archivo actúa como un puente.
+// El resto de tu app solo importará este archivo.
 
-import 'dart:js_util'; // Necesario para la interoperabilidad con JS
-import 'dart:html';    // Necesario para window, document, etc.
-import 'package:flutter/material.dart';
-
-class UpdateService {
-  final ValueNotifier<bool> isUpdateAvailable = ValueNotifier(false);
-
-  UpdateService() {
-    _initialize();
-  }
-
-  void _initialize() {
-    document.addEventListener('new-version-ready', (event) {
-      isUpdateAvailable.value = true;
-    });
-  }
-
-  void activateNewVersion() {
-    callMethod(window, 'activateNewWorker', []);
-
-    // --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
-    // Se accede al Service Worker a través de `window.navigator`.
-    window.navigator.serviceWorker?.addEventListener('controllerchange', (event) {
-      // Una vez que el nuevo controlador está activo, recargamos la página.
-      window.location.reload();
-    });
-  }
-}
+export 'update_service_io.dart' // Exporta la versión para IO (móvil, escritorio) por defecto
+    if (dart.library.html) 'update_service_web.dart'; // Y si detecta que es web, exporta la versión web.

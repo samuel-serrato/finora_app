@@ -1,41 +1,18 @@
+import 'dart:ui';
+
 import 'package:finora_app/providers/theme_provider.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../utils/app_logger.dart';
+// Al principio de tu archivo .dart
+//import 'dart:html' as html;
+// Añade esta importación para la interoperabilidad con JavaScript
+//import 'dart:js_util';
+import 'package:finora_app/dialog/about_logic.dart';
 
 
-// --- Funciones de Ayuda ---
-
-// Obtiene la versión local de la app desde el pubspec.yaml
-Future<String> getLocalVersion() async {
-  try {
-    final packageInfo = await PackageInfo.fromPlatform();
-    return packageInfo.version;
-  } catch (e) {
-    AppLogger.log("Error al obtener la versión: $e");
-    return 'N/A';
-  }
-}
-
-// Lógica para buscar actualizaciones (aquí puedes poner tu implementación real)
-Future<void> checkAppVersion(BuildContext context) async {
-  // Simula una llamada de red
-  await Future.delayed(const Duration(seconds: 2));
-
-  // Muestra un resultado
-  if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('¡Tu aplicación está actualizada!'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
-}
-
-// --- El Widget del Diálogo ---
 
 void showCustomAboutDialog(BuildContext context) {
   final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
@@ -89,7 +66,7 @@ void showCustomAboutDialog(BuildContext context) {
                   Divider(color: colors.bottomNavBorder, height: 1),
                   const SizedBox(height: 20),
                   FutureBuilder<String>(
-                    future: getLocalVersion(),
+                    future: getPlatformSpecificVersion(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return CircularProgressIndicator(color: colors.brandPrimary);
@@ -123,7 +100,7 @@ void showCustomAboutDialog(BuildContext context) {
                                   : TextButton.icon(
                                       onPressed: () async {
                                         setState(() => isCheckingForUpdate = true);
-                                        await checkAppVersion(context);
+                                        await checkPlatformSpecificVersion(context);
                                         // Solo actualiza si el widget todavía está montado
                                         if(context.mounted) {
                                           setState(() => isCheckingForUpdate = false);

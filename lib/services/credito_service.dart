@@ -126,4 +126,19 @@ class CreditoService {
     );
     return response;
   }
+
+
+  // ========================================================================
+  // =====> NUEVO MÉTODO PARA ACTUALIZAR ESTADO <======
+  // ========================================================================
+
+  /// Actualiza el estado de un crédito específico a través de su id de grupo.
+  Future<ApiResponse<dynamic>> actualizarEstadoCredito(String idGrupo, String nuevoEstado) {
+    return _api.put(
+      '/api/v1/creditos/estado/$idGrupo', 
+      body: {
+        'estado': nuevoEstado,
+      },
+    );
+  }
 }

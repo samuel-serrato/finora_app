@@ -17,11 +17,13 @@ import '../../utils/app_logger.dart';
 class RenovarGrupoForm extends StatefulWidget {
   final String idGrupo;
   final VoidCallback? onGrupoRenovado;
+  final String permitirNuevoGrupo; // <-- AÑADE ESTA LÍNEA
 
   const RenovarGrupoForm({
     super.key,
     required this.idGrupo,
     this.onGrupoRenovado,
+    required this.permitirNuevoGrupo, // <-- AÑADE ESTA LÍNEA
   });
 
   @override
@@ -130,9 +132,11 @@ class _RenovarGrupoFormState extends State<RenovarGrupoForm>
     // Guardamos los descuentos obtenidos
     if (descuentosResponse.success) {
       _descuentosRenovacion = descuentosResponse.data ?? {};
-      AppLogger.log("Descuentos de renovación cargados: $_descuentosRenovacion");
+      AppLogger.log(
+        "Descuentos de renovación cargados: $_descuentosRenovacion",
+      );
     } else {
-      print(
+      AppLogger.log(
         "Aviso: No se pudieron cargar los descuentos de renovación. ${descuentosResponse.error}",
       );
     }
@@ -184,33 +188,28 @@ class _RenovarGrupoFormState extends State<RenovarGrupoForm>
       return;
     }
 
-    setState(() => _isSaving = true);
+      setState(() => _isSaving = true);
 
-    try {
-      // Construimos el cuerpo de la solicitud
-      final Map<String, dynamic> datosRenovacion = {
-        'idgrupos': widget.idGrupo, // ID del grupo a renovar
-        'nombreGrupo': nombreGrupoController.text,
-        'detalles': detallesController.text,
-        'tipoGrupo': selectedTipoGrupo,
-        'idusuarios': _selectedAsesor?.idusuarios,
-        'clientes':
-            _miembrosSeleccionados
-                .map(
-                  (persona) => {
-                    'idclientes': persona['idclientes'],
-                    'nomCargo':
-                        _cargosSeleccionados[persona['idclientes']] ??
-                        'Miembro',
-                  },
-                )
-                .toList(),
-      };
+  try {
+    // Construimos el cuerpo de la solicitud
+    final Map<String, dynamic> datosRenovacion = {
+      'idgrupos': widget.idGrupo,
+      'nombreGrupo': nombreGrupoController.text,
+      'detalles': detallesController.text,
+      'tipoGrupo': selectedTipoGrupo,
+      'idusuarios': _selectedAsesor?.idusuarios,
+      'clientes': _miembrosSeleccionados.map((persona) => {
+        'idclientes': persona['idclientes'],
+        'nomCargo': _cargosSeleccionados[persona['idclientes']] ?? 'Miembro',
+      }).toList(),
+      // --- AQUÍ ESTÁ EL CAMBIO CLAVE ---
+      'permitirNuevoGrupo': widget.permitirNuevoGrupo,
+    };
 
-      // Llamamos al nuevo método en el servicio
-      final response = await _grupoService.renovarGrupo(datosRenovacion);
+    // El resto de la función no cambia
+    final response = await _grupoService.renovarGrupo(datosRenovacion);
 
-      if (!mounted) return;
+    if (!mounted) return;
 
       if (response.success) {
         ScaffoldMessenger.of(context).showSnackBar(

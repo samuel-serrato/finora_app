@@ -174,4 +174,25 @@ class GrupoService {
       showErrorDialog: false,
     );
   }
+
+    /// ========================================================================
+  /// =====> NUEVO MÉTODO PARA ACTUALIZAR ESTADO <======
+  /// ========================================================================
+
+  /// Actualiza el estado de un crédito/grupo específico.
+  Future<ApiResponse<dynamic>> actualizarEstadoGrupo(String idGrupo, String nuevoEstado) {
+    return _apiService.put(
+      // Usamos el endpoint que especificaste
+      '/api/v1/grupos/estado/$idGrupo', 
+      body: {
+        'estado': nuevoEstado,
+      },
+      // No necesitamos un parser complejo, solo saber si la operación fue exitosa.
+    );
+  }
+
+
+  // ========================================================================
+  // MÉTODOS PARA CREAR, EDITAR Y ELIMINAR (YA EXISTENTES)
+  // ========================================================================
 }

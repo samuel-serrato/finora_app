@@ -1,78 +1,75 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // Importamos el paquete
-import 'package:flutter/foundation.dart';
-import 'dart:js' as js;
+//import 'package:flutter/foundation.dart';
+//import 'dart:js' as js;
 
 import 'package:finora_app/constants/colors.dart'; // Asegúrate que esta ruta es correcta
+import 'package:finora_app/helpers/pwa_theme_helper.dart'; // <-- AÑADE ESTA LÍNEA
 
-// Tu función puente con JS no necesita cambios.
+
+/* ELIMINA ESTA FUNCIÓN DE AQUÍ
 void _updatePwaThemeColor(Color color) {
   if (kIsWeb) {
     final hexColor = '#${color.value.toRadixString(16).substring(2)}';
     js.context.callMethod('updatePwaThemeColor', [hexColor]);
   }
 }
+*/
 
 class ThemeProvider with ChangeNotifier {
-  // El estado por defecto es 'light'.
   ThemeMode _themeMode = ThemeMode.light;
   final AppColors colors = AppColors();
-
-  // Clave que usaremos para guardar el valor en SharedPreferences.
   static const String _themePreferenceKey = 'isDarkMode';
 
-  /// CONSTRUCTOR
-  ThemeProvider() {
-    // Cuando se crea el provider por primera vez (al iniciar la app),
-    // inmediatamente intentamos cargar la preferencia guardada.
-    _loadThemePreference();
-  }
+  // 1. El constructor ahora está VACÍO.
+  ThemeProvider();
 
-  // --- GETTERS ---
   ThemeMode get themeMode => _themeMode;
   bool get isDarkMode => _themeMode == ThemeMode.dark;
 
-  // --- LÓGICA DE PERSISTENCIA ---
-
-  /// Carga la preferencia de tema desde SharedPreferences.
-  Future<void> _loadThemePreference() async {
-    final prefs = await SharedPreferences.getInstance();
-    // Leemos el valor booleano. Si no existe ('??'), usamos 'false' como valor por defecto.
-    final bool isDark = prefs.getBool(_themePreferenceKey) ?? false;
-    
-    // Actualizamos el estado interno con el valor cargado.
-    _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
-    colors.setDarkMode(isDark);
-    _updatePwaThemeColor(colors.backgroundPrimary);
-
-    // Notificamos a los oyentes para que la UI se reconstruya con el tema correcto.
-    notifyListeners();
+  // 2. Creamos este nuevo método público para la inicialización.
+  Future<void> init() async {
+    // 3. Movemos la llamada a la función de carga aquí.
+    await _loadThemePreference();
   }
 
-  /// Guarda la preferencia de tema en SharedPreferences.
+  // _loadThemePreference se mantiene igual, pero ahora se llama de forma segura.
+  Future<void> _loadThemePreference() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final bool isDark = prefs.getBool(_themePreferenceKey) ?? false;
+      
+      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+      colors.setDarkMode(isDark);
+      
+      updatePwaThemeColor(colors.backgroundPrimary);
+
+      // NO necesitamos notifyListeners() aquí porque la UI aún no se ha construido.
+    } catch (e) {
+      print('Error al cargar las preferencias del tema: $e');
+      // Establecemos valores por defecto si algo falla.
+      _themeMode = ThemeMode.light;
+      colors.setDarkMode(false);
+    }
+  }
+
   Future<void> _saveThemePreference(bool isDark) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_themePreferenceKey, isDark);
   }
 
-  // --- MÉTODO PÚBLICO PARA CAMBIAR EL TEMA ---
-
-  /// Este es el método que la UI llama para cambiar el tema.
   void toggleTheme(bool isDark) {
-    // Comprobamos si el tema realmente está cambiando para evitar trabajo innecesario.
     if ((isDark && _themeMode == ThemeMode.dark) || (!isDark && _themeMode == ThemeMode.light)) {
-      return; // No hay cambios, no hacemos nada.
+      return;
     }
 
-    // 1. Actualizamos el estado en memoria.
     _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
     colors.setDarkMode(isDark);
-    _updatePwaThemeColor(colors.backgroundPrimary);
     
-    // 2. Guardamos la nueva preferencia en el almacenamiento persistente.
+    // Llama a la nueva función importada
+    updatePwaThemeColor(colors.backgroundPrimary);
+    
     _saveThemePreference(isDark);
-
-    // 3. Notificamos a la UI que debe reconstruirse.
     notifyListeners();
   }
 

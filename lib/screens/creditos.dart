@@ -319,7 +319,8 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
                     response.headers!['x-total-totalpaginas'] ?? '1',
                   ) ??
                   1;
-              AppLogger.log('📊 Headers: totalDatos: $totalDatos, totalPaginas: $totalPaginas',
+              AppLogger.log(
+                '📊 Headers: totalDatos: $totalDatos, totalPaginas: $totalPaginas',
               );
             } else {
               if (!loadMore) totalDatos = 0;
@@ -808,9 +809,10 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
             credito.estadoCredito!.moratorios > 0) ...[
           const VerticalDivider(width: 20, indent: 16, endIndent: 16),
           _buildTableRowItem(
-           /*  'Moratorios (${credito.estadoCredito?.diferenciaEnDias ?? 0}d)',
+            /*  'Moratorios (${credito.estadoCredito?.diferenciaEnDias ?? 0}d)',
             '\$${formatearNumero(credito.estadoCredito?.moratorios ?? 0.0)}', */
-            'Moratorios Acumulados', '\$${formatearNumero(credito.estadoCredito?.acumulado ?? 0.0)}',
+            'Moratorios Acumulados',
+            '\$${formatearNumero(credito.estadoCredito?.acumulado ?? 0.0)}',
             icon: Icons.warning_amber_rounded,
             colors: colors,
             valueColor: Colors.red.shade600,
@@ -1218,6 +1220,9 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
   // Reemplaza tu método _buildContent con esta versión actualizada
   // Reemplaza tu método _buildContent con esta versión final
   // Reemplaza tu método _buildContent con esta versión mejorada
+  // En tu clase _SeguimientoScreenMobileState
+
+  // Reemplaza tu método _buildContent con esta versión mejorada
   Widget _buildContent(dynamic colors) {
     // Las secciones de carga, error y estado vacío no cambian.
     if (isLoading && listaFiltrada.isEmpty) {
@@ -1258,11 +1263,12 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
           crossAxisCount = 1;
         }
 
-        // --- LÓGICA DE ALTURA Y LAYOUT (ACTUALIZADA) ---
-        const double standardCardHeight = 440.0;
-        // Aumentamos la altura para la vista de tabla para que quepa todo.
-        // Puedes ajustar este valor si lo necesitas.
-        const double tableRowCardHeight = 100.0;
+        // --- LÓGICA DE ALTURA Y LAYOUT (CORREGIDA) ---
+        // Esta es la altura fija para las tarjetas en la vista de cuadrícula.
+        // REDUCE este valor para eliminar el espacio extra en la parte inferior.
+        // Un valor entre 390-410 suele funcionar bien. Prueba con 395.
+        const double standardCardHeight = 395.0;
+        const double tableRowCardHeight = 100.0; // Altura para la vista de fila
 
         final bool useTableRowLayout = isDesktopLayout && crossAxisCount == 1;
         final double desiredCardHeight =
@@ -2961,7 +2967,10 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
             constraints: BoxConstraints(
               maxHeight: MediaQuery.of(fullScreenContext).size.height * 0.92,
             ),
-            child: CreditoDetalleConTabs(folio: folio),
+            child: CreditoDetalleConTabs(
+              folio: folio,
+              onEstadoCambiado: _onRefresh,
+            ),
           ),
         );
       },

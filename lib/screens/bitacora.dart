@@ -33,6 +33,8 @@ class _BitacoraScreenState extends State<BitacoraScreen> {
   Usuario? _selectedUsuario;
   DateTime? _selectedDate;
   String _selectedActivityFilter = 'Todas las actividades';
+  // <--- CAMBIO 1: Añadimos una nueva variable de estado para saber si ya se ha consultado
+  bool _hasSearched = false;
 
   final List<String> _activityFilters = [
     'Todas las actividades',
@@ -78,6 +80,8 @@ class _BitacoraScreenState extends State<BitacoraScreen> {
     setState(() {
       _isLoadingBitacora = true;
       _errorMessage = null;
+      // <--- CAMBIO 2: Marcamos que ya se realizó una consulta
+      _hasSearched = true; 
     });
 
     final response = await _bitacoraService.getBitacora(
@@ -482,18 +486,23 @@ class _BitacoraScreenState extends State<BitacoraScreen> {
 
   // --- RESTO DEL CÓDIGO (SIN CAMBIOS) ---
 
+   // <--- CAMBIO 3: Reestructuramos la lógica de este widget para mostrar los mensajes correctos
   Widget _buildContentBody(dynamic colors) {
+    // 1. Mostrar spinner de carga
     if (_isLoadingBitacora) {
       return Center(
         child: CircularProgressIndicator(color: colors.brandPrimary),
       );
     }
+    // 2. Mostrar error si la API falló
     if (_errorMessage != null) {
       return Center(
         child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
       );
     }
-    if (_bitacoraEntries.isEmpty) {
+
+    // 3. Estado inicial: Aún no se ha presionado "Consultar"
+    if (!_hasSearched) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -508,6 +517,30 @@ class _BitacoraScreenState extends State<BitacoraScreen> {
         ),
       );
     }
+
+    // 4. Estado post-consulta: La consulta se hizo pero no devolvió resultados
+    // Esto es gracias al `_hasSearched` que ahora es `true`
+    if (_bitacoraEntries.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.event_busy_outlined, size: 40, color: colors.textSecondary), // Un ícono más apropiado
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40.0),
+              child: Text(
+                'No hay información registrada para esa fecha o filtros seleccionados.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colors.textSecondary, height: 1.4),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 5. Estado post-consulta: Hay resultados, pero el filtro local (buscador) no encuentra coincidencias
     if (_filteredEntries.isEmpty) {
       return Center(
         child: Column(
@@ -516,13 +549,15 @@ class _BitacoraScreenState extends State<BitacoraScreen> {
             Icon(Icons.search_off, size: 40, color: colors.textSecondary),
             const SizedBox(height: 10),
             Text(
-              'No se encontraron registros',
+              'No se encontraron registros con los filtros actuales',
               style: TextStyle(color: colors.textSecondary),
             ),
           ],
         ),
       );
     }
+
+    // 6. Estado con resultados: Mostrar la lista
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       itemCount: _filteredEntries.length,

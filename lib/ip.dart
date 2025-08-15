@@ -2,7 +2,7 @@
 //IP OFICINA
 //const String baseUrl = '192.168.0.103:3001';
 //IP OFICINA LENIN PC
-//const String baseUrl = 'http://192.168.0.102:3002';
+//const String baseUrl = 'http://192.168.0.105:3002';
 //const String baseUrl = 'http://localhost:3000';
 //IP CASA
 //const String baseUrl = '192.168.1.23:3000';

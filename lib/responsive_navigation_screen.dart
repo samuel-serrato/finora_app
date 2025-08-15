@@ -3,7 +3,6 @@ import 'package:finora_app/constants/colors.dart';
 import 'package:finora_app/helpers/responsive_helpers.dart';
 import 'package:finora_app/screens/bitacora.dart';
 import 'package:finora_app/screens/screens_config/gestionar_usuarios_screen.dart';
-import 'package:finora_app/services/update_service.dart';
 import 'package:finora_app/widgets/custom_user_menu.dart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -65,95 +64,135 @@ class _ResponsiveNavigationScreenState
   // Lista única de información de navegación.
   List<_NavigationItemInfo> _navigationItems = [];
 
-  late final UpdateService _updateService; // 1. Declara la instancia del servicio
+  //late final UpdateService  _updateService; // 1. Declara la instancia del servicio
 
-    final AppColors colors = AppColors();
-
-
+  final AppColors colors = AppColors();
 
   @override
   void initState() {
     super.initState();
-      _updateService = UpdateService(); // 2. Inicializa el servicio
+   // _updateService = UpdateService(); // 2. Inicializa el servicio
 
-  // 3. Añade un listener para mostrar el SnackBar cuando haya una actualización
-  _updateService.isUpdateAvailable.addListener(_showUpdateDialog);
+    // 3. Añade un listener para mostrar el SnackBar cuando haya una actualización
+   // _updateService.isUpdateAvailable.addListener(_showUpdateDialog);
   }
 
   @override
-void dispose() {
-  // No olvides quitar el listener para evitar memory leaks
-  _updateService.isUpdateAvailable.removeListener(_showUpdateDialog);
-  // ... tu otro código de dispose ...
-  super.dispose();
-}
+  void dispose() {
+    // No olvides quitar el listener para evitar memory leaks
+    //_updateService.isUpdateAvailable.removeListener(_showUpdateDialog);
+    // ... tu otro código de dispose ...
+    super.dispose();
+  }
 
-// 4. Crea el método que muestra el SnackBar
-// REEMPLAZA TU MÉTODO _showUpdateSnackbar CON ESTE:
-void _showUpdateDialog() {
-  if (_updateService.isUpdateAvailable.value) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final colors = themeProvider.colors;
+  // 4. Crea el método que muestra el SnackBar
+  // REEMPLAZA TU MÉTODO _showUpdateSnackbar CON ESTE:
+  /* void _showUpdateDialog() {
+    if (_updateService.isUpdateAvailable.value) {
+      final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+      final colors = themeProvider.colors;
 
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        // En lugar de modificar el padding del AlertDialog,
-        // vamos a envolverlo en un widget que controle su tamaño.
-        return WillPopScope(
-          onWillPop: () async => false,
-          child: Dialog( // 1. Usamos el widget Dialog como contenedor base.
-            backgroundColor: Colors.transparent, // Hacemos transparente su fondo...
-            elevation: 0,
-            child: ConstrainedBox( // 2. ...y le damos restricciones de tamaño.
-              constraints: const BoxConstraints(
-                maxWidth: 500, // ¡ESTA ES LA CLAVE! Un ancho máximo fijo.
-              ),
-              child: AlertDialog( // 3. Tu AlertDialog original va dentro.
-                // Ya no necesitamos insetPadding aquí.
-                backgroundColor: colors.backgroundPrimary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                icon: Icon(
-                  Icons.cloud_download_outlined,
-                  color: colors.brandPrimary,
-                  size: 48,
-                ),
-                title: const Text(
-                  'Actualización Disponible',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                content: const Text(
-                  'Se ha encontrado una nueva versión de Finora con mejoras y nuevas funciones. '
-                  '\n\nPor favor, actualiza para continuar.',
-                  textAlign: TextAlign.center,
-                ),
-                actionsAlignment: MainAxisAlignment.center,
-                actions: <Widget>[
-                  FilledButton.icon(
-                    icon: const Icon(Icons.download_for_offline),
-                    label: const Text('ACTUALIZAR AHORA'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: colors.brandPrimary,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    onPressed: () {
-                      _updateService.activateNewVersion();
-                    },
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          return WillPopScope(
+            onWillPop: () async => false,
+            child: Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 500),
+                child: AlertDialog(
+                  insetPadding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 24.0,
                   ),
-                ],
+                  backgroundColor: colors.backgroundPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      28,
+                    ), // Un poco más redondeado se ve más moderno
+                  ),
+                  iconPadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                  icon: Icon(
+                    Icons.cloud_download_outlined,
+                    color: colors.brandPrimary,
+                    size: 48,
+                  ),
+
+                  // LA CLAVE: Forzamos al título y al contenido a ocupar todo el ancho disponible.
+                  // V V V V V V V V V V V V V V V V V V V V V V V V V
+                  title: SizedBox(
+                    width: double.infinity, // <-- ESTO HACE LA MAGIA
+                    child: const Text(
+                      'Actualización\n Disponible',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  content: SizedBox(
+                    width: double.infinity, // <-- Y ESTO TAMBIÉN
+                    child: const Text(
+                      'Se ha encontrado una nueva versión de Finora con mejoras y nuevas funciones. '
+                      '\n\nPor favor, actualiza para continuar.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15,
+                        height:
+                            1.4, // Un poco de interlineado mejora la lectura
+                      ),
+                    ),
+                  ),
+
+                  // ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
+                  actionsAlignment: MainAxisAlignment.center,
+                  actionsPadding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                  actions: <Widget>[
+                    // Para que el botón ocupe todo el ancho también:
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        icon: const Icon(Icons.download_for_offline),
+                        label: const Text('ACTUALIZAR AHORA'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: colors.brandPrimary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          await _updateService.activateNewVersion();
+                        },
+                      ),
+                    ),
+                  ],
+
+                  // Eliminamos los paddings de title y content porque ahora
+                  // el espaciado se controla mejor desde iconPadding y actionsPadding
+                  titlePadding: const EdgeInsets.only(top: 16),
+                  contentPadding: const EdgeInsets.only(
+                    top: 16,
+                    left: 24,
+                    right: 24,
+                  ),
+                ),
               ),
             ),
-          ),
-        );
-      },
-    );
-  }
-}
+          );
+        },
+      );
+    }
+  } */
 
   void _onNavigationItemSelected(int index) {
     if (_selectedIndex == index) return;
@@ -432,17 +471,18 @@ void _showUpdateDialog() {
         ],
       ),
       // <<< ======================= FIN DE LA MODIFICACIÓN ====================== >>>
- /*  // --- AÑADE ESTE BOTÓN TEMPORAL ---
-    floatingActionButton: FloatingActionButton(
-      onPressed: () {
-        // Simplemente cambia el valor para disparar el listener.
-        _updateService.isUpdateAvailable.value = true;
-      },
-      tooltip: 'Simular Actualización',
-      child: const Icon(Icons.update),
-      backgroundColor: Colors.orange, // Un color diferente para que sepas que es de prueba
-    ),
-    // --- FIN DEL CÓDIGO AÑADIDO --- */
+      // --- AÑADE ESTE BOTÓN TEMPORAL ---
+      /* floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // Simplemente cambia el valor para disparar el listener.
+          _updateService.isUpdateAvailable.value = true;
+        },
+        tooltip: 'Simular Actualización',
+        child: const Icon(Icons.update),
+        backgroundColor:
+            Colors.orange, // Un color diferente para que sepas que es de prueba
+      ), */
+      // --- FIN DEL CÓDIGO AÑADIDO ---
     );
   }
 
@@ -486,156 +526,161 @@ void _showUpdateDialog() {
   //============================================================================
 
   Widget _buildMobileLayout() {
-  final themeProvider = Provider.of<ThemeProvider>(context);
-  final userData = Provider.of<UserDataProvider>(context);
-  final colors = themeProvider.colors;
-  final isDarkMode = themeProvider.isDarkMode;
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final userData = Provider.of<UserDataProvider>(context);
+    final colors = themeProvider.colors;
+    final isDarkMode = themeProvider.isDarkMode;
 
-  final currentScreenTitle = _navigationItems[_selectedIndex].title;
-  final List<Widget> pages =
-      _navigationItems.map((item) => item.screen).toList();
+    final currentScreenTitle = _navigationItems[_selectedIndex].title;
+    final List<Widget> pages =
+        _navigationItems.map((item) => item.screen).toList();
 
-  return Scaffold(
-    key: _scaffoldKey,
-    backgroundColor: colors.backgroundPrimary,
-    appBar: AppBar(
-      // Tu AppBar no cambia, está perfecto.
-      elevation: 0,
-      surfaceTintColor: colors.backgroundPrimary,
+    return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: colors.backgroundPrimary,
-      title:
-          _selectedIndex == 0
-              ? SizedBox(
-                height: 40,
-                width: 120,
-                child: Image.asset(
-                  isDarkMode
-                      ? 'assets/finora_blanco.png'
-                      : 'assets/finora.png',
-                  fit: BoxFit.contain,
+      appBar: AppBar(
+        // Tu AppBar no cambia, está perfecto.
+        automaticallyImplyLeading: false,
+        elevation: 0,
+        surfaceTintColor: colors.backgroundPrimary,
+        backgroundColor: colors.backgroundPrimary,
+        title:
+            _selectedIndex == 0
+                ? SizedBox(
+                  height: 40,
+                  width: 120,
+                  child: Image.asset(
+                    isDarkMode
+                        ? 'assets/finora_blanco.png'
+                        : 'assets/finora.png',
+                    fit: BoxFit.contain,
+                  ),
+                )
+                : Text(
+                  currentScreenTitle,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 24,
+                  ),
                 ),
-              )
-              : Text(
-                currentScreenTitle,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 24,
-                ),
+        actions: [
+          _buildAppBarLogo(),
+          IconButton(
+            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            icon: Container(
+              width: 45,
+              height: 45,
+              decoration: BoxDecoration(
+                color: isDarkMode ? Colors.grey[850] : Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 3,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-      actions: [
-        _buildAppBarLogo(),
-        IconButton(
-          onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          icon: Container(
-            width: 45,
-            height: 45,
-            decoration: BoxDecoration(
-              color: isDarkMode ? Colors.grey[850] : Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 3,
-                  offset: const Offset(0, 2),
+              child: CircleAvatar(
+                backgroundColor: Colors.transparent,
+                child: Text(
+                  userData.nombreUsuario.isNotEmpty
+                      ? userData.nombreUsuario[0].toUpperCase()
+                      : 'U',
+                  style: TextStyle(color: colors.brandPrimary, fontSize: 20),
                 ),
-              ],
-            ),
-            child: CircleAvatar(
-              backgroundColor: Colors.transparent,
-              child: Text(
-                userData.nombreUsuario.isNotEmpty
-                    ? userData.nombreUsuario[0].toUpperCase()
-                    : 'U',
-                style: TextStyle(color: colors.brandPrimary, fontSize: 20),
               ),
             ),
           ),
-        ),
-        const SizedBox(width: 10),
-      ],
-    ),
-    endDrawer: _buildEndDrawer(),
-    body: IndexedStack(index: _selectedIndex, children: pages),
-    
-   // <<< ======================= MODIFICA ESTA PARTE ======================= >>>
-bottomNavigationBar: BottomAppBar(
-  // En lugar de EdgeInsets.zero, vamos a añadir un padding en la parte inferior.
-  // Prueba con un valor pequeño como 8 o 10.
-  padding: const EdgeInsets.only(bottom: 8.0), 
-  
-  elevation: 0,
-  color: colors.bottomNavBackground,
-  child: _buildBottomNavBar(), 
-),
-/* // <<< ======================= FIN DE LA MODIFICACIÓN ====================== >>>
-  // --- AÑADE ESTE BOTÓN TEMPORAL ---
-    floatingActionButton: FloatingActionButton(
-      onPressed: () {
-        // Simplemente cambia el valor para disparar el listener.
-        _updateService.isUpdateAvailable.value = true;
-      },
-      tooltip: 'Simular Actualización',
-      child: const Icon(Icons.update),
-      backgroundColor: Colors.orange, // Un color diferente para que sepas que es de prueba
-    ),
-    // --- FIN DEL CÓDIGO AÑADIDO --- */
-  );
-}
+          const SizedBox(width: 10),
+        ],
+      ),
+      endDrawer: _buildEndDrawer(),
+      body: IndexedStack(index: _selectedIndex, children: pages),
 
-  Widget _buildBottomNavBar() {
-  final themeProvider = Provider.of<ThemeProvider>(context);
-  final colors = themeProvider.colors;
+      // <<< ======================= MODIFICA ESTA PARTE ======================= >>>
+      bottomNavigationBar: BottomAppBar(
+        // En lugar de EdgeInsets.zero, vamos a añadir un padding en la parte inferior.
+        // Prueba con un valor pequeño como 8 o 10.
+        padding: const EdgeInsets.only(bottom: 8.0),
 
-  // <<< TODA ESTA LÓGICA DE FILTRADO ESTÁ PERFECTA, NO LA TOQUES >>>
-  final navBarItems = _navigationItems
-      .where(
-        (item) => item.title != 'Usuarios' && item.title != 'Bitácora',
-      )
-      .toList();
-
-  int bottomNavIndex = _selectedIndex;
-  final currentSelectedItemTitle = _navigationItems[_selectedIndex].title;
-  if (currentSelectedItemTitle == 'Usuarios' ||
-      currentSelectedItemTitle == 'Bitácora') {
-    bottomNavIndex = -1;
-  } else {
-    bottomNavIndex = navBarItems.indexWhere(
-      (item) => item.title == currentSelectedItemTitle,
+        elevation: 0,
+        color: colors.bottomNavBackground,
+        child: _buildBottomNavBar(),
+      ),
+      // <<< ======================= FIN DE LA MODIFICACIÓN ====================== >>>
+      // --- AÑADE ESTE BOTÓN TEMPORAL ---
+      /* floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // Simplemente cambia el valor para disparar el listener.
+          _updateService.isUpdateAvailable.value = true;
+        },
+        tooltip: 'Simular Actualización',
+        child: const Icon(Icons.update),
+        backgroundColor:
+            Colors.orange, // Un color diferente para que sepas que es de prueba
+      ), */
+      // --- FIN DEL CÓDIGO AÑADIDO ---
     );
   }
 
-  // <<< EL CAMBIO ESTÁ AQUÍ, SOLO DEVOLVEMOS EL WIDGET DIRECTAMENTE >>>
-  return BottomNavigationBar( // <-- Sin el SafeArea envolviéndolo
-    currentIndex: bottomNavIndex == -1 ? 0 : bottomNavIndex,
-    onTap: (tappedIndexInBottomNav) {
-      final String tappedTitle = navBarItems[tappedIndexInBottomNav].title;
-      final int globalIndex = _navigationItems.indexWhere(
-        (item) => item.title == tappedTitle,
-      );
+  Widget _buildBottomNavBar() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final colors = themeProvider.colors;
 
-      if (globalIndex != -1) {
-        _onNavigationItemSelected(globalIndex);
-      }
-    },
-    type: BottomNavigationBarType.fixed,
-    backgroundColor: colors.bottomNavBackground,
-    selectedItemColor: colors.bottomNavSelectedItem,
-    unselectedItemColor: colors.bottomNavUnselectedItem,
-    selectedFontSize: 12,
-    unselectedFontSize: 11,
-    elevation: 0,
-    showUnselectedLabels: true,
-    items: navBarItems.map((item) {
-      return BottomNavigationBarItem(
-        label: item.title,
-        icon: Icon(item.icon, size: 24),
-        activeIcon: Icon(item.selectedIcon ?? item.icon, size: 24),
+    // <<< TODA ESTA LÓGICA DE FILTRADO ESTÁ PERFECTA, NO LA TOQUES >>>
+    final navBarItems =
+        _navigationItems
+            .where(
+              (item) => item.title != 'Usuarios' && item.title != 'Bitácora',
+            )
+            .toList();
+
+    int bottomNavIndex = _selectedIndex;
+    final currentSelectedItemTitle = _navigationItems[_selectedIndex].title;
+    if (currentSelectedItemTitle == 'Usuarios' ||
+        currentSelectedItemTitle == 'Bitácora') {
+      bottomNavIndex = -1;
+    } else {
+      bottomNavIndex = navBarItems.indexWhere(
+        (item) => item.title == currentSelectedItemTitle,
       );
-    }).toList(),
-  );
-}
+    }
+
+    // <<< EL CAMBIO ESTÁ AQUÍ, SOLO DEVOLVEMOS EL WIDGET DIRECTAMENTE >>>
+    return BottomNavigationBar(
+      // <-- Sin el SafeArea envolviéndolo
+      currentIndex: bottomNavIndex == -1 ? 0 : bottomNavIndex,
+      onTap: (tappedIndexInBottomNav) {
+        final String tappedTitle = navBarItems[tappedIndexInBottomNav].title;
+        final int globalIndex = _navigationItems.indexWhere(
+          (item) => item.title == tappedTitle,
+        );
+
+        if (globalIndex != -1) {
+          _onNavigationItemSelected(globalIndex);
+        }
+      },
+      type: BottomNavigationBarType.fixed,
+      backgroundColor: colors.bottomNavBackground,
+      selectedItemColor: colors.bottomNavSelectedItem,
+      unselectedItemColor: colors.bottomNavUnselectedItem,
+      selectedFontSize: 12,
+      unselectedFontSize: 11,
+      elevation: 0,
+      showUnselectedLabels: true,
+      items:
+          navBarItems.map((item) {
+            return BottomNavigationBarItem(
+              label: item.title,
+              icon: Icon(item.icon, size: 24),
+              activeIcon: Icon(item.selectedIcon ?? item.icon, size: 24),
+            );
+          }).toList(),
+    );
+  }
 
   // --- MÉTODOS HELPER (logout, dialogs, etc.) ---
 

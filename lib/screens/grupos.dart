@@ -110,6 +110,9 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
               idGrupo: idGrupo,
               nombreGrupo: nombreGrupo,
               onGrupoRenovado: _onRefresh,
+              // --- ¡AQUÍ ESTÁ EL CAMBIO! ---
+              // Le pasamos la misma función que usamos para renovar.
+              onEstadoCambiado: _onRefresh,
             ),
           ),
         );
@@ -399,65 +402,70 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
   }
 
   Future<void> _eliminarGrupo(String idGrupo) async {
-  // 1. Diálogo de confirmación (se mantiene igual, es buena práctica)
-  bool? confirmado = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Eliminar Grupo'),
-      content: const Text(
-          '¿Estás seguro de que deseas eliminar este grupo? Esta acción no se puede deshacer.'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancelar'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
-        ),
-      ],
-    ),
-  );
+    // 1. Diálogo de confirmación (se mantiene igual, es buena práctica)
+    bool? confirmado = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Eliminar Grupo'),
+            content: const Text(
+              '¿Estás seguro de que deseas eliminar este grupo? Esta acción no se puede deshacer.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancelar'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text(
+                  'Eliminar',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
+          ),
+    );
 
-  if (confirmado != true) {
-    return; // El usuario canceló
-  }
-
-  // Muestra un indicador de carga si lo deseas
-  // setState(() => _isDeleting = true);
-
-  try {
-    // 2. UNA SOLA LLAMADA al servicio para eliminar todo
-    final response = await _grupoService.eliminarGrupoCompleto(idGrupo);
-
-    if (!mounted) return;
-
-    // 3. Manejar la respuesta
-    if (response.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Grupo eliminado exitosamente.'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      // Actualiza tu lista de grupos para reflejar el cambio
-      obtenerGrupos(); 
-    } else {
-      // El ApiService ya debería mostrar un diálogo de error
-      // con el mensaje que viene del backend.
-      // Pero si quieres un mensaje por defecto, puedes añadirlo aquí.
-      _apiService.showErrorDialog(
-        response.error ?? "Ocurrió un error al intentar eliminar el grupo."
-      );
+    if (confirmado != true) {
+      return; // El usuario canceló
     }
-  } catch (e) {
-    // Para errores de programación o de red no manejados por ApiService
-    _apiService.showErrorDialog("Error de conexión: $e");
-  } finally {
-    // Oculta el indicador de carga
-    // if(mounted) setState(() => _isDeleting = false);
+
+    // Muestra un indicador de carga si lo deseas
+    // setState(() => _isDeleting = true);
+
+    try {
+      // 2. UNA SOLA LLAMADA al servicio para eliminar todo
+      final response = await _grupoService.eliminarGrupoCompleto(idGrupo);
+
+      if (!mounted) return;
+
+      // 3. Manejar la respuesta
+      if (response.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Grupo eliminado exitosamente.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Actualiza tu lista de grupos para reflejar el cambio
+        obtenerGrupos();
+      } else {
+        // El ApiService ya debería mostrar un diálogo de error
+        // con el mensaje que viene del backend.
+        // Pero si quieres un mensaje por defecto, puedes añadirlo aquí.
+        _apiService.showErrorDialog(
+          response.error ?? "Ocurrió un error al intentar eliminar el grupo.",
+        );
+      }
+    } catch (e) {
+      // Para errores de programación o de red no manejados por ApiService
+      _apiService.showErrorDialog("Error de conexión: $e");
+    } finally {
+      // Oculta el indicador de carga
+      // if(mounted) setState(() => _isDeleting = false);
+    }
   }
-}
 
   void _onSearchChanged(String query) {
     _currentSearchQuery = query;
@@ -832,71 +840,77 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
 
   // --- ¡ASEGÚRATE DE QUE ESTOS MÉTODOS ESTÉN PRESENTES EN TU CLASE! ---
 
-Widget _buildStatusFiltersChips(dynamic colors) {
-  final estados = [
-    'Todos',
-    'Activo',
-    'Disponible',
-    'Liquidado',
-    'Finalizado',
-    'Inactivo',
-  ];
-  final themeProvider = Provider.of<ThemeProvider>(context);
+  Widget _buildStatusFiltersChips(dynamic colors) {
+    final estados = [
+      'Todos',
+      'Activo',
+      'Disponible',
+      'Liquidado',
+     // 'Finalizado',
+      'Inactivo',
+    ];
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
-  return SizedBox(
-    height: 32,
-    child: ListView(
-      scrollDirection: Axis.horizontal,
-      children: estados.map((estado) {
-        final isSelected =
-            (_estadoGrupoSeleccionadoFiltroAPI == null && estado == 'Todos') ||
-                (_estadoGrupoSeleccionadoFiltroAPI == estado);
-        return Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: FilterChip(
-            showCheckmark: false,
-            label: Text(estado, style: const TextStyle(fontSize: 12)),
-            selected: isSelected,
-            onSelected: (selected) {
-              if (selected) {
-                setState(
-                  () =>
-                      _estadoGrupoSeleccionadoFiltroAPI =
-                          estado == 'Todos' ? null : estado,
-                );
-                _aplicarFiltrosYOrdenamiento();
-              }
-            },
-            backgroundColor: themeProvider.colors.backgroundCard,
-            selectedColor: Colors.blue.withOpacity(0.2),
-            labelStyle: TextStyle(
-              color: isSelected
-                  ? Colors.blue
-                  : (themeProvider.isDarkMode
-                      ? Colors.white70
-                      : Colors.grey[700]),
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: BorderSide(
-                color: isSelected
-                    ? Colors.blue
-                    : (themeProvider.isDarkMode
-                        ? Colors.grey[700]!
-                        : Colors.grey.withOpacity(0.3)),
-                width: isSelected ? 1.5 : 1.0,
-              ),
-            ),
-            // --- AQUÍ LA SOLUCIÓN ---
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, // <-- AÑADIDO
-            visualDensity: VisualDensity.compact,                   // <-- AÑADIDO
-          ),
-        );
-      }).toList(),
-    ),
-  );
-}
+    return SizedBox(
+      height: 32,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children:
+            estados.map((estado) {
+              final isSelected =
+                  (_estadoGrupoSeleccionadoFiltroAPI == null &&
+                      estado == 'Todos') ||
+                  (_estadoGrupoSeleccionadoFiltroAPI == estado);
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilterChip(
+                  showCheckmark: false,
+                  label: Text(estado, style: const TextStyle(fontSize: 12)),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(
+                        () =>
+                            _estadoGrupoSeleccionadoFiltroAPI =
+                                estado == 'Todos' ? null : estado,
+                      );
+                      _aplicarFiltrosYOrdenamiento();
+                    }
+                  },
+                  backgroundColor: themeProvider.colors.backgroundCard,
+                  selectedColor: Colors.blue.withOpacity(0.2),
+                  labelStyle: TextStyle(
+                    color:
+                        isSelected
+                            ? Colors.blue
+                            : (themeProvider.isDarkMode
+                                ? Colors.white70
+                                : Colors.grey[700]),
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(
+                      color:
+                          isSelected
+                              ? Colors.blue
+                              : (themeProvider.isDarkMode
+                                  ? Colors.grey[700]!
+                                  : Colors.grey.withOpacity(0.3)),
+                      width: isSelected ? 1.5 : 1.0,
+                    ),
+                  ),
+                  // --- AQUÍ LA SOLUCIÓN ---
+                  materialTapTargetSize:
+                      MaterialTapTargetSize.shrinkWrap, // <-- AÑADIDO
+                  visualDensity: VisualDensity.compact, // <-- AÑADIDO
+                ),
+              );
+            }).toList(),
+      ),
+    );
+  }
 
   // --- Widgets y métodos de ayuda específicos de la pantalla de Grupos ---
 

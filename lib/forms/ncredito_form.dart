@@ -711,18 +711,28 @@ class _nCreditoFormState extends State<nCreditoForm>
       return const Center(child: CircularProgressIndicator());
     }
 
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final colors = themeProvider.colors;
+   final themeProvider = Provider.of<ThemeProvider>(context);
+final colors = themeProvider.colors;
 
-    double sumaTotal = montosIndividuales.values.fold(
-      0.0,
-      (sum, amount) => sum + amount,
-    );
-    double descuentoTotal = _descuentosRenovacion.values.fold(
-      0.0,
-      (sum, discount) => sum + discount,
-    );
-    final double totalGarantia = sumaTotal * _getGarantiaPorcentaje();
+double sumaTotal = montosIndividuales.values.fold(
+  0.0,
+  (sum, amount) => sum + amount,
+);
+
+// --- INICIO DE LA MODIFICACIÓN ---
+
+// 1. Obtén un conjunto de los IDs de los integrantes actuales para una búsqueda rápida.
+final idsIntegrantesActuales = integrantes.map((c) => c.idclientes).toSet();
+
+// 2. Calcula el total de descuentos SOLO para los integrantes actuales.
+double descuentoTotal = _descuentosRenovacion.entries
+    .where((entry) => idsIntegrantesActuales.contains(entry.key)) // Filtra por ID
+    .map((entry) => entry.value) // Obtiene solo los montos
+    .fold(0.0, (sum, discount) => sum + discount); // Suma los montos filtrados
+
+// --- FIN DE LA MODIFICACIÓN ---
+
+final double totalGarantia = sumaTotal * _getGarantiaPorcentaje();
 
     return Form(
       key: _integrantesFormKey,
@@ -895,11 +905,16 @@ class _nCreditoFormState extends State<nCreditoForm>
     final double interesTotal = totalARecuperar - monto;
 
     final double montoGarantia = monto * _getGarantiaPorcentaje();
-    final double totalDescuentos = _descuentosRenovacion.values.fold(
-      0.0,
-      (sum, disc) => sum + disc,
-    );
-    final double montoDesembolsado = monto - montoGarantia - totalDescuentos;
+
+// --- APLICA LA MISMA CORRECCIÓN AQUÍ ---
+final idsIntegrantesActuales = integrantes.map((c) => c.idclientes).toSet();
+final double totalDescuentos = _descuentosRenovacion.entries
+    .where((entry) => idsIntegrantesActuales.contains(entry.key))
+    .map((entry) => entry.value)
+    .fold(0.0, (sum, discount) => sum + discount);
+// --- FIN DE LA CORRECCIÓN ---
+
+final double montoDesembolsado = monto - montoGarantia - totalDescuentos;
 
     // --- Construcción de la UI ---
     return SingleChildScrollView(

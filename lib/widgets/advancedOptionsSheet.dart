@@ -1002,7 +1002,34 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
         // ===================================================================
         // --- FIN DE LA SECCIÓN DE TOTALES ---
         // ===================================================================
-        const SizedBox(height: 24),
+
+        Container(
+            margin: const EdgeInsets.only(top: 16),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue.withOpacity(0.2)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue[700], size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                   "Al guardar los clientes a renovar el pago se tomará como pagado.",
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDarkMode ? Colors.blue[200] : Colors.blue[800],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+         const SizedBox(height: 24),
 
         // --- Botones de Acción ---
         // Esta sección no cambia

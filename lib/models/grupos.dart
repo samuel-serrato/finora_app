@@ -8,7 +8,7 @@ class Grupo {
   String asesor;
   final String? idusuario; // <<< CAMBIO 1: AÑADIR EL CAMPO DEL ID DEL ASESOR
   final String fCreacion;
-  final String estado;
+  String estado;
   final String folio;
   final List<ClienteResumenGrupo> clientes; 
 

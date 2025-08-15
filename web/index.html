@@ -43,41 +43,56 @@
 </head>
 
 <body>
+  <!-- Tu flutter_bootstrap.js -->
   <script src="flutter_bootstrap.js" async></script>
 
   <script>
-    function updatePwaThemeColor(color) {
-      document.getElementById('theme-color-meta').setAttribute('content', color);
-    }
-
-    // Variable global para guardar la referencia al nuevo Service Worker.
+    // Variable global para guardar la referencia al nuevo Service Worker
     let newWorker;
 
-    // 1. Definimos una función que Flutter podrá llamar.
-    //    Esta función será llamada desde Dart para mostrar el SnackBar de actualización.
-    window.showUpdateSnackbar = (event) => {
-      // Cuando el Service Worker nos notifica, no hacemos nada directamente.
-      // En su lugar, guardamos la referencia al nuevo worker.
-      newWorker = event.detail;
-
-      // Disparamos un evento personalizado que nuestra app de Flutter puede escuchar.
-      // Esto es más limpio que llamar directamente a una función de Dart.
-      document.dispatchEvent(new CustomEvent('new-version-ready'));
-    };
-
-    // 2. Escuchamos el evento 'NewServiceWorker' que el Service Worker de Flutter emite.
-    //    Cuando se detecta una nueva versión lista, llamamos a nuestra función puente.
-    window.addEventListener('NewServiceWorker', window.showUpdateSnackbar);
-
-
-    // 3. Definimos la función que activará la actualización.
-    //    Flutter llamará a esta función cuando el usuario presione el botón "Actualizar".
-    window.activateNewWorker = () => {
-      if (newWorker) {
-        // Le decimos al nuevo Service Worker que se salte la espera y se active ahora.
-        newWorker.postMessage({ type: 'SKIP_WAITING' });
+    // 1. FUNCIÓN QUE DART LLAMARÁ.
+    // Esta función le dice al nuevo SW que se active y luego recarga la página.
+    function applyUpdate() {
+      if (!newWorker) {
+        console.error('No hay un nuevo worker para activar.');
+        return;
       }
-    };
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        // Una vez que el nuevo SW está al mando, recargamos.
+        window.location.reload();
+      }, { once: true });
+
+      // Enviamos el mensaje al nuevo SW para que deje de esperar.
+      newWorker.postMessage({ type: 'SKIP_WAITING' });
+    }
+
+    // 2. LÓGICA DE REGISTRO Y DETECCIÓN
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/my_sw.js')
+          .then(function (registration) {
+            console.log('Service Worker registrado correctamente.');
+
+            registration.addEventListener('updatefound', () => {
+              newWorker = registration.installing;
+              console.log('Se encontró un nuevo Service Worker, instalando...');
+
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  console.log('Nueva versión lista. Notificando a Flutter...');
+                  
+                  // ¡LA CONEXIÓN CLAVE! Llama a la función que Dart expuso.
+                  if (window.onNewVersionReady) {
+                    window.onNewVersionReady();
+                  }
+                }
+              });
+            });
+          }).catch(function (err) {
+            console.error('Fallo en el registro del Service Worker: ', err);
+          });
+      });
+    }
   </script>
 </body>
 

@@ -1,3 +1,11 @@
+// Pega esta función al inicio de tu archivo models/estado_credito.dart
+double parseDouble(dynamic value) {
+  if (value is double) return value;
+  if (value is int) return value.toDouble();
+  if (value is String) return double.tryParse(value) ?? 0.0;
+  return 0.0;
+}
+
 class EstadoCredito {
   final double montoTotal;
   final double moratorios;
@@ -17,37 +25,39 @@ class EstadoCredito {
     required this.estado,
   });
 
-  factory EstadoCredito.fromJson(Map<String, dynamic> json) {
-  // Manejo de seguridad si el JSON entero es nulo o vacío
+  // En tu clase EstadoCredito
+factory EstadoCredito.fromJson(Map<String, dynamic> json) {
+  // Manejo de seguridad si el JSON entero es nulo o vacío, esto está bien
   if (json.isEmpty) {
     return EstadoCredito(
       montoTotal: 0.0,
       moratorios: 0.0,
       semanasDeRetraso: 0,
       diferenciaEnDias: 0,
-      acumulado: 0,
+      acumulado: 0.0, // Asegúrate de que el valor por defecto sea double
       mensaje: '',
       estado: '',
     );
   }
 
   return EstadoCredito(
-    // 1. Convertir de forma segura a double, con valor por defecto 0.0 si es nulo
-    montoTotal: (json['montoTotal'] as num?)?.toDouble() ?? 0.0,
-    moratorios: (json['moratorios'] as num?)?.toDouble() ?? 0.0,
+    // --- CAMPOS DOUBLE ---
+    // Usa nuestra función segura para todos los `double`.
+    // Esto maneja int, double, String y null sin problemas.
+    montoTotal: parseDouble(json['montoTotal']),
+    moratorios: parseDouble(json['moratorios']),
+    acumulado: parseDouble(json['acumulado']),
 
-    // 2. Asignar de forma segura a int, con valor por defecto 0 si es nulo
-    semanasDeRetraso: json['semanasDeRetraso'] ?? 0,
-    diferenciaEnDias: json['diferenciaEnDias'] ?? 0,
+    // --- CAMPOS INT ---
+    // Para los `int`, tu método es bueno. Lo hacemos un poco más robusto
+    // por si la API envía un número como String (ej. "3").
+    semanasDeRetraso: int.tryParse(json['semanasDeRetraso']?.toString() ?? '0') ?? 0,
+    diferenciaEnDias: int.tryParse(json['diferenciaEnDias']?.toString() ?? '0') ?? 0,
 
-    // 3. Asignar de forma segura a String, con valor por defecto '' si es nulo
+    // --- CAMPOS STRING ---
+    // Tu método es perfecto, lo mantenemos.
     mensaje: json['mensaje'] ?? '',
-
-    // 4. Buscar en 'estado' y 'esatado' (si es un typo común en tu API)
-    estado: json['estado'] ?? json['esatado'] ?? '',
-
-    // 5. Asegurar que acumulado sea un entero, con valor por defecto 0 si es nulo
-    acumulado: json['acumulado'] ?? 0,
+    estado: json['estado'] ?? json['esatado'] ?? '', // Maneja el typo
   );
 }
 }

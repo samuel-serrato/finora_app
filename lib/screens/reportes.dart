@@ -102,6 +102,7 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
 
       if (!mounted) return;
 
+      
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (selectedReportType == 'Contable') {
@@ -117,11 +118,24 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
         setState(() => hasGenerated = true); // Reporte generado con éxito
       } else {
         final errorData = json.decode(response.body);
-        if (errorData["Error"]?["Message"] == "La sesión ha cambiado. Cerrando sesión...") {
-           // Manejar cierre de sesión...
-        } else if (response.statusCode == 401 || (response.statusCode == 404 && errorData["Error"]?["Message"] == "jwt expired")) {
+        final String serverMessage = errorData["Error"]?["Message"] ?? "";
+
+        if (serverMessage == "La sesión ha cambiado. Cerrando sesión...") {
+          // Manejar cierre de sesión...
+        } else if (response.statusCode == 401 || (response.statusCode == 404 && serverMessage == "jwt expired")) {
           // Manejar sesión expirada...
+
+        // --- INICIO DE LA CORRECCIÓN ---
+        // Se añade un caso para manejar la respuesta "No hay reportes de pagos".
+        // Esto se considera una generación exitosa pero sin resultados, no un error.
+        } else if (response.statusCode == 400 && serverMessage == "No hay reportes de pagos") {
+          setState(() {
+            hasGenerated = true; // El reporte se "generó", pero vino vacío.
+          });
+        // --- FIN DE LA CORRECCIÓN ---
+
         } else {
+          // Solo los errores realmente inesperados lanzarán una excepción.
           throw Exception('Error ${response.statusCode}: ${response.body}');
         }
       }

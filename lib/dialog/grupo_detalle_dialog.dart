@@ -5,6 +5,7 @@ import 'package:finora_app/dialog/renovarGrupo.dart';
 import 'package:finora_app/forms/renovar_grupo_form.dart';
 import 'package:finora_app/models/grupos.dart';
 import 'package:finora_app/providers/theme_provider.dart';
+import 'package:finora_app/providers/user_data_provider.dart';
 import 'package:finora_app/services/api_service.dart';
 import 'package:finora_app/services/grupo_service.dart';
 import 'package:flutter/material.dart';
@@ -12,17 +13,18 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../utils/app_logger.dart';
 
-
 class GrupoDetalleDialog extends StatefulWidget {
   final String idGrupo;
   final String nombreGrupo;
   final VoidCallback onGrupoRenovado;
+  final VoidCallback? onEstadoCambiado; // <--- AÑADE ESTA LÍNEA
 
   const GrupoDetalleDialog({
     super.key,
     required this.idGrupo,
     required this.nombreGrupo,
     required this.onGrupoRenovado,
+    this.onEstadoCambiado, // <--- AÑADE ESTA LÍNEA
   });
 
   @override
@@ -37,6 +39,42 @@ class _GrupoDetalleDialogState extends State<GrupoDetalleDialog>
   bool isLoading = true;
   bool errorDeConexion = false;
   String errorMessage = 'Ocurrió un error inesperado.';
+
+  // --- NUEVA VARIABLE DE CLASE PARA LOS ESTILOS ---
+  final Map<String, Map<String, dynamic>> _statusConfig = const {
+    'Activo': {
+      'color': Colors.green,
+      'icon': Icons.check_circle_outline_rounded,
+    },
+    'Disponible': {'color': Colors.blue, 'icon': Icons.circle_outlined},
+    'Inactivo': {'color': Colors.red, 'icon': Icons.cancel_outlined},
+    'Liquidado': {'color': Colors.purple, 'icon': Icons.paid_outlined},
+    'Finalizado': {
+      'color': Colors.red, // Cambiado a gris para ser más neutro
+      'icon': Icons.flag_circle_outlined,
+    },
+    'default': {'color': Colors.grey, 'icon': Icons.info_outline_rounded},
+  };
+
+  // --- NUEVAS VARIABLES DE ESTADO ---
+  // 1. Lista de estados disponibles para el dropdown.
+  final List<String> _posiblesEstados = const [
+    'Activo',
+    'Disponible',
+    //'Inactivo',
+    'Liquidado',
+  ];
+
+  /*  final List<String> _posiblesEstados = const [
+    'Activo',
+    'Finalizado',
+  ]; */
+  // 2. Para manejar el estado de carga mientras se actualiza el estado.
+  bool _isUpdatingStatus = false;
+  // 3. Para guardar el estado actual seleccionado en el dropdown.
+  String? _selectedEstado;
+
+  // --- FIN DE NUEVAS VARIABLES ---
 
   final GrupoService _grupoService = GrupoService();
 
@@ -77,6 +115,9 @@ class _GrupoDetalleDialogState extends State<GrupoDetalleDialog>
 
       if (grupoResponse.success && grupoResponse.data != null) {
         grupoData = grupoResponse.data;
+        // --- AÑADIR ESTA LÍNEA ---
+        // Inicializamos el estado seleccionado con el dato que viene de la API.
+        _selectedEstado = grupoData!.estado;
       } else {
         errorDeConexion = true;
         errorMessage =
@@ -106,9 +147,184 @@ class _GrupoDetalleDialogState extends State<GrupoDetalleDialog>
     }
   }
 
-    // --- FUNCIÓN MODIFICADA ---
-   // --- REEMPLAZA TU ANTIGUA FUNCIÓN _mostrarDialogoRenovar CON ESTA ---
+  // --- NUEVO MÉTODO PARA MANEJAR LA ACTUALIZACIÓN ---
+  Future<void> _handleStatusChange(String? nuevoEstado) async {
+    if (nuevoEstado == null || nuevoEstado == grupoData!.estado || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isUpdatingStatus = true;
+      _selectedEstado =
+          nuevoEstado; // Actualiza la UI del dropdown inmediatamente
+    });
+
+    final response = await _grupoService.actualizarEstadoGrupo(
+      widget.idGrupo,
+      nuevoEstado,
+    );
+
+    if (!mounted) return;
+
+    if (response.success) {
+      // Si la API confirma el cambio, actualizamos el dato principal.
+      setState(() {
+        grupoData!.estado = nuevoEstado;
+      });
+      _showSnackBar(
+        'Estado actualizado a "$nuevoEstado" correctamente.',
+        isError: false,
+      );
+
+         // --- ¡AQUÍ ESTÁ LA MAGIA! ---
+    // Si el callback fue proporcionado, lo llamamos.
+    widget.onEstadoCambiado?.call(); 
+    } else {
+      // Si falla, revertimos el dropdown a su estado original y mostramos error.
+      _showSnackBar(
+        response.error ?? 'Error al actualizar el estado.',
+        isError: true,
+      );
+      setState(() {
+        _selectedEstado = grupoData!.estado; // Revertir al estado anterior
+      });
+    }
+
+    setState(() {
+      _isUpdatingStatus = false;
+    });
+  }
+
+  // --- NUEVO MÉTODO AUXILIAR PARA MOSTRAR MENSAJES ---
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.redAccent : Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // --- FUNCIÓN MODIFICADA ---
+  // --- REEMPLAZA TU ANTIGUA FUNCIÓN _mostrarDialogoRenovar CON ESTA ---
+  // --- FUNCIÓN MODIFICADA ---
+  // Esta función ahora contiene la lógica de verificación.
+  // --- FUNCIÓN MODIFICADA CON EL NUEVO DISEÑO ---
   void _mostrarDialogoRenovar(String idGrupo) {
+    // 1. Verificamos si el grupo está cargado y su estado es "Activo".
+    if (grupoData != null && grupoData!.estado == 'Activo') {
+      // Obtenemos los colores del ThemeProvider para usarlos en el diálogo.
+      final colors = Provider.of<ThemeProvider>(context, listen: false).colors;
+
+      // 2. Si es "Activo", mostramos el diálogo con el diseño personalizado.
+      showDialog(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20.0),
+            ),
+            backgroundColor: colors.backgroundCard,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 450),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(25, 25, 25, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // --- CAMBIOS CLAVE ---
+                    // Ícono: Usamos uno más adecuado para una advertencia/confirmación.
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      size: 60,
+                      color: Colors.orange.shade700, // Un color de advertencia
+                    ),
+                    const SizedBox(height: 15),
+                    // Título: Adaptado para la renovación.
+                    Text(
+                      'Confirmar Renovación',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: colors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    // Descripción: El mensaje que solicitaste.
+                    Text(
+                      'El grupo que se va a renovar está activo y tiene un crédito activo. ¿Desea continuar?',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: colors.textSecondary,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 25),
+                    // Botones: Mantenemos el estilo de tu ejemplo.
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: colors.textSecondary,
+                              side: BorderSide(color: colors.divider),
+                              backgroundColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(vertical: 15),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            child: const Text('Cancelar'),
+                          ),
+                        ),
+                        const SizedBox(width: 15),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: colors.brandPrimary,
+                              foregroundColor: colors.whiteWhite,
+                              padding: const EdgeInsets.symmetric(vertical: 15),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            // Acción: Adaptada para proceder con la renovación.
+                            onPressed: () {
+                              Navigator.of(
+                                dialogContext,
+                              ).pop(); // Cierra la alerta
+                              _procederConRenovacion(idGrupo, 'Si');
+                            },
+                            child: const Text(
+                              'Continuar', // Texto del botón de confirmación
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    } else {
+      // Si el estado no es "Activo", procedemos directamente enviando 'No'.
+      // --- CAMBIO AQUÍ: Enviamos 'No' ---
+      _procederConRenovacion(idGrupo, 'No');
+    }
+  }
+
+  // --- FUNCIÓN ACTUALIZADA PARA ACEPTAR EL NUEVO DATO ---
+  void _procederConRenovacion(String idGrupo, String permitirNuevoGrupo) {
     // Obtenemos el ancho total de la pantalla ANTES de llamar al BottomSheet.
     final fullScreenWidth = MediaQuery.of(context).size.width;
 
@@ -121,37 +337,30 @@ class _GrupoDetalleDialogState extends State<GrupoDetalleDialog>
       dialogMaxWidth = fullScreenWidth;
     } else {
       // En escritorio, el diálogo ocupa un porcentaje de la pantalla.
-      // Puedes ajustar este valor si lo necesitas.
-      dialogMaxWidth = fullScreenWidth * 0.7; 
+      dialogMaxWidth = fullScreenWidth * 0.7;
     }
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      // Usamos la propiedad `constraints` para pasar el ancho calculado.
       constraints: BoxConstraints(maxWidth: dialogMaxWidth),
       builder: (context) {
-        // El builder ahora solo se preocupa por el contenido vertical.
         return Padding(
-          // Esto asegura que el teclado no tape el formulario
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(context).viewInsets.bottom,
           ),
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              // La altura máxima se sigue controlando aquí.
               maxHeight: MediaQuery.of(context).size.height * 0.92,
             ),
-            // --- AQUÍ ESTÁ EL CAMBIO CLAVE ---
-            // Llamamos a RenovarGrupoForm en lugar de GrupoDetalleDialog
             child: RenovarGrupoForm(
               idGrupo: idGrupo,
+              permitirNuevoGrupo:
+                  permitirNuevoGrupo, // <-- AQUÍ SE PASA EL VALOR
               onGrupoRenovado: () {
-                // Cerramos este diálogo de detalles para volver a la lista principal.
-                // Lo hacemos desde aquí porque el RenovarGrupoForm ya se cierra solo.
-                Navigator.of(context).pop(); 
-                widget.onGrupoRenovado(); // Refresca la lista de grupos.
+                Navigator.of(context).pop();
+                widget.onGrupoRenovado();
               },
             ),
           ),
@@ -159,7 +368,6 @@ class _GrupoDetalleDialogState extends State<GrupoDetalleDialog>
       },
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -220,6 +428,12 @@ class _GrupoDetalleDialogState extends State<GrupoDetalleDialog>
     final colors = themeProvider.colors;
     final isDarkMode = themeProvider.isDarkMode;
 
+    // Obtenemos la información del usuario desde el provider
+    final userDataProvider = Provider.of<UserDataProvider>(
+      context,
+      listen: false,
+    );
+
     return Column(
       children: [
         Padding(
@@ -242,7 +456,10 @@ class _GrupoDetalleDialogState extends State<GrupoDetalleDialog>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  _buildModernStatusChip(grupoData!.estado),
+                  //_buildModernStatusChip(grupoData!.estado),
+                  // --- ESTE ES EL CAMBIO PRINCIPAL ---
+                  // Reemplazamos la llamada directa al chip por nuestro nuevo widget.
+                  _buildStatusWidget(userDataProvider.tipoUsuario, colors),
                 ],
               ),
               Container(
@@ -417,7 +634,7 @@ class _GrupoDetalleDialogState extends State<GrupoDetalleDialog>
                 Icons.receipt_long_rounded,
               ),
               _buildInfoItem(
-                'Creado el',
+                'Fecha de Creación',
                 _formatDate(grupoData!.fCreacion),
                 Icons.event_rounded,
               ),
@@ -555,7 +772,7 @@ class _GrupoDetalleDialogState extends State<GrupoDetalleDialog>
       decoration: BoxDecoration(
         color: colors.backgroundCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.divider)
+        border: Border.all(color: colors.divider),
       ),
       child: TabBar(
         controller: _tabController,
@@ -569,41 +786,44 @@ class _GrupoDetalleDialogState extends State<GrupoDetalleDialog>
         labelColor: colors.whiteWhite,
         unselectedLabelColor: colors.textSecondary,
         labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
-        tabs: const [
-            Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  //const Icon(Icons.info_outline_rounded, size: 12),
-                  const SizedBox(width: 2),
-                  const Text('Información'),
-                ],
-              ),
-            ),
-            Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  //const Icon(Icons.people_outline_rounded, size: 12),
-                  const SizedBox(width: 2),
-                  const Text('Integrantes'),
-                ],
-              ),
-            ),
-            Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  //const Icon(Icons.history_rounded, size: 12),
-                  const SizedBox(width: 2),
-                  const Text('Historial'),
-                ],
-              ),
-            ),
-          ],
+        unselectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.w500,
+          fontSize: 12,
         ),
-      );
+        tabs: const [
+          Tab(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                //const Icon(Icons.info_outline_rounded, size: 12),
+                const SizedBox(width: 2),
+                const Text('Información'),
+              ],
+            ),
+          ),
+          Tab(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                //const Icon(Icons.people_outline_rounded, size: 12),
+                const SizedBox(width: 2),
+                const Text('Integrantes'),
+              ],
+            ),
+          ),
+          Tab(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                //const Icon(Icons.history_rounded, size: 12),
+                const SizedBox(width: 2),
+                const Text('Historial'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildIntegrantesList(
@@ -1018,24 +1238,51 @@ class _GrupoDetalleDialogState extends State<GrupoDetalleDialog>
     );
   }
 
-  Widget _buildModernStatusChip(String estado) {
-    final statusConfig = {
-      'Activo': {
-        'color': Colors.green,
-        'icon': Icons.check_circle_outline_rounded,
-      },
-      'Disponible': {'color': Colors.blue, 'icon': Icons.circle_outlined},
-      'Inactivo': {'color': Colors.red, 'icon': Icons.cancel_outlined},
-      'Liquidado': {'color': Colors.purple, 'icon': Icons.paid_outlined},
-      'Finalizado': {
-        'color': Colors.grey[600],
-        'icon': Icons.flag_circle_outlined,
-      },
-      'default': {'color': Colors.grey, 'icon': Icons.info_outline_rounded},
-    };
-    final config = statusConfig[estado] ?? statusConfig['default']!;
+  // Al final de la clase _GrupoDetalleDialogState
+
+  /// Widget que decide si mostrar el chip estático o el dropdown editable.
+  Widget _buildStatusWidget(String tipoUsuario, dynamic colors) {
+    // La condición principal: si el tipo de usuario es 'Admin', muestra el dropdown.
+    if (tipoUsuario == 'Admin') {
+      return _buildAdminStatusDropdown(colors);
+    }
+    // Para cualquier otro tipo de usuario, muestra el chip de siempre.
+    return _buildModernStatusChip(grupoData!.estado);
+  }
+
+  // Coloca estos tres métodos al final de tu clase _GrupoDetalleDialogState
+
+  /// 1. Widget reutilizable para el contenido (Icono + Texto).
+  Widget _buildStatusRow(String estado) {
+    final config = _statusConfig[estado] ?? _statusConfig['default']!;
     final color = config['color'] as Color;
     final icon = config['icon'] as IconData;
+
+    return Row(
+      mainAxisSize:
+          MainAxisSize.min, // Importante para que no ocupe todo el ancho
+      children: [
+        Icon(icon, color: color, size: 16),
+        const SizedBox(width: 6),
+        Text(
+          estado,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 2. El chip estático, ahora más simple y usando el _buildStatusRow.
+  @override
+  Widget _buildModernStatusChip(String estado) {
+    // Ya no necesitas la configuración aquí, la hemos movido.
+    final config = _statusConfig[estado] ?? _statusConfig['default']!;
+    final color = config['color'] as Color;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -1043,21 +1290,74 @@ class _GrupoDetalleDialogState extends State<GrupoDetalleDialog>
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(width: 6),
-          Text(
-            estado,
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+      child: _buildStatusRow(estado), // Reutilizamos el nuevo widget
+    );
+  }
+
+  /// 3. El NUEVO Y MEJORADO dropdown para administradores.
+  Widget _buildAdminStatusDropdown(dynamic colors) {
+    // Obtenemos la configuración del estado actualmente seleccionado
+    final config = _statusConfig[_selectedEstado] ?? _statusConfig['default']!;
+    final color = config['color'] as Color;
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // El Container exterior da el estilo de fondo y borde basado en el estado
+        Container(
+          height: 34, // Altura fija para consistencia
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withOpacity(0.3)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedEstado,
+              onChanged: _isUpdatingStatus ? null : _handleStatusChange,
+              dropdownColor: colors.backgroundCard,
+              // --- LA MAGIA ESTÁ AQUÍ ---
+              // Esto define cómo se ve el elemento cuando el menú está CERRADO
+              selectedItemBuilder: (context) {
+                return _posiblesEstados.map<Widget>((String item) {
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 12.0),
+                    child: _buildStatusRow(
+                      item,
+                    ), // Reutilizamos el widget de contenido
+                  );
+                }).toList();
+              },
+              // Esto define cómo se ven los elementos en la lista DESPLEGADA
+              items:
+                  _posiblesEstados.map((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: _buildStatusRow(
+                        value,
+                      ), // También lo reutilizamos aquí
+                    );
+                  }).toList(),
+              // Personalizamos la flechita para que coincida con el color
+              icon: Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: Icon(Icons.arrow_drop_down_rounded, color: color),
+              ),
+              isDense: true, // Reduce el padding vertical interno
             ),
           ),
-        ],
-      ),
+        ),
+        // Indicador de carga, ahora también usa el color del estado
+        if (_isUpdatingStatus)
+          SizedBox(
+            height: 18,
+            width: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: color, // El color del progreso ahora es dinámico
+            ),
+          ),
+      ],
     );
   }
 }

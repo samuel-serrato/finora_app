@@ -28,7 +28,7 @@ class Credito {
   final double pagoCuota;
   final String numPago;
   final String fechasIniciofin;
-  final String estado; // para json['estado'] (ej. "Finalizado")
+  String estado; // para json['estado'] (ej. "Finalizado")
   final String fCreacion;
   final String estadoInterno; // para estado_credito['esatado'] (ej. "Pagado")
   final List<ClienteMonto> clientesMontosInd;

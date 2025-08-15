@@ -7,6 +7,7 @@ import 'package:finora_app/helpers/responsive_helpers.dart';
 import 'package:finora_app/models/cliente_monto.dart';
 import 'package:finora_app/models/creditos.dart';
 import 'package:finora_app/providers/theme_provider.dart';
+import 'package:finora_app/providers/user_data_provider.dart';
 import 'package:finora_app/services/api_service.dart';
 import 'package:finora_app/services/credito_service.dart';
 import 'package:flutter/material.dart';
@@ -14,13 +15,17 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../utils/app_logger.dart';
 
-
 // 1. EL WIDGET PRINCIPAL DEL DIÁLOGO (AHORA CON LÓGICA DE DATOS)
 class CreditoDetalleConTabs extends StatefulWidget {
   // Recibe el ID del crédito que se va a mostrar
   final String folio;
+  final VoidCallback? onEstadoCambiado; // <--- AÑADE ESTA LÍNEA
 
-  const CreditoDetalleConTabs({super.key, required this.folio});
+  const CreditoDetalleConTabs({
+    super.key,
+    required this.folio,
+    this.onEstadoCambiado, // <--- AÑADE ESTA LÍNEA
+  });
 
   @override
   State<CreditoDetalleConTabs> createState() => _CreditoDetalleConTabsState();
@@ -41,6 +46,31 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
 
   // ▼▼▼ 1. AÑADE LA VARIABLE DE ESTADO DE CARGA AQUÍ ▼▼▼
   bool _isSaving = false;
+
+
+   // --- 2. AÑADE LAS NUEVAS VARIABLES DE ESTADO ---
+  // Lista de estados posibles para el dropdown
+  final List<String> _posiblesEstados = const [
+    'Activo',
+    'Finalizado',
+    //'Pagado',
+  ];
+  // Para manejar la carga mientras se actualiza el estado
+  bool _isUpdatingStatus = false;
+  // Para guardar el estado actual seleccionado en el dropdown
+  String? _selectedEstado;
+  
+  // Configuración de estilos para los estados (centralizado)
+  final Map<String, Map<String, dynamic>> _statusConfig = const {
+    'Activo': {
+      'color': Colors.green,
+      'icon': Icons.check_circle_outline_rounded,
+    },
+    'Finalizado': {'color': Colors.red, 'icon': Icons.flag_circle_outlined},
+    'Pagado': {'color': Colors.purple, 'icon': Icons.paid_outlined},
+    'default': {'color': Colors.grey, 'icon': Icons.info_outline_rounded},
+  };
+
 
   @override
   void initState() {
@@ -70,6 +100,10 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
     if (creditoResponse.success && creditoResponse.data != null) {
       _creditoData = creditoResponse.data;
 
+       
+      // --- 3. INICIALIZA EL ESTADO SELECCIONADO ---
+      _selectedEstado = _creditoData!.estado;
+
       // Paso 2: Ahora que tenemos los datos, obtenemos el idgrupos
       final descuentoResponse = await _creditoService.getDescuentosRenovacion(
         _creditoData!.idgrupos,
@@ -91,6 +125,53 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
     }
   }
 
+    // --- 4. AÑADE EL MÉTODO PARA MANEJAR EL CAMBIO DE ESTADO Y EL SNACKBAR ---
+
+  Future<void> _handleStatusChange(String? nuevoEstado) async {
+    if (nuevoEstado == null || nuevoEstado == _creditoData!.estado || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isUpdatingStatus = true;
+      _selectedEstado = nuevoEstado;
+    });
+
+    // Usamos el idgrupos del crédito cargado
+    final response = await _creditoService.actualizarEstadoCredito(_creditoData!.idgrupos, nuevoEstado);
+
+    if (!mounted) return;
+
+    if (response.success) {
+      setState(() {
+        _creditoData!.estado = nuevoEstado;
+      });
+      _showSnackBar('Estado actualizado a "$nuevoEstado" correctamente.', isError: false);
+      // ¡Llama al callback para refrescar la lista externa!
+      widget.onEstadoCambiado?.call();
+    } else {
+      _showSnackBar(response.error ?? 'Error al actualizar el estado.', isError: true);
+      setState(() {
+        _selectedEstado = _creditoData!.estado; // Revertir
+      });
+    }
+    
+    setState(() {
+      _isUpdatingStatus = false;
+    });
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.redAccent : Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -108,6 +189,8 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
     final themeProvider = Provider.of<ThemeProvider>(context);
     final colors = themeProvider.colors;
     final isDarkMode = themeProvider.isDarkMode;
+     // --- OBTÉN EL USERDATA PROVIDER ---
+  final userDataProvider = Provider.of<UserDataProvider>(context, listen: false);
 
     // ▼▼▼ ¡LA MODIFICACIÓN PRINCIPAL ESTÁ AQUÍ! ▼▼▼
     // Envolvemos todo el contenido en un WillPopScope.
@@ -190,7 +273,9 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
                           ),
                           const SizedBox(width: 8),
                           if (!_isLoading && _creditoData != null)
-                            _buildModernStatusChip(_creditoData!.estado),
+                            //_buildModernStatusChip(_creditoData!.estado),
+                              // --- ¡ESTE ES EL CAMBIO! ---
+                        _buildStatusWidget(userDataProvider.tipoUsuario, colors),
                         ],
                       ),
                       if (!_isLoading && _creditoData != null)
@@ -427,7 +512,7 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
           _buildInfoItem('Detalles', credito.detalles, Icons.notes_rounded),
         _buildInfoItem(
           'Fecha de Creación',
-          _formatDate(credito.fCreacion),
+          (credito.fCreacion),
           Icons.event_rounded,
         ),
       ]),
@@ -702,101 +787,97 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
   // (Omitidos por brevedad, pero deben estar aquí)
   // --- WIDGET PRINCIPAL CON LA LÓGICA RESPONSIVE CORRECTA ---
   Widget _buildIntegrantesTab(ThemeProvider themeProvider) {
-  if (_creditoData == null || _creditoData!.clientesMontosInd.isEmpty) {
-    return _buildEmptyState(
-      'Sin Integrantes',
-      'No se encontraron integrantes para este crédito.',
-      Icons.people_outline_rounded,
-    );
+    if (_creditoData == null || _creditoData!.clientesMontosInd.isEmpty) {
+      return _buildEmptyState(
+        'Sin Integrantes',
+        'No se encontraron integrantes para este crédito.',
+        Icons.people_outline_rounded,
+      );
+    }
+
+    final plazoAbbr = _getPlazoAbbreviation(_creditoData!.tipoPlazo);
+
+    // --- CÁLCULO DE TOTALES ---
+    final clientes = _creditoData!.clientesMontosInd;
+    double sumCapitalIndividual = 0;
+    double sumMontoDesembolsado = 0;
+    double sumPeriodoCapital = 0;
+    double sumPeriodoInteres = 0;
+    double sumTotalCapital = 0;
+    double sumTotalIntereses = 0;
+    double sumCapitalMasInteres = 0;
+    double sumTotal = 0;
+
+    final garantiaPorcentaje =
+        double.tryParse(_creditoData!.garantia.replaceAll('%', '')) ?? 0.0;
+
+    for (var cliente in clientes) {
+      final descuento = _descuentos[cliente.idclientes] ?? 0.0;
+      final garantiaMonto =
+          cliente.capitalIndividual * (garantiaPorcentaje / 100);
+      final montoDesembolsadoIndividual =
+          cliente.capitalIndividual - descuento - garantiaMonto;
+
+      sumCapitalIndividual += cliente.capitalIndividual;
+      sumMontoDesembolsado += montoDesembolsadoIndividual;
+      sumPeriodoCapital += cliente.periodoCapital;
+      sumPeriodoInteres += cliente.periodoInteres;
+      sumTotalCapital += cliente.totalCapital;
+      sumTotalIntereses += cliente.totalIntereses;
+      sumCapitalMasInteres += cliente.capitalMasInteres;
+      sumTotal += cliente.total;
+    }
+    // <<< NUEVO: Cálculo del total basado en la cuota redondeada >>>
+    final sumTotalRedondeado = _creditoData!.pagoCuota * _creditoData!.plazo;
+
+    // --- LÓGICA RESPONSIVE ---
+    if (context.isDesktop) {
+      // VISTA TABLET Y DESKTOP: Muestra la tabla de datos
+      return _buildResponsiveIntegrantesTable(
+        clientes: clientes,
+        themeProvider: themeProvider,
+        plazoAbbr: plazoAbbr,
+        sumCapitalIndividual: sumCapitalIndividual,
+        sumMontoDesembolsado: sumMontoDesembolsado,
+        sumPeriodoCapital: sumPeriodoCapital,
+        sumPeriodoInteres: sumPeriodoInteres,
+        sumTotalCapital: sumTotalCapital,
+        sumTotalIntereses: sumTotalIntereses,
+        sumCapitalMasInteres: sumCapitalMasInteres,
+        sumTotal: sumTotal,
+        // <<< NUEVO: Pasamos los datos de redondeo a la tabla >>>
+        pagoCuotaRedondeado: _creditoData!.pagoCuota,
+        totalRedondeado: sumTotalRedondeado,
+      );
+    } else {
+      // VISTA MÓVIL: Muestra las tarjetas expandibles
+      return ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: clientes.length + 1,
+        itemBuilder: (context, index) {
+          if (index == clientes.length) {
+            // La tarjeta de totales ya recibe los datos de redondeo y los maneja internamente.
+            return _buildTotalesCard(
+              sumCapitalIndividual: sumCapitalIndividual,
+              sumMontoDesembolsado: sumMontoDesembolsado,
+              sumPeriodoCapital: sumPeriodoCapital,
+              sumPeriodoInteres: sumPeriodoInteres,
+              sumTotalCapital: sumTotalCapital,
+              sumTotalIntereses: sumTotalIntereses,
+              sumCapitalMasInteres: sumCapitalMasInteres,
+              sumTotal: sumTotal,
+              pagoCuotaRedondeado: _creditoData!.pagoCuota,
+              totalRedondeado: sumTotalRedondeado,
+              themeProvider: themeProvider,
+              plazoAbbr: plazoAbbr,
+            );
+          }
+          final cliente = clientes[index];
+          return _buildIntegranteCard(cliente, themeProvider, plazoAbbr);
+        },
+      );
+    }
   }
-
-  final plazoAbbr = _getPlazoAbbreviation(_creditoData!.tipoPlazo);
-
-  // --- CÁLCULO DE TOTALES ---
-  final clientes = _creditoData!.clientesMontosInd;
-  double sumCapitalIndividual = 0;
-  double sumMontoDesembolsado = 0;
-  double sumPeriodoCapital = 0;
-  double sumPeriodoInteres = 0;
-  double sumTotalCapital = 0;
-  double sumTotalIntereses = 0;
-  double sumCapitalMasInteres = 0;
-  double sumTotal = 0;
-
-  final garantiaPorcentaje =
-      double.tryParse(_creditoData!.garantia.replaceAll('%', '')) ?? 0.0;
-
-  for (var cliente in clientes) {
-    final descuento = _descuentos[cliente.idclientes] ?? 0.0;
-    final garantiaMonto =
-        cliente.capitalIndividual * (garantiaPorcentaje / 100);
-    final montoDesembolsadoIndividual =
-        cliente.capitalIndividual - descuento - garantiaMonto;
-
-    sumCapitalIndividual += cliente.capitalIndividual;
-    sumMontoDesembolsado += montoDesembolsadoIndividual;
-    sumPeriodoCapital += cliente.periodoCapital;
-    sumPeriodoInteres += cliente.periodoInteres;
-    sumTotalCapital += cliente.totalCapital;
-    sumTotalIntereses += cliente.totalIntereses;
-    sumCapitalMasInteres += cliente.capitalMasInteres;
-    sumTotal += cliente.total;
-  }
-  // <<< NUEVO: Cálculo del total basado en la cuota redondeada >>>
-  final sumTotalRedondeado = _creditoData!.pagoCuota * _creditoData!.plazo;
-
-  // --- LÓGICA RESPONSIVE ---
-  if (context.isDesktop) {
-    // VISTA TABLET Y DESKTOP: Muestra la tabla de datos
-    return _buildResponsiveIntegrantesTable(
-      clientes: clientes,
-      themeProvider: themeProvider,
-      plazoAbbr: plazoAbbr,
-      sumCapitalIndividual: sumCapitalIndividual,
-      sumMontoDesembolsado: sumMontoDesembolsado,
-      sumPeriodoCapital: sumPeriodoCapital,
-      sumPeriodoInteres: sumPeriodoInteres,
-      sumTotalCapital: sumTotalCapital,
-      sumTotalIntereses: sumTotalIntereses,
-      sumCapitalMasInteres: sumCapitalMasInteres,
-      sumTotal: sumTotal,
-      // <<< NUEVO: Pasamos los datos de redondeo a la tabla >>>
-      pagoCuotaRedondeado: _creditoData!.pagoCuota,
-      totalRedondeado: sumTotalRedondeado,
-    );
-  } else {
-    // VISTA MÓVIL: Muestra las tarjetas expandibles
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: clientes.length + 1,
-      itemBuilder: (context, index) {
-        if (index == clientes.length) {
-          // La tarjeta de totales ya recibe los datos de redondeo y los maneja internamente.
-          return _buildTotalesCard(
-            sumCapitalIndividual: sumCapitalIndividual,
-            sumMontoDesembolsado: sumMontoDesembolsado,
-            sumPeriodoCapital: sumPeriodoCapital,
-            sumPeriodoInteres: sumPeriodoInteres,
-            sumTotalCapital: sumTotalCapital,
-            sumTotalIntereses: sumTotalIntereses,
-            sumCapitalMasInteres: sumCapitalMasInteres,
-            sumTotal: sumTotal,
-            pagoCuotaRedondeado: _creditoData!.pagoCuota,
-            totalRedondeado: sumTotalRedondeado,
-            themeProvider: themeProvider,
-            plazoAbbr: plazoAbbr,
-          );
-        }
-        final cliente = clientes[index];
-        return _buildIntegranteCard(
-          cliente,
-          themeProvider,
-          plazoAbbr,
-        );
-      },
-    );
-  }
-}
 
   //==============================================================================
   // <<< INICIO: NUEVA IMPLEMENTACIÓN DE TABLA RESPONSIVA >>>
@@ -804,60 +885,65 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
 
   // Widget principal que construye la estructura de la tabla responsiva
   //==============================================================================
-// <<< TABLA RESPONSIVA PARA DESKTOP (CON LÓGICA DE REDONDEO) >>>
-//==============================================================================
-Widget _buildResponsiveIntegrantesTable({
-  required List<ClienteMonto> clientes,
-  required ThemeProvider themeProvider,
-  required String plazoAbbr,
-  required double sumCapitalIndividual,
-  required double sumMontoDesembolsado,
-  required double sumPeriodoCapital,
-  required double sumPeriodoInteres,
-  required double sumTotalCapital,
-  required double sumTotalIntereses,
-  required double sumCapitalMasInteres,
-  required double sumTotal,
-  // <<< NUEVO: Parámetros para el redondeo >>>
-  required double pagoCuotaRedondeado,
-  required double totalRedondeado,
-}) {
-  final colors = themeProvider.colors;
-  final garantiaPorcentaje =
-      double.tryParse(_creditoData!.garantia.replaceAll('%', '')) ?? 0.0;
-  final int flexNombre = 3;
-  final int flexMonto = 2;
+  // <<< TABLA RESPONSIVA PARA DESKTOP (CON LÓGICA DE REDONDEO) >>>
+  //==============================================================================
+  Widget _buildResponsiveIntegrantesTable({
+    required List<ClienteMonto> clientes,
+    required ThemeProvider themeProvider,
+    required String plazoAbbr,
+    required double sumCapitalIndividual,
+    required double sumMontoDesembolsado,
+    required double sumPeriodoCapital,
+    required double sumPeriodoInteres,
+    required double sumTotalCapital,
+    required double sumTotalIntereses,
+    required double sumCapitalMasInteres,
+    required double sumTotal,
+    // <<< NUEVO: Parámetros para el redondeo >>>
+    required double pagoCuotaRedondeado,
+    required double totalRedondeado,
+  }) {
+    final colors = themeProvider.colors;
+    final garantiaPorcentaje =
+        double.tryParse(_creditoData!.garantia.replaceAll('%', '')) ?? 0.0;
+    final int flexNombre = 3;
+    final int flexMonto = 2;
 
-  // <<< NUEVO: Condición para mostrar la fila de redondeo >>>
-  final bool mostrarRedondeo = pagoCuotaRedondeado != sumCapitalMasInteres;
+    // <<< NUEVO: Condición para mostrar la fila de redondeo >>>
+    final bool mostrarRedondeo = pagoCuotaRedondeado != sumCapitalMasInteres;
 
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
-    child: Column(
-      children: [
-        // --- FILA DE ENCABEZADO (sin cambios) ---
-        Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          decoration: BoxDecoration(
-            color: colors.backgroundCardDark,
-            borderRadius: BorderRadius.circular(12),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+      child: Column(
+        children: [
+          // --- FILA DE ENCABEZADO (sin cambios) ---
+          Container(
+            height: 50,
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            decoration: BoxDecoration(
+              color: colors.backgroundCardDark,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                _buildHeaderCell(
+                  'Nombre',
+                  flexNombre,
+                  colors,
+                  alignment: TextAlign.left,
+                ),
+                _buildHeaderCell('Autorizado', flexMonto, colors),
+                _buildHeaderCell('Desembolsado', flexMonto, colors),
+                _buildHeaderCell('Capital $plazoAbbr', flexMonto, colors),
+                _buildHeaderCell('Interés $plazoAbbr', flexMonto, colors),
+                _buildHeaderCell('Total Capital', flexMonto, colors),
+                _buildHeaderCell('Total Intereses', flexMonto, colors),
+                _buildHeaderCell('Pago $plazoAbbr', flexMonto, colors),
+                _buildHeaderCell('Pago Total', flexMonto, colors),
+              ],
+            ),
           ),
-          child: Row(
-            children: [
-              _buildHeaderCell('Nombre', flexNombre, colors, alignment: TextAlign.left),
-              _buildHeaderCell('Autorizado', flexMonto, colors),
-              _buildHeaderCell('Desembolsado', flexMonto, colors),
-              _buildHeaderCell('Capital $plazoAbbr', flexMonto, colors),
-              _buildHeaderCell('Interés $plazoAbbr', flexMonto, colors),
-              _buildHeaderCell('Total Capital', flexMonto, colors),
-              _buildHeaderCell('Total Intereses', flexMonto, colors),
-              _buildHeaderCell('Pago $plazoAbbr', flexMonto, colors),
-              _buildHeaderCell('Pago Total', flexMonto, colors),
-            ],
-          ),
-        ),
-        const SizedBox(height: 4),
+          const SizedBox(height: 4),
 
           // --- FILAS DE DATOS ---
           ...clientes.map((cliente) {
@@ -977,69 +1063,120 @@ Widget _buildResponsiveIntegrantesTable({
           }).toList(),
 
           // --- FILA DE TOTALES ---
-           // --- FILA DE TOTALES ---
-        Container(
-          height: 50,
-          margin: const EdgeInsets.only(top: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          decoration: BoxDecoration(
-            color: colors.brandPrimary.withOpacity(0.08),
-            // <<< CAMBIO: El borde se redondea arriba si hay fila de redondeo, o completo si no la hay >>>
-            borderRadius: mostrarRedondeo
-                ? const BorderRadius.only(
-                    topLeft: Radius.circular(12),
-                    topRight: Radius.circular(12),
-                  )
-                : BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              _buildTotalCell('Totales', flexNombre, colors, alignment: TextAlign.left),
-              _buildTotalCell('\$${formatearNumero(sumCapitalIndividual)}', flexMonto, colors),
-              _buildTotalCell('\$${formatearNumero(sumMontoDesembolsado)}', flexMonto, colors),
-              _buildTotalCell('\$${formatearNumero(sumPeriodoCapital)}', flexMonto, colors),
-              _buildTotalCell('\$${formatearNumero(sumPeriodoInteres)}', flexMonto, colors),
-              _buildTotalCell('\$${formatearNumero(sumTotalCapital)}', flexMonto, colors),
-              _buildTotalCell('\$${formatearNumero(sumTotalIntereses)}', flexMonto, colors),
-              _buildTotalCell('\$${formatearNumero(sumCapitalMasInteres)}', flexMonto, colors),
-              _buildTotalCell('\$${formatearNumero(sumTotal)}', flexMonto, colors),
-            ],
-          ),
-        ),
-        
-        // <<< NUEVO: Fila condicional para el redondeo >>>
-        if (mostrarRedondeo)
+          // --- FILA DE TOTALES ---
           Container(
             height: 50,
+            margin: const EdgeInsets.only(top: 8),
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             decoration: BoxDecoration(
               color: colors.brandPrimary.withOpacity(0.08),
-              // <<< CAMBIO: Redondea solo las esquinas inferiores para unirse a la fila de totales >>>
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(12),
-                bottomRight: Radius.circular(12),
-              ),
+              // <<< CAMBIO: El borde se redondea arriba si hay fila de redondeo, o completo si no la hay >>>
+              borderRadius:
+                  mostrarRedondeo
+                      ? const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      )
+                      : BorderRadius.circular(12),
             ),
             child: Row(
               children: [
-                _buildTotalCell('Redondeado', flexNombre, colors, alignment: TextAlign.left),
-                _buildTotalCell('', flexMonto, colors), // Celda vacía
-                _buildTotalCell('', flexMonto, colors), // Celda vacía
-                _buildTotalCell('', flexMonto, colors), // Celda vacía
-                _buildTotalCell('', flexMonto, colors), // Celda vacía
-                _buildTotalCell('', flexMonto, colors), // Celda vacía
-                _buildTotalCell('', flexMonto, colors), // Celda vacía
-                // Muestra el pago por periodo redondeado
-                _buildTotalCell('\$${formatearNumero(pagoCuotaRedondeado)}', flexMonto, colors),
-                // Muestra el pago total con el redondeo aplicado
-                _buildTotalCell('\$${formatearNumero(totalRedondeado)}', flexMonto, colors),
+                _buildTotalCell(
+                  'Totales',
+                  flexNombre,
+                  colors,
+                  alignment: TextAlign.left,
+                ),
+                _buildTotalCell(
+                  '\$${formatearNumero(sumCapitalIndividual)}',
+                  flexMonto,
+                  colors,
+                ),
+                _buildTotalCell(
+                  '\$${formatearNumero(sumMontoDesembolsado)}',
+                  flexMonto,
+                  colors,
+                ),
+                _buildTotalCell(
+                  '\$${formatearNumero(sumPeriodoCapital)}',
+                  flexMonto,
+                  colors,
+                ),
+                _buildTotalCell(
+                  '\$${formatearNumero(sumPeriodoInteres)}',
+                  flexMonto,
+                  colors,
+                ),
+                _buildTotalCell(
+                  '\$${formatearNumero(sumTotalCapital)}',
+                  flexMonto,
+                  colors,
+                ),
+                _buildTotalCell(
+                  '\$${formatearNumero(sumTotalIntereses)}',
+                  flexMonto,
+                  colors,
+                ),
+                _buildTotalCell(
+                  '\$${formatearNumero(sumCapitalMasInteres)}',
+                  flexMonto,
+                  colors,
+                ),
+                _buildTotalCell(
+                  '\$${formatearNumero(sumTotal)}',
+                  flexMonto,
+                  colors,
+                ),
               ],
             ),
           ),
-      ],
-    ),
-  );
-}
+
+          // <<< NUEVO: Fila condicional para el redondeo >>>
+          if (mostrarRedondeo)
+            Container(
+              height: 50,
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              decoration: BoxDecoration(
+                color: colors.brandPrimary.withOpacity(0.08),
+                // <<< CAMBIO: Redondea solo las esquinas inferiores para unirse a la fila de totales >>>
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(12),
+                  bottomRight: Radius.circular(12),
+                ),
+              ),
+              child: Row(
+                children: [
+                  _buildTotalCell(
+                    'Redondeado',
+                    flexNombre,
+                    colors,
+                    alignment: TextAlign.left,
+                  ),
+                  _buildTotalCell('', flexMonto, colors), // Celda vacía
+                  _buildTotalCell('', flexMonto, colors), // Celda vacía
+                  _buildTotalCell('', flexMonto, colors), // Celda vacía
+                  _buildTotalCell('', flexMonto, colors), // Celda vacía
+                  _buildTotalCell('', flexMonto, colors), // Celda vacía
+                  _buildTotalCell('', flexMonto, colors), // Celda vacía
+                  // Muestra el pago por periodo redondeado
+                  _buildTotalCell(
+                    '\$${formatearNumero(pagoCuotaRedondeado)}',
+                    flexMonto,
+                    colors,
+                  ),
+                  // Muestra el pago total con el redondeo aplicado
+                  _buildTotalCell(
+                    '\$${formatearNumero(totalRedondeado)}',
+                    flexMonto,
+                    colors,
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   // --- Helpers para construir las celdas de la tabla responsiva ---
 
@@ -1442,110 +1579,146 @@ Widget _buildResponsiveIntegrantesTable({
 
   // <<< WIDGET ACTUALIZADO: La tarjeta de totales ahora muestra todos los campos >>>
   //==============================================================================
-// <<< TARJETA DE TOTALES PARA MÓVIL (CON LÓGICA DE REDONDEO) >>>
-//==============================================================================
-Widget _buildTotalesCard({
-  required double sumCapitalIndividual,
-  required double sumMontoDesembolsado,
-  required double sumPeriodoCapital,
-  required double sumPeriodoInteres,
-  required double sumTotalCapital,
-  required double sumTotalIntereses,
-  required double sumCapitalMasInteres,
-  required double sumTotal,
-  required double pagoCuotaRedondeado,
-  required double totalRedondeado,
-  required ThemeProvider themeProvider,
-  required String plazoAbbr,
-}) {
-  final colors = themeProvider.colors;
-  // <<< CAMBIO: La misma condición de redondeo, ahora local a este widget >>>
-  final bool mostrarRedondeo = pagoCuotaRedondeado != sumCapitalMasInteres;
+  // <<< TARJETA DE TOTALES PARA MÓVIL (CON LÓGICA DE REDONDEO) >>>
+  //==============================================================================
+  Widget _buildTotalesCard({
+    required double sumCapitalIndividual,
+    required double sumMontoDesembolsado,
+    required double sumPeriodoCapital,
+    required double sumPeriodoInteres,
+    required double sumTotalCapital,
+    required double sumTotalIntereses,
+    required double sumCapitalMasInteres,
+    required double sumTotal,
+    required double pagoCuotaRedondeado,
+    required double totalRedondeado,
+    required ThemeProvider themeProvider,
+    required String plazoAbbr,
+  }) {
+    final colors = themeProvider.colors;
+    // <<< CAMBIO: La misma condición de redondeo, ahora local a este widget >>>
+    final bool mostrarRedondeo = pagoCuotaRedondeado != sumCapitalMasInteres;
 
-  return Container(
-    margin: const EdgeInsets.only(top: 8, bottom: 12),
-    padding: const EdgeInsets.all(16.0),
-    decoration: BoxDecoration(
-      color: colors.brandPrimary,
-      borderRadius: BorderRadius.circular(16),
-      boxShadow: [
-        BoxShadow(
-          color: colors.brandPrimary.withOpacity(0.3),
-          blurRadius: 10,
-          offset: const Offset(0, 4),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ... (Encabezado de la tarjeta sin cambios)
-        Row(
-          children: [
-            const Icon(Icons.functions_rounded, color: Colors.white, size: 22),
-            const SizedBox(width: 12),
-            const Text(
-              'Totales del Grupo',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 12),
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: colors.brandPrimary,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: colors.brandPrimary.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ... (Encabezado de la tarjeta sin cambios)
+          Row(
+            children: [
+              const Icon(
+                Icons.functions_rounded,
                 color: Colors.white,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Totales del Grupo',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+
+          const Divider(color: Colors.white30, height: 24),
+
+          _buildTotalRow(
+            'Suma Autorizado',
+            '\$${formatearNumero(sumCapitalIndividual)}',
+            colors,
+          ),
+          _buildTotalRow(
+            'Suma Desembolsado',
+            '\$${formatearNumero(sumMontoDesembolsado)}',
+            colors,
+          ),
+          _buildTotalRow(
+            'Suma Pago Total',
+            '\$${formatearNumero(sumTotal)}',
+            colors,
+          ),
+
+          const Divider(color: Colors.white30, height: 24),
+
+          _buildTotalRow(
+            'Suma Capital $plazoAbbr',
+            '\$${formatearNumero(sumPeriodoCapital)}',
+            colors,
+          ),
+          _buildTotalRow(
+            'Suma Interés $plazoAbbr',
+            '\$${formatearNumero(sumPeriodoInteres)}',
+            colors,
+          ),
+          _buildTotalRow(
+            'Suma Pago $plazoAbbr',
+            '\$${formatearNumero(sumCapitalMasInteres)}',
+            colors,
+          ),
+
+          const Divider(color: Colors.white30, height: 24),
+
+          _buildTotalRow(
+            'Suma Total Capital',
+            '\$${formatearNumero(sumTotalCapital)}',
+            colors,
+          ),
+          _buildTotalRow(
+            'Suma Total Intereses',
+            '\$${formatearNumero(sumTotalIntereses)}',
+            colors,
+          ),
+
+          // <<< NUEVO: Sección condicional de redondeo para la tarjeta móvil >>>
+          if (mostrarRedondeo)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Divider(color: Colors.white30, height: 20),
+                  Text(
+                    "Redondeo Aplicado",
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  _buildTotalRow(
+                    'Pago $plazoAbbr Redondeado',
+                    '\$${formatearNumero(pagoCuotaRedondeado)}',
+                    colors,
+                  ),
+                  _buildTotalRow(
+                    'Pago Total Redondeado',
+                    '\$${formatearNumero(totalRedondeado)}',
+                    colors,
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-
-        const Divider(color: Colors.white30, height: 24),
-
-        _buildTotalRow('Suma Autorizado', '\$${formatearNumero(sumCapitalIndividual)}', colors),
-        _buildTotalRow('Suma Desembolsado', '\$${formatearNumero(sumMontoDesembolsado)}', colors),
-        _buildTotalRow('Suma Pago Total', '\$${formatearNumero(sumTotal)}', colors),
-
-        const Divider(color: Colors.white30, height: 24),
-
-        _buildTotalRow('Suma Capital $plazoAbbr', '\$${formatearNumero(sumPeriodoCapital)}', colors),
-        _buildTotalRow('Suma Interés $plazoAbbr', '\$${formatearNumero(sumPeriodoInteres)}', colors),
-        _buildTotalRow('Suma Pago $plazoAbbr', '\$${formatearNumero(sumCapitalMasInteres)}', colors),
-
-        const Divider(color: Colors.white30, height: 24),
-
-        _buildTotalRow('Suma Total Capital', '\$${formatearNumero(sumTotalCapital)}', colors),
-        _buildTotalRow('Suma Total Intereses', '\$${formatearNumero(sumTotalIntereses)}', colors),
-
-        // <<< NUEVO: Sección condicional de redondeo para la tarjeta móvil >>>
-        if (mostrarRedondeo)
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Divider(color: Colors.white30, height: 20),
-                Text(
-                  "Redondeo Aplicado",
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                _buildTotalRow(
-                  'Pago $plazoAbbr Redondeado',
-                  '\$${formatearNumero(pagoCuotaRedondeado)}',
-                  colors,
-                ),
-                _buildTotalRow(
-                  'Pago Total Redondeado',
-                  '\$${formatearNumero(totalRedondeado)}',
-                  colors,
-                ),
-              ],
-            ),
-          ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   // <<< NUEVO HELPER (o mantenido si ya lo tenías): Para las filas de la tarjeta de totales >>>
   Widget _buildTotalRow(String label, String value, AppColors colors) {
@@ -2008,45 +2181,106 @@ Widget _buildTotalesCard({
     );
   }
 
-  Widget _buildModernStatusChip(String estado) {
-    // Este es el mismo widget de tu código original, para mantener la consistencia
-    final statusConfig = {
-      'Activo': {
-        'color': Colors.green,
-        'icon': Icons.check_circle_outline_rounded,
-      },
-      'Finalizado': {'color': Colors.red, 'icon': Icons.flag_circle_outlined},
-      'Pagado': {'color': Colors.purple, 'icon': Icons.paid_outlined},
-      'default': {'color': Colors.grey, 'icon': Icons.info_outline_rounded},
-    };
-    final config = statusConfig[estado] ?? statusConfig['default']!;
-    final color = config['color'] as Color;
-    final icon = config['icon'] as IconData;
+  // Al final de la clase _CreditoDetalleConTabsState
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(width: 6),
-          Text(
-            estado,
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
+/// Widget que decide si mostrar el chip estático o el dropdown editable.
+Widget _buildStatusWidget(String tipoUsuario, dynamic colors) {
+  if (tipoUsuario == 'Admin') {
+    return _buildAdminStatusDropdown(colors);
   }
+  return _buildModernStatusChip(_creditoData!.estado);
+}
+
+/// Widget reutilizable para el contenido (Icono + Texto).
+Widget _buildStatusRow(String estado) {
+  final config = _statusConfig[estado] ?? _statusConfig['default']!;
+  final color = config['color'] as Color;
+  final icon = config['icon'] as IconData;
+
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, color: color, size: 16),
+      const SizedBox(width: 6),
+      Text(
+        estado,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ],
+  );
+}
+
+/// El NUEVO dropdown para administradores con estilo de chip.
+Widget _buildAdminStatusDropdown(dynamic colors) {
+  final config = _statusConfig[_selectedEstado] ?? _statusConfig['default']!;
+  final color = config['color'] as Color;
+
+  return Stack(
+    alignment: Alignment.center,
+    children: [
+      Container(
+        height: 34,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: _selectedEstado,
+            onChanged: _isUpdatingStatus ? null : _handleStatusChange,
+            dropdownColor: colors.backgroundCard,
+            selectedItemBuilder: (context) {
+              return _posiblesEstados.map<Widget>((item) {
+                return Padding(
+                  padding: const EdgeInsets.only(left: 12.0),
+                  child: _buildStatusRow(item),
+                );
+              }).toList();
+            },
+            items: _posiblesEstados.map((value) {
+              return DropdownMenuItem<String>(
+                value: value,
+                child: _buildStatusRow(value),
+              );
+            }).toList(),
+            icon: Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: Icon(Icons.arrow_drop_down_rounded, color: color),
+            ),
+            isDense: true,
+          ),
+        ),
+      ),
+      if (_isUpdatingStatus)
+        SizedBox(
+          height: 18,
+          width: 18,
+          child: CircularProgressIndicator(strokeWidth: 2.5, color: color),
+        ),
+    ],
+  );
+}
+
+// 3. REFACTORIZA TU ANTIGUO `_buildModernStatusChip` PARA USAR LA LÓGICA CENTRALIZADA
+Widget _buildModernStatusChip(String estado) {
+  final config = _statusConfig[estado] ?? _statusConfig['default']!;
+  final color = config['color'] as Color;
+
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color.withOpacity(0.3)),
+    ),
+    child: _buildStatusRow(estado), // Reutilizamos el nuevo widget
+  );
+}
 }
 
 // <<< --- NUEVO WIDGET: El contenido personalizado para el tooltip de desglose --- >>>

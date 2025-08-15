@@ -1173,7 +1173,11 @@ class _ControlPagosTabState extends State<ControlPagosTab>
 
   // En: tu clase _ControlPagosTabState
 
+  // Pega esta función completa para reemplazar la tuya
+
   CreditoTotales _calcularTotales(List<Pago> pagos) {
+    AppLogger.log('--- [DEBUG] INICIANDO CÁLCULO DE TOTALES ---');
+
     // --- INICIALIZAMOS TODOS LOS ACUMULADORES ---
     double totalMonto = 0.0;
     double totalRealIngresado = 0.0;
@@ -1185,28 +1189,59 @@ class _ControlPagosTabState extends State<ControlPagosTab>
     double totalSaldoContra = 0.0;
     double totalDeudaPendiente = 0.0;
 
-    // ▼▼▼ CAMBIO: NUEVOS ACUMULADORES PARA MORATORIOS ▼▼▼
     double totalMoratoriosGenerados = 0.0;
     double totalMoratoriosPagados = 0.0;
-    // ▲▲▲ FIN DEL CAMBIO ▲▲▲
 
     for (final pago in pagos) {
       if (pago.semana == 0) continue;
+
+      AppLogger.log('\n--- [DEBUG] Procesando Semana ${pago.semana} ---');
 
       totalMonto += pago.capitalMasInteres;
       totalSaldoFavor += pago.saldoRestante ?? 0.0;
       saldoFavorHistoricoTotal += pago.saldoFavorOriginalGenerado;
       totalFavorUtilizado += pago.favorUtilizado?.toDouble() ?? 0.0;
 
+      // Bucle de abonos (aquí está la clave)
       for (var abono in pago.abonos) {
+        AppLogger.log(
+          '  [DEBUG] Abono encontrado: $abono',
+        ); // <--- MUESTRA EL MAPA COMPLETO
+
         final double deposito =
             double.tryParse(abono['deposito']?.toString() ?? '0') ?? 0.0;
-        if (abono['garantia'] == 'Si') {
+
+        final String esGarantia = abono['garantia']?.toString() ?? 'No';
+        final String esMoratorio =
+            abono['moratorio']?.toString() ?? 'No'; // <--- Leemos el campo
+
+        // Imprimimos los valores que estamos a punto de comparar
+        AppLogger.log(
+          '    [DEBUG] Valores leídos -> esGarantia: "$esGarantia", esMoratorio: "$esMoratorio"',
+        );
+
+        if (esGarantia == 'Si') {
+          AppLogger.log(
+            '    [DEBUG] DECISIÓN: Es Garantía. Sumando $deposito a totalGarantiasAplicadas.',
+          );
           totalGarantiasAplicadas += deposito;
+        } else if (esMoratorio == 'Si') {
+          AppLogger.log(
+            '    [DEBUG] DECISIÓN: Es Moratorio. IGNORANDO $deposito para totalRealIngresado.',
+          );
+          // No hacemos nada, que es lo que queremos
         } else {
+          AppLogger.log(
+            '    [DEBUG] DECISIÓN: Es pago normal. Sumando $deposito a totalRealIngresado.',
+          );
           totalRealIngresado += deposito;
         }
+        AppLogger.log(
+          '    [DEBUG] >> totalRealIngresado actual: $totalRealIngresado',
+        );
       }
+
+      // El resto de tu lógica...
       for (var renovacion in pago.renovacionesPendientes) {
         totalRenovacionesAplicadas += renovacion.descuento ?? 0.0;
       }
@@ -1226,12 +1261,10 @@ class _ControlPagosTabState extends State<ControlPagosTab>
         totalSaldoContra += deficitSemana;
       }
 
-      // ▼▼▼ CAMBIO: CÁLCULO SEPARADO DE MORATORIOS ▼▼▼
       if (pago.moratorioDesabilitado != "Si") {
         totalMoratoriosGenerados += pago.moratorios?.moratorios ?? 0.0;
       }
       totalMoratoriosPagados += pago.moratoriosPagados;
-      // ▲▲▲ FIN DEL CAMBIO ▲▲▲
     }
 
     double totalPagoActual =
@@ -1240,12 +1273,21 @@ class _ControlPagosTabState extends State<ControlPagosTab>
         totalRenovacionesAplicadas +
         totalFavorUtilizado;
 
-    // ▼▼▼ CAMBIO: CÁLCULO DE TOTALES FINALES ▼▼▼
     final double totalMoratoriosPendientes = (totalMoratoriosGenerados -
             totalMoratoriosPagados)
         .clamp(0, double.infinity);
     final double saldoContraCombinado =
         totalSaldoContra + totalMoratoriosPendientes;
+
+    AppLogger.log('\n--- [DEBUG] CÁLCULO FINALIZADO ---');
+    AppLogger.log(
+      '  [DEBUG] Total Real Ingresado (Final): $totalRealIngresado',
+    );
+    AppLogger.log(
+      '  [DEBUG] Total Garantías Aplicadas (Final): $totalGarantiasAplicadas',
+    );
+    AppLogger.log('  [DEBUG] Total Pago Actual (Final): $totalPagoActual');
+    AppLogger.log('--------------------------------------\n');
 
     return CreditoTotales(
       totalMonto: totalMonto,
@@ -1257,13 +1299,10 @@ class _ControlPagosTabState extends State<ControlPagosTab>
       totalSaldoContraPotencial: saldoContraCombinado,
       totalDeudaPendiente: totalDeudaPendiente,
       hayGarantiaAplicada: totalGarantiasAplicadas > 0,
-
-      // Pasando los nuevos valores al constructor del modelo
       totalMoratoriosGenerados: totalMoratoriosGenerados,
       totalMoratoriosPagados: totalMoratoriosPagados,
       totalMoratorios: totalMoratoriosPendientes,
     );
-    // ▲▲▲ FIN DEL CAMBIO ▲▲▲
   }
 
   // (Aquí continúa el resto de tu código sin cambios...)
@@ -3670,6 +3709,34 @@ class _ControlPagosTabState extends State<ControlPagosTab>
     );
   }
 
+  Widget _buildMoratorioChip() {
+    return Container(
+      margin: const EdgeInsets.only(top: 6), // Espacio para separarlo
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        // Usamos un color naranja para diferenciarlo
+        color: Colors.orange.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize:
+            MainAxisSize.min, // Importante para que no ocupe toda la fila
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 12),
+          SizedBox(width: 4),
+          Text(
+            'PAGO MORATORIO',
+            style: TextStyle(
+              color: Colors.orange,
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // REEMPLAZA ESTA FUNCIÓN COMPLETA
 
   // REEMPLAZA ESTA FUNCIÓN COMPLETA
@@ -3992,17 +4059,20 @@ class _ControlPagosTabState extends State<ControlPagosTab>
     final double monto =
         double.tryParse(abono['deposito']?.toString() ?? '0') ?? 0.0;
     final String fecha = formatearFecha(abono['fechaDeposito']);
+
+    // Lógica robusta para detectar el tipo de abono
     final bool esGarantia =
-        (abono['garantia'] as String?)?.toLowerCase() == 'si';
+        (abono['garantia']?.toString() ?? 'No').trim().toLowerCase() == 'si';
+
+    // <<< AÑADIR ESTA LÍNEA >>>
+    final bool esMoratorio =
+        (abono['moratorio']?.toString() ?? 'No').trim().toLowerCase() == 'si';
 
     final bool sePuedeEliminar =
         abono['idpagos'] != null && abono['idpagos'].toString().isNotEmpty;
 
-    // <<< INICIO DEL CAMBIO (1/2) >>>
-    // Obtenemos el provider para saber el tipo de usuario
     final userData = Provider.of<UserDataProvider>(context, listen: false);
     final bool esAdmin = userData.tipoUsuario == 'Admin';
-    // <<< FIN DEL CAMBIO (1/2) >>>
 
     return Container(
       margin: EdgeInsets.only(bottom: 12),
@@ -4045,7 +4115,11 @@ class _ControlPagosTabState extends State<ControlPagosTab>
                     color: isDarkMode ? Colors.white : Colors.black87,
                   ),
                 ),
+                // --- Lógica para mostrar los chips ---
                 if (esGarantia) _buildGarantiaChip(),
+
+                // <<< AÑADIR ESTA LÍNEA >>>
+                if (esMoratorio) _buildMoratorioChip(),
               ],
             ),
           ),
@@ -4070,9 +4144,6 @@ class _ControlPagosTabState extends State<ControlPagosTab>
               ),
             ],
           ),
-          // ▼▼▼ ICONO DE ELIMINAR AÑADIDO ▼▼▼
-          // <<< INICIO DEL CAMBIO (2/2) >>>
-          // Ahora el botón solo se muestra si se puede eliminar Y si el usuario es Admin
           if (sePuedeEliminar && esAdmin)
             Padding(
               padding: const EdgeInsets.only(left: 8.0),
@@ -4083,13 +4154,11 @@ class _ControlPagosTabState extends State<ControlPagosTab>
                 constraints: BoxConstraints(),
                 tooltip: 'Eliminar este abono (Solo Admin)',
                 onPressed: () {
-                  // Cerramos el modal de la lista y abrimos el de confirmación
                   Navigator.pop(context);
                   _mostrarDialogoConfirmarEliminarAbono(context, pago, abono);
                 },
               ),
             ),
-          // <<< FIN DEL CAMBIO (2/2) >>>
         ],
       ),
     );

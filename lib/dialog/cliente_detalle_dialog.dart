@@ -441,6 +441,11 @@ class _ClienteDetalleDialogState extends State<ClienteDetalleDialog>
             clienteInfo.dependientesEconomicos.toString(),
             Icons.escalator_warning_rounded,
           ),
+           _buildInfoItem(
+          'Fecha de Creación',
+          (clienteInfo.fCreacion),
+          Icons.event_rounded,
+        ),
         ],
         colors,
         isDarkMode,
