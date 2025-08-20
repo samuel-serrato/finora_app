@@ -2,86 +2,63 @@
 <html>
 
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-
   <meta name="description" content="Tu asistente financiero para controlar gastos e ingresos.">
-
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-
-  <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-
-  <!-- CAMBIAR ESTO: Usa el nombre de tu app. -->
   <meta name="apple-mobile-web-app-title" content="Finora">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png" />
-
-  <!-- CAMBIAR ESTO: Usa el nombre de tu app. -->
   <title>Finora</title>
   <link rel="manifest" href="manifest.json">
-  <meta id="theme-color-meta" name="theme-color" content="#F9FAFC">
-
+   <meta id="theme-color-meta" name="theme-color" content="#F9FAFC">
 </head>
 
 <body>
-  <!-- Tu flutter_bootstrap.js -->
   <script src="flutter_bootstrap.js" async></script>
 
   <script>
     // Variable global para guardar la referencia al nuevo Service Worker
     let newWorker;
 
-    // 1. FUNCIÓN QUE DART LLAMARÁ.
-    // Esta función le dice al nuevo SW que se active y luego recarga la página.
+    // 1. FUNCIÓN QUE DART LLAMARÁ PARA ACTIVAR LA ACTUALIZACIÓN
     function applyUpdate() {
       if (!newWorker) {
         console.error('No hay un nuevo worker para activar.');
         return;
       }
+      // Escuchamos el cambio de controlador para recargar la página de forma segura
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        // Una vez que el nuevo SW está al mando, recargamos.
         window.location.reload();
       }, { once: true });
 
-      // Enviamos el mensaje al nuevo SW para que deje de esperar.
+      // Le decimos al nuevo SW que se active inmediatamente
       newWorker.postMessage({ type: 'SKIP_WAITING' });
     }
 
-    // 2. LÓGICA DE REGISTRO Y DETECCIÓN
+    // 2. LÓGICA DE REGISTRO Y DETECCIÓN DE ACTUALIZACIONES
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('/my_sw.js')
+        // ¡CAMBIO CLAVE! Registramos el SW que genera Flutter automáticamente.
+        navigator.serviceWorker.register('flutter_service_worker.js')
           .then(function (registration) {
-            console.log('Service Worker registrado correctamente.');
+            console.log('Service Worker de Flutter registrado correctamente.');
 
+            // Esta lógica se mantiene: detectamos cuando el navegador encuentra una nueva versión.
             registration.addEventListener('updatefound', () => {
               newWorker = registration.installing;
-              console.log('Se encontró un nuevo Service Worker, instalando...');
+              console.log('Se encontró una nueva versión del Service Worker, instalando...');
 
               newWorker.addEventListener('statechange', () => {
+                // Si el nuevo SW está instalado y listo para tomar el control...
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  console.log('Nueva versión lista. Notificando a Flutter...');
-                  
-                  // ¡LA CONEXIÓN CLAVE! Llama a la función que Dart expuso.
+                  console.log('Nueva versión lista para activar. Notificando a Flutter...');
+
+                  // ¡LA CONEXIÓN CLAVE! Llamamos a la función que Dart expondrá.
                   if (window.onNewVersionReady) {
                     window.onNewVersionReady();
                   }

@@ -21,7 +21,6 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../../utils/app_logger.dart';
 
-
 // El widget ahora es un StatefulWidget que representa una pantalla completa.
 class ConfiguracionScreen extends StatefulWidget {
   const ConfiguracionScreen({Key? key}) : super(key: key);
@@ -38,18 +37,18 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
 
   // Variables para el manejo de imágenes
 
-// Variables para el manejo de imágenes
-Uint8List? _tempColorLogoBytes; // Para la vista previa del logo a color
-String? _colorLogoFileName;      // Nombre del archivo para la subida
-String? _colorLogoImagePath;
+  // Variables para el manejo de imágenes
+  Uint8List? _tempColorLogoBytes; // Para la vista previa del logo a color
+  String? _colorLogoFileName; // Nombre del archivo para la subida
+  String? _colorLogoImagePath;
 
-Uint8List? _tempWhiteLogoBytes; // Para la vista previa del logo blanco
-String? _whiteLogoFileName;      // Nombre del archivo para la subida
-String? _whiteLogoImagePath;
+  Uint8List? _tempWhiteLogoBytes; // Para la vista previa del logo blanco
+  String? _whiteLogoFileName; // Nombre del archivo para la subida
+  String? _whiteLogoImagePath;
 
-bool _isUploading = false;
-bool _isSaving = false;
-double? _roundingThreshold;
+  bool _isUploading = false;
+  bool _isSaving = false;
+  double? _roundingThreshold;
 
   // Variables para cuentas bancarias
   List<CuentaBancaria> _cuentasBancarias = [];
@@ -180,6 +179,11 @@ double? _roundingThreshold;
               const SizedBox(height: 24),
               _buildUserSection(context),
               const SizedBox(height: 24),
+              // --- AQUÍ VA LA NUEVA SECCIÓN ---
+              _buildPlanInfoSection(context), // <--- ¡AÑADE ESTA LÍNEA!
+              const SizedBox(height: 24),
+
+              // ---------------------------------
               _buildSection(
                 context,
                 title: 'Apariencia',
@@ -419,260 +423,268 @@ double? _roundingThreshold;
     return finalWidget;
   }
 
-// (Copia y reemplaza tu versión actual con esta)
-Widget _buildLogoUploader(BuildContext context) {
-  final themeProvider = Provider.of<ThemeProvider>(context);
-  final isDarkMode = themeProvider.isDarkMode;
-  final userData = Provider.of<UserDataProvider>(context);
+  // (Copia y reemplaza tu versión actual con esta)
+  Widget _buildLogoUploader(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+    final userData = Provider.of<UserDataProvider>(context);
 
-  bool isAdmin = userData.tipoUsuario == 'Admin';
+    bool isAdmin = userData.tipoUsuario == 'Admin';
 
-  // Depuración: Imprimir todas las imágenes para verificar
-  // (Esto lo puedes dejar o quitar, es solo para ayudarte a depurar)
-  AppLogger.log("Número de imágenes: ${userData.imagenes.length}");
-  userData.imagenes.forEach((img) {
-    AppLogger.log("Tipo de imagen: ${img.tipoImagen}, Ruta: ${img.rutaImagen}");
-  });
+    // Depuración: Imprimir todas las imágenes para verificar
+    // (Esto lo puedes dejar o quitar, es solo para ayudarte a depurar)
+    AppLogger.log("Número de imágenes: ${userData.imagenes.length}");
+    userData.imagenes.forEach((img) {
+      AppLogger.log(
+        "Tipo de imagen: ${img.tipoImagen}, Ruta: ${img.rutaImagen}",
+      );
+    });
 
-  final colorLogo =
-      userData.imagenes.where((img) => img.tipoImagen == 'logoColor').firstOrNull;
-  final whiteLogo =
-      userData.imagenes.where((img) => img.tipoImagen == 'logoBlanco').firstOrNull;
+    final colorLogo =
+        userData.imagenes
+            .where((img) => img.tipoImagen == 'logoColor')
+            .firstOrNull;
+    final whiteLogo =
+        userData.imagenes
+            .where((img) => img.tipoImagen == 'logoBlanco')
+            .firstOrNull;
 
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      SizedBox(height: 16),
-      // Adaptación a layout de columna para mejor visualización en móvil
-      Column(
-        children: [
-          // Color Logo (Light Mode) - Llamada corregida
-          _buildSingleLogoUploader(
-            context: context,
-            title: "Logo a color (modo claro)",
-            isDarkMode: isDarkMode,
-            isAdmin: isAdmin,
-            tempLogoBytes: _tempColorLogoBytes, // <-- Corregido
-            savedLogo: colorLogo,
-            logoType: "logoColor",
-            backgroundColor:
-                isDarkMode ? Colors.grey[800]! : Colors.grey[200]!,
-          ),
-
-          SizedBox(height: 24), // Separador vertical
-
-          // White Logo (Dark Mode) - Llamada corregida
-          _buildSingleLogoUploader(
-            context: context,
-            title: "Logo blanco (modo oscuro)",
-            isDarkMode: isDarkMode,
-            isAdmin: isAdmin,
-            tempLogoBytes: _tempWhiteLogoBytes, // <-- Corregido
-            savedLogo: whiteLogo,
-            logoType: "logoBlanco",
-            backgroundColor: Colors.grey[800]!,
-          ),
-        ],
-      ),
-
-      // Botones para guardar ambos logos si hay cambios pendientes - Condición corregida
-      if ((_tempColorLogoBytes != null || _tempWhiteLogoBytes != null) &&
-          isAdmin) ...[
-        Divider(height: 32),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: 16),
+        // Adaptación a layout de columna para mejor visualización en móvil
+        Column(
           children: [
-            if (_isSaving)
-              CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
-              )
-            else
+            // Color Logo (Light Mode) - Llamada corregida
+            _buildSingleLogoUploader(
+              context: context,
+              title: "Logo a color (modo claro)",
+              isDarkMode: isDarkMode,
+              isAdmin: isAdmin,
+              tempLogoBytes: _tempColorLogoBytes, // <-- Corregido
+              savedLogo: colorLogo,
+              logoType: "logoColor",
+              backgroundColor:
+                  isDarkMode ? Colors.grey[800]! : Colors.grey[200]!,
+            ),
+
+            SizedBox(height: 24), // Separador vertical
+            // White Logo (Dark Mode) - Llamada corregida
+            _buildSingleLogoUploader(
+              context: context,
+              title: "Logo blanco (modo oscuro)",
+              isDarkMode: isDarkMode,
+              isAdmin: isAdmin,
+              tempLogoBytes: _tempWhiteLogoBytes, // <-- Corregido
+              savedLogo: whiteLogo,
+              logoType: "logoBlanco",
+              backgroundColor: Colors.grey[800]!,
+            ),
+          ],
+        ),
+
+        // Botones para guardar ambos logos si hay cambios pendientes - Condición corregida
+        if ((_tempColorLogoBytes != null || _tempWhiteLogoBytes != null) &&
+            isAdmin) ...[
+          Divider(height: 32),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (_isSaving)
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                )
+              else
+                ElevatedButton.icon(
+                  onPressed: _saveLogoChanges,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  icon: Icon(Icons.save, size: 16, color: Colors.white),
+                  label: Text(
+                    'Guardar cambios',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
+              SizedBox(width: 12),
               ElevatedButton.icon(
-                onPressed: _saveLogoChanges,
+                onPressed: _cancelLogoChanges,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
+                  backgroundColor: Colors.orange,
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                icon: Icon(Icons.save, size: 16, color: Colors.white),
-                label: Text(
-                  'Guardar cambios',
-                  style: TextStyle(fontSize: 14),
-                ),
+                icon: Icon(Icons.cancel, size: 16, color: Colors.white),
+                label: Text('Cancelar', style: TextStyle(fontSize: 14)),
               ),
-            SizedBox(width: 12),
+            ],
+          ),
+        ],
+
+        SizedBox(height: 16),
+        Center(
+          child: Text(
+            "Formatos permitidos: PNG",
+            style: TextStyle(
+              fontSize: 12,
+              color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ),
+        ),
+        SizedBox(height: 16),
+        Center(
+          child: Text(
+            "Estas imágenes se utilizarán como logos de la financiera en la aplicación según el modo de visualización",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ),
+        ),
+        SizedBox(height: 16),
+      ],
+    );
+  }
+
+  // Widget auxiliar para no repetir código en el uploader de logos
+  // DESPUÉS (MÉTODO CORREGIDO)
+  // Widget auxiliar para no repetir código en el uploader de logos
+  // (Copia y reemplaza tu versión actual con esta)
+
+  Widget _buildSingleLogoUploader({
+    required BuildContext context,
+    required String title,
+    required bool isDarkMode,
+    required bool isAdmin,
+    required Uint8List? tempLogoBytes, // <-- Parámetro actualizado
+    required dynamic savedLogo, // Puede ser null
+    required String logoType,
+    required Color backgroundColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: isDarkMode ? Colors.white : Colors.black,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        SizedBox(height: 8),
+        Container(
+          width: 150,
+          height: 150,
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Color(0xFF5162F6), width: 2),
+          ),
+          child:
+              // --- INICIO DE LA LÓGICA DE VISUALIZACIÓN CORREGIDA ---
+              tempLogoBytes != null
+                  ? ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.memory(tempLogoBytes, fit: BoxFit.contain),
+                  )
+                  : savedLogo != null
+                  ? ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.network(
+                      '$baseUrl/imagenes/subidas/${savedLogo.rutaImagen}',
+                      fit: BoxFit.contain,
+                      errorBuilder:
+                          (context, error, stackTrace) => Icon(
+                            Icons.add_photo_alternate,
+                            size: 50,
+                            color: Colors.grey[600],
+                          ),
+                    ),
+                  )
+                  : Icon(
+                    Icons.add_photo_alternate,
+                    size: 50,
+                    color: Colors.grey[600],
+                  ),
+          // --- FIN DE LA LÓGICA DE VISUALIZACIÓN CORREGIDA ---
+        ),
+        SizedBox(height: 8),
+        Text(
+          tempLogoBytes !=
+                  null // <-- Condición actualizada
+              ? "Nuevo (no guardado)"
+              : savedLogo != null
+              ? "Logo guardado"
+              : "Sin logo",
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: isDarkMode ? Colors.white70 : Colors.black87,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
             ElevatedButton.icon(
-              onPressed: _cancelLogoChanges,
+              onPressed: isAdmin ? () => _pickAndUploadLogo(logoType) : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
+                backgroundColor: Color(0xFF5162F6),
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              icon: Icon(Icons.cancel, size: 16, color: Colors.white),
-              label: Text('Cancelar', style: TextStyle(fontSize: 14)),
+              icon: Icon(Icons.photo_camera, size: 16, color: Colors.white),
+              label: Text(
+                savedLogo != null ? 'Cambiar' : 'Subir',
+                style: TextStyle(fontSize: 14),
+              ),
             ),
+            // --- INICIO DE LA LÓGICA DEL BOTÓN ELIMINAR CORREGIDA ---
+            if (savedLogo != null && tempLogoBytes == null) ...[
+              SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed:
+                    isAdmin
+                        ? () {
+                          // TODO: Implementar la lógica para llamar a la API y eliminar el logo.
+                          // Por ejemplo, podrías llamar a una función _deleteLogo(logoType)
+                          AppLogger.log("Eliminar logo de tipo: $logoType");
+                        }
+                        : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade700,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                icon: Icon(Icons.delete, size: 16, color: Colors.white),
+                label: Text('Eliminar', style: TextStyle(fontSize: 14)),
+              ),
+            ],
+            // --- FIN DE LA LÓGICA DEL BOTÓN ELIMINAR CORREGIDA ---
           ],
         ),
       ],
-
-      SizedBox(height: 16),
-      Center(
-        child: Text(
-          "Formatos permitidos: PNG",
-          style: TextStyle(
-            fontSize: 12,
-            color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-          ),
-        ),
-      ),
-      SizedBox(height: 16),
-      Center(
-        child: Text(
-          "Estas imágenes se utilizarán como logos de la financiera en la aplicación según el modo de visualización",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 12,
-            color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-          ),
-        ),
-      ),
-      SizedBox(height: 16),
-    ],
-  );
-}
-
-  // Widget auxiliar para no repetir código en el uploader de logos
-  // DESPUÉS (MÉTODO CORREGIDO)
-// Widget auxiliar para no repetir código en el uploader de logos
-// (Copia y reemplaza tu versión actual con esta)
-
-Widget _buildSingleLogoUploader({
-  required BuildContext context,
-  required String title,
-  required bool isDarkMode,
-  required bool isAdmin,
-  required Uint8List? tempLogoBytes, // <-- Parámetro actualizado
-  required dynamic savedLogo, // Puede ser null
-  required String logoType,
-  required Color backgroundColor,
-}) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.center,
-    children: [
-      Text(
-        title,
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: isDarkMode ? Colors.white : Colors.black,
-        ),
-        textAlign: TextAlign.center,
-      ),
-      SizedBox(height: 8),
-      Container(
-        width: 150,
-        height: 150,
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Color(0xFF5162F6), width: 2),
-        ),
-        child:
-            // --- INICIO DE LA LÓGICA DE VISUALIZACIÓN CORREGIDA ---
-            tempLogoBytes != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.memory(tempLogoBytes, fit: BoxFit.contain),
-                  )
-                : savedLogo != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
-                          '$baseUrl/imagenes/subidas/${savedLogo.rutaImagen}',
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => Icon(
-                            Icons.add_photo_alternate,
-                            size: 50,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      )
-                    : Icon(
-                        Icons.add_photo_alternate,
-                        size: 50,
-                        color: Colors.grey[600],
-                      ),
-        // --- FIN DE LA LÓGICA DE VISUALIZACIÓN CORREGIDA ---
-      ),
-      SizedBox(height: 8),
-      Text(
-        tempLogoBytes != null // <-- Condición actualizada
-            ? "Nuevo (no guardado)"
-            : savedLogo != null
-                ? "Logo guardado"
-                : "Sin logo",
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          color: isDarkMode ? Colors.white70 : Colors.black87,
-        ),
-        textAlign: TextAlign.center,
-      ),
-      SizedBox(height: 16),
-      Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          ElevatedButton.icon(
-            onPressed: isAdmin ? () => _pickAndUploadLogo(logoType) : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFF5162F6),
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            icon: Icon(Icons.photo_camera, size: 16, color: Colors.white),
-            label: Text(
-              savedLogo != null ? 'Cambiar' : 'Subir',
-              style: TextStyle(fontSize: 14),
-            ),
-          ),
-          // --- INICIO DE LA LÓGICA DEL BOTÓN ELIMINAR CORREGIDA ---
-          if (savedLogo != null && tempLogoBytes == null) ...[
-            SizedBox(width: 8),
-            ElevatedButton.icon(
-              onPressed: isAdmin
-                  ? () {
-                      // TODO: Implementar la lógica para llamar a la API y eliminar el logo.
-                      // Por ejemplo, podrías llamar a una función _deleteLogo(logoType)
-                      AppLogger.log("Eliminar logo de tipo: $logoType");
-                    }
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade700,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              icon: Icon(Icons.delete, size: 16, color: Colors.white),
-              label: Text('Eliminar', style: TextStyle(fontSize: 14)),
-            ),
-          ],
-          // --- FIN DE LA LÓGICA DEL BOTÓN ELIMINAR CORREGIDA ---
-        ],
-      ),
-    ],
-  );
-}
+    );
+  }
 
   /* Widget _buildZoomSlider(BuildContext context,  ) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -1089,157 +1101,167 @@ Widget _buildSingleLogoUploader({
   }
 
   // DESPUÉS (CORREGIDO)
-Future<void> _pickAndUploadLogo(String tipoLogo) async {
-  final userData = Provider.of<UserDataProvider>(context, listen: false);
-  if (userData.tipoUsuario == 'Admin') {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['png'],
-        withData: true, // ¡MUY IMPORTANTE! Esto carga los bytes del archivo
-      );
+  Future<void> _pickAndUploadLogo(String tipoLogo) async {
+    final userData = Provider.of<UserDataProvider>(context, listen: false);
+    if (userData.tipoUsuario == 'Admin') {
+      try {
+        FilePickerResult? result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['png'],
+          withData: true, // ¡MUY IMPORTANTE! Esto carga los bytes del archivo
+        );
 
-      if (result != null && result.files.isNotEmpty) {
-        final file = result.files.single;
+        if (result != null && result.files.isNotEmpty) {
+          final file = result.files.single;
 
-        setState(() {
-          if (tipoLogo == "logoColor") {
-            _tempColorLogoBytes = file.bytes; // Guardamos los bytes
-            _colorLogoFileName = file.name;  // Guardamos el nombre
-          } else {
-            _tempWhiteLogoBytes = file.bytes; // Guardamos los bytes
-            _whiteLogoFileName = file.name;   // Guardamos el nombre
-          }
-        });
+          setState(() {
+            if (tipoLogo == "logoColor") {
+              _tempColorLogoBytes = file.bytes; // Guardamos los bytes
+              _colorLogoFileName = file.name; // Guardamos el nombre
+            } else {
+              _tempWhiteLogoBytes = file.bytes; // Guardamos los bytes
+              _whiteLogoFileName = file.name; // Guardamos el nombre
+            }
+          });
+        }
+      } catch (e) {
+        AppLogger.log('Error al seleccionar el logo: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al seleccionar el archivo')),
+        );
       }
-    } catch (e) {
-      AppLogger.log('Error al seleccionar el logo: $e');
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al seleccionar el archivo')),
+        SnackBar(content: Text('Solo los administradores pueden subir logos')),
       );
     }
-  } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Solo los administradores pueden subir logos')),
-    );
   }
-}
 
   // Función para guardar los cambios pendientes (cuando hay imagenes temporales)
   // DESPUÉS (CORREGIDO)
-Future<void> _saveLogoChanges() async {
-  try {
-    setState(() => _isSaving = true);
+  Future<void> _saveLogoChanges() async {
+    try {
+      setState(() => _isSaving = true);
 
-    if (_tempColorLogoBytes != null && _colorLogoFileName != null) {
-      await _uploadLogoToServer(
-        _tempColorLogoBytes!, _colorLogoFileName!, "logoColor");
+      if (_tempColorLogoBytes != null && _colorLogoFileName != null) {
+        await _uploadLogoToServer(
+          _tempColorLogoBytes!,
+          _colorLogoFileName!,
+          "logoColor",
+        );
+      }
+
+      if (_tempWhiteLogoBytes != null && _whiteLogoFileName != null) {
+        await _uploadLogoToServer(
+          _tempWhiteLogoBytes!,
+          _whiteLogoFileName!,
+          "logoBlanco",
+        );
+      }
+
+      // Limpiar variables temporales
+      setState(() {
+        _tempColorLogoBytes = null;
+        _colorLogoFileName = null;
+        _tempWhiteLogoBytes = null;
+        _whiteLogoFileName = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Logo guardado correctamente'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      setState(() => _isSaving = false);
     }
-
-    if (_tempWhiteLogoBytes != null && _whiteLogoFileName != null) {
-      await _uploadLogoToServer(
-        _tempWhiteLogoBytes!, _whiteLogoFileName!, "logoBlanco");
-    }
-
-    // Limpiar variables temporales
-    setState(() {
-      _tempColorLogoBytes = null;
-      _colorLogoFileName = null;
-      _tempWhiteLogoBytes = null;
-      _whiteLogoFileName = null;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Logo guardado correctamente'),
-        backgroundColor: Colors.green,
-      ),
-    );
-  } catch (e) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Error: $e')));
-  } finally {
-    setState(() => _isSaving = false);
   }
-}
 
   // Función para subir un logo ya seleccionado
   // DESPUÉS (FUNCIÓN DE SUBIDA CORREGIDA)
-Future<void> _uploadLogoToServer(
-    Uint8List fileBytes, String fileName, String tipoLogo) async { // Firma cambiada
-  final userData = Provider.of<UserDataProvider>(context, listen: false);
+  Future<void> _uploadLogoToServer(
+    Uint8List fileBytes,
+    String fileName,
+    String tipoLogo,
+  ) async {
+    // Firma cambiada
+    final userData = Provider.of<UserDataProvider>(context, listen: false);
 
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('tokenauth') ?? '';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('tokenauth') ?? '';
 
-    if (token.isEmpty) {
-      throw Exception(
-        'Token de autenticación no encontrado. Por favor, inicia sesión.',
+      if (token.isEmpty) {
+        throw Exception(
+          'Token de autenticación no encontrado. Por favor, inicia sesión.',
+        );
+      }
+
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/api/v1/imagenes/subir/logo'),
       );
+
+      request.headers['tokenauth'] = token;
+
+      // Adjuntar archivo DESDE BYTES, no desde una ruta
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'imagen',
+          fileBytes, // Usamos los bytes
+          filename: fileName, // Usamos el nombre del archivo
+          contentType: MediaType('image', 'png'),
+        ),
+      );
+
+      request.fields.addAll({
+        'tipoImagen': tipoLogo,
+        'idnegocio': userData.idnegocio,
+      });
+
+      // El resto de la función (enviar, recibir respuesta, etc.) es igual
+      http.StreamedResponse response = await request.send().timeout(
+        Duration(seconds: 30),
+      );
+      String responseBody = await response.stream.bytesToString();
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final Map<String, dynamic> jsonResponse = jsonDecode(responseBody);
+        final nuevaRuta = jsonResponse['filename'];
+        userData.actualizarLogo(tipoLogo, nuevaRuta);
+      } else {
+        throw Exception('Error HTTP ${response.statusCode}: $responseBody');
+      }
+    } on SocketException catch (e) {
+      AppLogger.log('Error de red: $e');
+      throw Exception('Verifica tu conexión a internet');
+    } on TimeoutException {
+      AppLogger.log('Tiempo de espera agotado');
+      throw Exception('El servidor no respondió a tiempo');
+    } catch (e) {
+      AppLogger.log('Error inesperado: $e');
+      rethrow;
     }
-
-    var request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$baseUrl/api/v1/imagenes/subir/logo'),
-    );
-
-    request.headers['tokenauth'] = token;
-
-    // Adjuntar archivo DESDE BYTES, no desde una ruta
-    request.files.add(
-      http.MultipartFile.fromBytes(
-        'imagen',
-        fileBytes, // Usamos los bytes
-        filename: fileName, // Usamos el nombre del archivo
-        contentType: MediaType('image', 'png'),
-      ),
-    );
-
-    request.fields.addAll({
-      'tipoImagen': tipoLogo,
-      'idnegocio': userData.idnegocio,
-    });
-    
-    // El resto de la función (enviar, recibir respuesta, etc.) es igual
-    http.StreamedResponse response = await request.send().timeout(
-      Duration(seconds: 30),
-    );
-    String responseBody = await response.stream.bytesToString();
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final Map<String, dynamic> jsonResponse = jsonDecode(responseBody);
-      final nuevaRuta = jsonResponse['filename'];
-      userData.actualizarLogo(tipoLogo, nuevaRuta);
-    } else {
-      throw Exception('Error HTTP ${response.statusCode}: $responseBody');
-    }
-  } on SocketException catch (e) {
-    AppLogger.log('Error de red: $e');
-    throw Exception('Verifica tu conexión a internet');
-  } on TimeoutException {
-    AppLogger.log('Tiempo de espera agotado');
-    throw Exception('El servidor no respondió a tiempo');
-  } catch (e) {
-    AppLogger.log('Error inesperado: $e');
-    rethrow;
   }
-}
 
-// (Copia y reemplaza tu versión actual con esta)
+  // (Copia y reemplaza tu versión actual con esta)
 
-// Función para cancelar los cambios
-void _cancelLogoChanges() {
-  setState(() {
-    // Limpia los bytes de la imagen a color y su nombre
-    _tempColorLogoBytes = null;
-    _colorLogoFileName = null;
+  // Función para cancelar los cambios
+  void _cancelLogoChanges() {
+    setState(() {
+      // Limpia los bytes de la imagen a color y su nombre
+      _tempColorLogoBytes = null;
+      _colorLogoFileName = null;
 
-    // Limpia los bytes de la imagen blanca y su nombre
-    _tempWhiteLogoBytes = null;
-    _whiteLogoFileName = null;
-  });
-}
+      // Limpia los bytes de la imagen blanca y su nombre
+      _tempWhiteLogoBytes = null;
+      _whiteLogoFileName = null;
+    });
+  }
 
   Future<void> _fetchCuentasBancarias() async {
     final userData = Provider.of<UserDataProvider>(context, listen: false);
@@ -1795,6 +1817,329 @@ void _cancelLogoChanges() {
       );
     }
   }
+
+  // --- NUEVA SECCIÓN DESPLEGABLE PARA LA INFORMACIÓN DEL PLAN ---
+  Widget _buildPlanInfoSection(BuildContext context) {
+  final userData = Provider.of<UserDataProvider>(context);
+  final colors = Provider.of<ThemeProvider>(context).colors;
+
+  // --- ¡IMPORTANTE! ---
+  // Estos son datos de ejemplo. Debes obtenerlos desde tu UserDataProvider.
+  final String? planUsuario = 'Plan Profesional';
+  final double? planCosto = 299.90;
+  final String? planFrecuencia = "Mensual";
+  final DateTime? planFechaProximoPago = DateTime.now().add(
+    const Duration(days: 15),
+  );
+  final DateTime? planFechaTermino = DateTime.now().add(
+    const Duration(days: 380),
+  );
+
+  // Formateadores para la fecha y la moneda
+  final currencyFormatter = NumberFormat.currency(
+    locale: 'es_MX',
+    symbol: '\$',
+  );
+  final dateFormatter = DateFormat('dd \'de\' MMMM \'de\' yyyy', 'es_MX');
+
+  // No mostrar la sección si el usuario no tiene un plan de pago
+  if (planUsuario == null ||
+      planUsuario.isEmpty ||
+      planUsuario.toLowerCase() == 'gratuito') {
+    return const SizedBox.shrink();
+  }
+
+  return _buildSection(
+    context,
+    title: 'Mi Suscripción',
+    isExpandable: true,
+    items: [
+      Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        decoration: BoxDecoration(
+          color: colors.backgroundCard,
+          borderRadius: BorderRadius.circular(16),
+        /*   border: Border.all(
+            color: colors.backgroundButton.withOpacity(0.2),
+            width: 1,
+          ), */
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header del Plan con badge
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.workspace_premium,
+                      color: Colors.amber.shade700,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          planUsuario,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: colors.textPrimary ?? Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'ACTIVO',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.green.shade700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Información de costos en tarjetas
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildInfoCard(
+                      context,
+                      icon: Icons.monetization_on_outlined,
+                      iconColor: Colors.green,
+                      title: 'Costo',
+                      value: planCosto != null && planFrecuencia != null
+                          ? '${currencyFormatter.format(planCosto)}'
+                          : 'No disponible',
+                      subtitle: planFrecuencia ?? '',
+                      colors: colors,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildInfoCard(
+                      context,
+                      icon: Icons.schedule_outlined,
+                      iconColor: Colors.blue,
+                      title: 'Próximo Pago',
+                      value: planFechaProximoPago != null
+                          ? _getShortDate(planFechaProximoPago)
+                          : 'No disponible',
+                      subtitle: planFechaProximoPago != null
+                          ? _getDaysUntil(planFechaProximoPago)
+                          : '',
+                      colors: colors,
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Información de vigencia
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: colors.backgroundSecondary?.withOpacity(0.3) ?? 
+                         Colors.grey.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.orange.withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.event_available_outlined,
+                      color: Colors.orange.shade700,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Válido hasta',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: colors.textSecondary ?? Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            planFechaTermino != null
+                                ? dateFormatter.format(planFechaTermino)
+                                : 'No disponible',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: colors.textPrimary ?? Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Botón de administrar
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    // TODO: Navegar a la pantalla de gestión de planes
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Navegando a la gestión de planes...'),
+                        backgroundColor: colors.backgroundButton,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.settings_outlined, size: 18),
+                  label: const Text(
+                    'Administrar Suscripción',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: colors.backgroundButton,
+                    foregroundColor: colors.whiteWhite,
+                    elevation: 2,
+                    shadowColor: colors.backgroundButton?.withOpacity(0.3),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+// Widget helper para las tarjetas de información
+Widget _buildInfoCard(
+  BuildContext context, {
+  required IconData icon,
+  required Color iconColor,
+  required String title,
+  required String value,
+  required String subtitle,
+  required dynamic colors,
+}) {
+  return Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: colors.backgroundSecondary?.withOpacity(0.3) ?? 
+             Colors.white.withOpacity(0.7),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+        color: iconColor.withOpacity(0.2),
+        width: 1,
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              icon,
+              color: iconColor,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: colors.textSecondary ?? Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: colors.textPrimary ?? Colors.black87,
+          ),
+        ),
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: colors.textSecondary ?? Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+// Función helper para obtener fecha corta
+String _getShortDate(DateTime date) {
+  final formatter = DateFormat('dd MMM', 'es_MX');
+  return formatter.format(date);
+}
+
+// Función helper para obtener días restantes
+String _getDaysUntil(DateTime date) {
+  final days = date.difference(DateTime.now()).inDays;
+  if (days == 0) return 'Hoy';
+  if (days == 1) return 'Mañana';
+  return 'En $days días';
+}
 
   //</editor-fold>
 }

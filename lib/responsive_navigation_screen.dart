@@ -71,10 +71,10 @@ class _ResponsiveNavigationScreenState
   @override
   void initState() {
     super.initState();
-   // _updateService = UpdateService(); // 2. Inicializa el servicio
+    // _updateService = UpdateService(); // 2. Inicializa el servicio
 
     // 3. Añade un listener para mostrar el SnackBar cuando haya una actualización
-   // _updateService.isUpdateAvailable.addListener(_showUpdateDialog);
+    // _updateService.isUpdateAvailable.addListener(_showUpdateDialog);
   }
 
   @override
@@ -521,6 +521,41 @@ class _ResponsiveNavigationScreenState
     );
   }
 
+  // <<<====================== NUEVO WIDGET ======================>>>
+  // Añade este nuevo método completo.
+  Widget _buildMobileFooter(bool isDarkMode) {
+    return Padding(
+      // Añadimos un poco de espacio para que no quede pegado
+      padding: const EdgeInsets.only(bottom: 24.0, top: 16.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Desarrollado por',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white70 : Colors.black54,
+              fontSize: 10,
+              fontFamily: 'Verdana',
+              fontWeight: FontWeight.w100,
+            ),
+          ),
+          const SizedBox(height: 5),
+          SizedBox(
+            width: 70,
+            height: 30,
+            child: Image.asset(
+              isDarkMode
+                  ? 'assets/codx_transparente_blanco.png'
+                  : 'assets/codx_transparente_full_negro.png',
+              fit: BoxFit.contain,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  // <<<===========================================================>>>
+
   //============================================================================
   // CONSTRUCCIÓN DE LA INTERFAZ MÓVIL
   //============================================================================
@@ -918,6 +953,9 @@ class _ResponsiveNavigationScreenState
     final themeProvider = Provider.of<ThemeProvider>(context);
     final colors = themeProvider.colors;
     final userData = Provider.of<UserDataProvider>(context, listen: false);
+    final isDarkMode = themeProvider.isDarkMode;
+
+        final String planUsuario = "Plan Profesional";
 
     return Drawer(
       child: Container(
@@ -970,15 +1008,18 @@ class _ResponsiveNavigationScreenState
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            userData.tipoUsuario,
-                            style: TextStyle(
-                              color: colors.textSecondary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w400,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                            Text(
+                          planUsuario != null &&
+                                  planUsuario.isNotEmpty
+                              ? "${userData.tipoUsuario} · ${planUsuario}"
+                              : userData.tipoUsuario,
+                          style: TextStyle(
+                            color: colors.textSecondary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
                           ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         ],
                       ),
                     ),
@@ -1043,6 +1084,8 @@ class _ResponsiveNavigationScreenState
                 ),
               ),
             ),
+            // <<< MODIFICACIÓN 2: Añade la llamada al nuevo footer aquí >>>
+            //_buildMobileFooter(isDarkMode),
             Container(
               height: 1,
               margin: const EdgeInsets.symmetric(horizontal: 24),

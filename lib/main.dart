@@ -1,6 +1,7 @@
 // Imports de paquetes externos
 import 'package:finora_app/constants/colors.dart';
 import 'package:finora_app/providers/logo_provider.dart';
+import 'package:finora_app/services/navigation_service.dart';
 import 'package:finora_app/services/update_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -23,7 +24,7 @@ import 'package:finora_app/constants/routes.dart';
 // 1. La función `main` ahora es `async` para permitir operaciones asíncronas antes de iniciar la app.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // ==================== INICIO DE CAMBIOS ====================
 
   // A. Creamos las instancias de los providers que necesitan carga previa.
@@ -36,7 +37,8 @@ void main() async {
 
   // ===================== FIN DE CAMBIOS ======================
 
-  final String initialRoute = isLoggedIn ? AppRoutes.navigation : AppRoutes.login;
+  final String initialRoute =
+      isLoggedIn ? AppRoutes.navigation : AppRoutes.login;
 
   await initializeDateFormatting('es_ES', null);
   Intl.defaultLocale = 'es_ES';
@@ -49,7 +51,7 @@ void main() async {
         // ¡IMPORTANTE! Usamos `.value` para los providers que ya hemos creado e inicializado.
         ChangeNotifierProvider.value(value: themeProvider),
         ChangeNotifierProvider.value(value: userDataProvider),
-        
+
         ChangeNotifierProvider(create: (_) => LogoProvider()),
       ],
       child: MyApp(initialRoute: initialRoute),
@@ -69,14 +71,16 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-
   // 1. Declaramos e inicializamos nuestro servicio de actualización aquí.
   final UpdateService _updateService = UpdateService();
 
-
-    @override
+  @override
   void initState() {
     super.initState();
+    // ¡LLAMADA CLAVE! Al iniciar la app, busca actualizaciones.
+    _updateService.checkForUpdate();
+
+    // El resto de tu lógica se mantiene.
     _updateService.isUpdateAvailable.addListener(_showUpdateDialogIfNeeded);
   }
 
@@ -87,132 +91,140 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
-    final AppColors colors = AppColors();
+  final AppColors colors = AppColors();
 
+  void _showUpdateDialogIfNeeded() {
+  // 1. Eliminamos la comprobación de `mounted`, ya que la GlobalKey maneja eso por nosotros.
+  //    Solo comprobamos si la actualización está realmente disponible.
+  if (!_updateService.isUpdateAvailable.value) return;
 
-    void _showUpdateDialogIfNeeded() {
-    // La comprobación inicial sigue siendo la misma.
-    if (mounted && _updateService.isUpdateAvailable.value) {
-      // Obtenemos los providers necesarios.
-      final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-      final colors = themeProvider.colors;
+  // 2. OBTENEMOS EL CONTEXTO SEGURO a través de la GlobalKey.
+  final BuildContext? dialogContext = navigatorKey.currentContext;
 
-      showDialog<void>(
-        context: context,
-        barrierDismissible: false, // El usuario está obligado a interactuar.
-        builder: (BuildContext dialogContext) {
-          // *** CAMBIO IMPORTANTE: Usamos PopScope en lugar de WillPopScope ***
-          // Evita que el diálogo se cierre con el botón de "atrás" del sistema.
-          return PopScope(
-            canPop: false, // Esto es el equivalente moderno de onWillPop: () async => false
-            child: Dialog(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 500),
-                child: AlertDialog(
-                  insetPadding: const EdgeInsets.symmetric(
-                    horizontal: 24.0,
-                    vertical: 24.0,
-                  ),
-                  backgroundColor: colors.backgroundPrimary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  iconPadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                  icon: Icon(
-                    Icons.cloud_download_outlined,
-                    color: colors.brandPrimary,
-                    size: 48,
-                  ),
-                  title: SizedBox(
-                    width: double.infinity,
-                    child: Text(
-                      'Actualización Disponible', // He simplificado el salto de línea
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: colors.textPrimary, // Asegúrate de usar el color del tema
-                      ),
-                    ),
-                  ),
-                  content: SizedBox(
-                    width: double.infinity,
-                    child: Text(
-                      'Se ha encontrado una nueva versión de Finora con mejoras y nuevas funciones. \n\nPor favor, actualiza para continuar.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 15,
-                        height: 1.4,
-                        color: colors.textPrimary, // Asegúrate de usar el color del tema
-                      ),
-                    ),
-                  ),
-                  actionsAlignment: MainAxisAlignment.center,
-                  actionsPadding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                  actions: <Widget>[
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        icon: const Icon(Icons.download_for_offline, color: Colors.white), // Color del icono
-                        label: const Text('ACTUALIZAR AHORA'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: colors.brandPrimary,
-                          foregroundColor: Colors.white, // Color del texto
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          textStyle: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        onPressed: () {
-                          // 1. Cierra el diálogo para dar feedback visual inmediato.
-                          Navigator.of(dialogContext).pop();
-                          // 2. Llama al servicio para que aplique la actualización.
-                          // La página se recargará por completo.
-                          _updateService.activateNewVersion();
-                        },
-                      ),
-                    ),
-                  ],
-                  titlePadding: const EdgeInsets.only(top: 16),
-                  contentPadding: const EdgeInsets.only(
-                    top: 16,
-                    left: 24,
-                    right: 24,
+  // 3. Verificamos que el contexto no sea nulo antes de continuar.
+  if (dialogContext == null) {
+    print("No se pudo mostrar el diálogo de actualización: el contexto del navegador es nulo.");
+    return;
+  }
+
+  // A partir de aquí, el resto del código es casi idéntico al tuyo,
+  // pero usamos el 'dialogContext' seguro que acabamos de obtener.
+
+  // 4. Obtenemos los providers necesarios usando el contexto seguro.
+  final themeProvider = Provider.of<ThemeProvider>(dialogContext, listen: false);
+  final colors = themeProvider.colors; // Suponiendo que `colors` es un getter en tu ThemeProvider
+
+  showDialog<void>(
+    // 5. Usamos el contexto seguro para mostrar el diálogo.
+    context: dialogContext,
+    barrierDismissible: false, // El usuario está obligado a interactuar.
+    builder: (BuildContext builderContext) { // Renombramos el context del builder a 'builderContext' para evitar confusiones
+      // Dentro del builder, es seguro usar el context que nos proporciona.
+      return PopScope(
+        canPop: false,
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 24.0,
+              ),
+              backgroundColor: colors.backgroundPrimary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+              iconPadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              icon: Icon(
+                Icons.cloud_download_outlined,
+                color: colors.brandPrimary,
+                size: 48,
+              ),
+              title: SizedBox(
+                width: double.infinity,
+                child: Text(
+                  'Actualización Disponible',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: colors.textPrimary,
                   ),
                 ),
               ),
+              content: SizedBox(
+                width: double.infinity,
+                child: Text(
+                  'Se ha encontrado una nueva versión de Finora con mejoras y nuevas funciones. \n\nPor favor, actualiza para continuar.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.4,
+                    color: colors.textPrimary,
+                  ),
+                ),
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actionsPadding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+              actions: <Widget>[
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.download_for_offline, color: Colors.white),
+                    label: const Text('ACTUALIZAR AHORA'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colors.brandPrimary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    onPressed: () {
+                      // Usamos el 'builderContext' para cerrar el diálogo.
+                      Navigator.of(builderContext).pop();
+                      _updateService.activateNewVersion();
+                    },
+                  ),
+                ),
+              ],
+              titlePadding: const EdgeInsets.only(top: 16),
+              contentPadding: const EdgeInsets.only(
+                top: 16,
+                left: 24,
+                right: 24,
+              ),
             ),
-          );
-        },
+          ),
+        ),
       );
-    }
-  }
+    },
+  );
+}
 
-  
   @override
   Widget build(BuildContext context) {
     // Obtenemos el provider del tema para configurar el ThemeData de la app.
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return MaterialApp(
+        // 2. ASIGNA LA CLAVE AQUÍ
+      navigatorKey: navigatorKey, 
       // --- Configuración de Localización ---
       locale: const Locale('es', 'ES'),
-      supportedLocales: const [
-        Locale('es', 'ES'),
-        Locale('en', 'US')
-      ],
+      supportedLocales: const [Locale('es', 'ES'), Locale('en', 'US')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      
+
       // --- Configuración de Navegación ---
       // 9. Aquí se utiliza la variable `initialRoute` para definir la pantalla de inicio.
       initialRoute: widget.initialRoute,
@@ -220,7 +232,8 @@ class _MyAppState extends State<MyApp> {
         // Mapeo de todas las rutas con nombre de la aplicación.
         AppRoutes.login: (context) => LoginScreen(),
         AppRoutes.navigation: (context) => const ResponsiveNavigationScreen(),
-        AppRoutes.gestionarUsuarios: (context) => const GestionarUsuariosScreen(),
+        AppRoutes.gestionarUsuarios:
+            (context) => const GestionarUsuariosScreen(),
         AppRoutes.configuracion: (context) => const ConfiguracionScreen(),
         AppRoutes.acercaDe: (context) => const AcercaDeScreen(),
       },
@@ -228,7 +241,7 @@ class _MyAppState extends State<MyApp> {
       onGenerateRoute: (settings) {
         return _errorRoute();
       },
-      
+
       // --- Configuración Visual ---
       debugShowCheckedModeBanner: false,
       // El tema de la aplicación (claro u oscuro) se controla dinámicamente desde el ThemeProvider.
@@ -240,10 +253,9 @@ class _MyAppState extends State<MyApp> {
 // Función helper para mostrar una pantalla de error en caso de una ruta desconocida.
 Route<dynamic> _errorRoute() {
   return MaterialPageRoute(
-    builder: (_) => Scaffold(
-      body: Center(
-        child: Text('Error de navegación: Ruta no encontrada'),
-      ),
-    ),
+    builder:
+        (_) => Scaffold(
+          body: Center(child: Text('Error de navegación: Ruta no encontrada')),
+        ),
   );
 }
