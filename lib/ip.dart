@@ -2,7 +2,7 @@
 //IP OFICINA
 //const String baseUrl = '192.168.0.103:3001';
 //IP OFICINA LENIN PC
-const String baseUrl = 'http://192.168.0.103:3002';
+//const String baseUrl = 'http://192.168.0.103:3002';
 //const String baseUrl = 'http://localhost:3000';
 //IP CASA
 //const String baseUrl = '192.168.1.23:3000';
@@ -19,7 +19,7 @@ const String baseUrl = 'http://192.168.0.103:3002';
 //const String baseUrl = '26.142.160.243:3001';
 
 //SERVIDOR FINORA TEST 1=
-//const String baseUrl = 'https://finoraxcodx.duckdns.org';
+const String baseUrl = 'https://finoraxcodx.duckdns.org';
 
 //SERVIDOR FINORA TEST 1=
 //const String baseUrl = 'https://finoraprueba.duckdns.org';
