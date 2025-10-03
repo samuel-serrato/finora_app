@@ -11,12 +11,14 @@ import 'dart:js' as js;
 
 import 'dart:js_util' as js_util;
 
+import '../utils/app_logger.dart';
+
 class UpdateService {
   final ValueNotifier<bool> isUpdateAvailable = ValueNotifier(false);
 
   UpdateService() {
     js.context['onNewVersionReady'] = () {
-      print(
+      AppLogger.log(
         'Dart: Notificación recibida desde JS. La actualización está lista.',
       );
       Future(() {
@@ -27,7 +29,7 @@ class UpdateService {
 
   Future<void> checkForUpdate() async {
     if (!kIsWeb || kDebugMode) {
-      print(
+      AppLogger.log(
         'Comprobación de actualización omitida (no es un build web de producción).',
       );
       return;
@@ -55,24 +57,24 @@ class UpdateService {
 
         // ===================== FIN DE LA ADAPTACIÓN =====================
 
-        print(
+        AppLogger.log(
           'Versión actual de la app: $currentVersion, Última versión en el servidor: $latestVersion',
         );
 
         if (latestVersion != currentVersion) {
-          print(
+          AppLogger.log(
             '¡Se encontró una nueva versión! Pidiendo al navegador que busque un nuevo Service Worker.',
           );
           _triggerServiceWorkerUpdate();
         } else {
-          print('La aplicación ya está en su última versión.');
+          AppLogger.log('La aplicación ya está en su última versión.');
         }
       } else {
         // Añadimos un log para errores de petición HTTP
-        print('Error en la petición: Status code ${response.statusCode}');
+        AppLogger.log('Error en la petición: Status code ${response.statusCode}');
       }
     } catch (e) {
-      print('Error al verificar la actualización: $e');
+      AppLogger.log('Error al verificar la actualización: $e');
     }
   }
 
@@ -86,7 +88,7 @@ void _triggerServiceWorkerUpdate() {
   js_util.promiseToFuture(promise).then((registration) {
     // Verificamos que el registro del Service Worker existe
     if (registration != null) {
-      print('Forzando la comprobación del Service Worker...');
+      AppLogger.log('Forzando la comprobación del Service Worker...');
       
       // 'registration' es ahora un objeto JS que representa el ServiceWorkerRegistration.
       // Llamamos al método 'update()' directamente sobre este objeto.
@@ -94,12 +96,12 @@ void _triggerServiceWorkerUpdate() {
     }
   }).catchError((err) {
     // Es una buena práctica añadir un manejo de errores para estas operaciones.
-    print('Error al intentar actualizar el Service Worker: $err');
+    AppLogger.log('Error al intentar actualizar el Service Worker: $err');
   });
 }
 
   void activateNewVersion() {
-    print('Dart: Pidiendo a JS que aplique la actualización.');
+    AppLogger.log('Dart: Pidiendo a JS que aplique la actualización.');
     js.context.callMethod('applyUpdate');
   }
 

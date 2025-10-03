@@ -55,15 +55,16 @@ class GrupoService {
   }
 
   /// Obtiene la lista de usuarios con rol de "campo" (Asesores).
-  Future<ApiResponse<List<Usuario>>> getAsesores() {
-    return _apiService.get<List<Usuario>>(
-      '/api/v1/usuarios/tipo/campo',
-      parser: (data) {
-        if (data is List) return data.map((item) => Usuario.fromJson(item)).toList();
-        throw Exception('Formato de respuesta inesperado al obtener asesores.');
-      },
-    );
-  }
+  Future<ApiResponse<List<Usuario>>> getAsesores({bool showErrorDialog = true}) {
+  return _apiService.get<List<Usuario>>(
+    '/api/v1/usuarios/tipo/campo',
+    parser: (data) {
+      if (data is List) return data.map((item) => Usuario.fromJson(item)).toList();
+      throw Exception('Formato de respuesta inesperado al obtener asesores.');
+    },
+    showErrorDialog: showErrorDialog, // <--- Y pásalo aquí a la llamada interna
+  );
+}
 
   /// Obtiene los datos de un grupo específico (usado por los formularios de edición/renovación).
   Future<ApiResponse<Grupo>> getGrupo(String idGrupo) {

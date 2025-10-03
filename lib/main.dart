@@ -21,6 +21,8 @@ import 'package:finora_app/screens/screens_config/configuracion_screen.dart';
 import 'package:finora_app/screens/screens_config/gestionar_usuarios_screen.dart';
 import 'package:finora_app/constants/routes.dart';
 
+import 'utils/app_logger.dart';
+
 // 1. La función `main` ahora es `async` para permitir operaciones asíncronas antes de iniciar la app.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -103,7 +105,7 @@ class _MyAppState extends State<MyApp> {
 
   // 3. Verificamos que el contexto no sea nulo antes de continuar.
   if (dialogContext == null) {
-    print("No se pudo mostrar el diálogo de actualización: el contexto del navegador es nulo.");
+    AppLogger.log("No se pudo mostrar el diálogo de actualización: el contexto del navegador es nulo.");
     return;
   }
 

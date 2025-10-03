@@ -360,6 +360,7 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
     final response = await _apiService.get<List<Usuario>>(
       '/api/v1/usuarios/tipo/campo',
       parser: (json) => (json as List).map((e) => Usuario.fromJson(e)).toList(),
+      showErrorDialog: false, // <--- ¡AÑADE ESTA LÍNEA!
     );
     if (mounted && response.success) {
       setState(() {
@@ -516,7 +517,7 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
 
       // --- Textos personalizables ---
       //appBarTitle: 'Grupos',
-      searchHintText: 'Buscar por nombre, asesor...',
+      searchHintText: 'Buscar por nombre...',
       addItemText: 'Agregar Grupo',
       loadingText: 'Cargando grupos...',
       emptyStateTitle: 'No se encontraron grupos',
@@ -846,7 +847,7 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
       'Activo',
       'Disponible',
       'Liquidado',
-     // 'Finalizado',
+      // 'Finalizado',
       'Inactivo',
     ];
     final themeProvider = Provider.of<ThemeProvider>(context);

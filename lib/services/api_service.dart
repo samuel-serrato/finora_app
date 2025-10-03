@@ -54,38 +54,41 @@ class ApiService {
     Object? body,
     http.Response? response,
     Object? error,
-    StackTrace? stackTrace, // <-- Nuevo para más detalle
+    StackTrace? stackTrace, 
   }) {
     AppLogger.log('\n===================== 🚀 API LOG 🚀 =====================');
     AppLogger.log('➡️  $method: $url');
-
-    // Imprime el token de forma segura
-    if (headers != null && headers.containsKey('tokenauth')) {
-      final token = headers['tokenauth']!;
-      final displayToken =
-          token.length > 6 ? '...${token.substring(token.length - 6)}' : token;
-      AppLogger.log('🔑  Token: Bearer $displayToken');
+    
+    // <<< CAMBIO 1: AÑADIMOS LOGGING PARA LA LICENCIA >>>
+    if (headers != null) {
+      // Imprime el token de forma segura
+      if (headers.containsKey('tokenauth')) {
+        final token = headers['tokenauth']!;
+        final displayToken = token.length > 6 ? '...${token.substring(token.length - 6)}' : token;
+        AppLogger.log('🔑  Token: Bearer $displayToken');
+      }
+      // Imprime la licencia de forma segura
+      if (headers.containsKey('token_licencia')) {
+        final license = headers['token_licencia']!;
+        final displayLicense = license.length > 10 ? '${license.substring(0, 10)}...' : license;
+        AppLogger.log('📜  Licencia: $displayLicense');
+      }
     }
 
-    // Imprime el cuerpo de la petición (payload)
     if (body != null) {
       try {
-        // Usa un encoder con indentación para que el JSON sea legible
         const encoder = JsonEncoder.withIndent('  ');
         AppLogger.log('📦  Body:\n${encoder.convert(body)}');
       } catch (e) {
-        // Si no es un JSON válido, lo imprime tal cual
         AppLogger.log('📦  Body (no-JSON);: $body');
       }
     }
 
-    // Imprime la respuesta del servidor si existe
     if (response != null) {
       AppLogger.log('-------------------- 📥 RESPONSE 📥 ---------------------');
       final statusIcon =
           response.statusCode >= 200 && response.statusCode < 300 ? '✅' : '❌';
       AppLogger.log('$statusIcon Status Code: ${response.statusCode}');
-      // Intenta formatear la respuesta también
       try {
         final decodedBody = jsonDecode(response.body);
         const encoder = JsonEncoder.withIndent('  ');
@@ -95,7 +98,6 @@ class ApiService {
       }
     }
 
-    // Imprime cualquier error de conexión o de otro tipo
     if (error != null) {
       AppLogger.log('---------------------- 🔥 ERROR 🔥 ----------------------');
       AppLogger.log('🐞  Exception: $error');
@@ -106,6 +108,7 @@ class ApiService {
     AppLogger.log('=========================================================\n');
   }
 
+   // --- MANEJO DE TOKEN ---
   Future<String?> _getToken() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -134,8 +137,40 @@ class ApiService {
     }
   }
 
+  // <<< CAMBIO 2: AÑADIMOS FUNCIONES PARA MANEJAR LA LICENCIA, IGUAL QUE EL TOKEN >>>
+  Future<String?> _getLicense() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('token_licencia');
+    } catch (e) {
+      AppLogger.log('❌ Error obteniendo licencia: $e');
+      return null;
+    }
+  }
+
+    Future<void> _saveLicense(String license) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('token_licencia', license);
+    } catch (e) {
+      AppLogger.log('❌ Error guardando licencia: $e');
+    }
+  }
+
+  Future<void> _removeLicense() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('token_licencia');
+    } catch (e) {
+      AppLogger.log('❌ Error removiendo licencia: $e');
+    }
+  }
+
+
+    // <<< CAMBIO 3: MODIFICAMOS _getHeaders PARA QUE ACEPTE Y AÑADA LA LICENCIA >>>
   Map<String, String> _getHeaders({
     String? token,
+    String? license, // <-- Nuevo parámetro
     bool includeContentType = true,
   }) {
     final headers = <String, String>{};
@@ -145,23 +180,28 @@ class ApiService {
     if (token != null && token.isNotEmpty) {
       headers['tokenauth'] = token;
     }
+    // Añadimos la licencia al header si existe
+    if (license != null && license.isNotEmpty) {
+      headers['token_licencia'] = license;
+    }
     return headers;
   }
 
   // Dentro de la clase ApiService
 
   // Reemplaza tu método _makeRequest completo con este
+  
+  // <<< CAMBIO 4: MODIFICAMOS _makeRequest PARA OBTENER Y PASAR LA LICENCIA >>>
   Future<ApiResponse<T>> _makeRequest<T>({
     required HttpMethod method,
     required String endpoint,
-    Map<String, String>? queryParams, // <<< PASO 1: AÑADE ESTE PARÁMETRO
+    Map<String, String>? queryParams,
     dynamic body,
     bool requiresAuth = true,
     bool showErrorDialog = true,
     T Function(dynamic)? parser,
     bool handle404AsSuccess = false,
   }) async {
-    // <<< PASO 2: CONSTRUYE LA URI ANTES DEL TRY-CATCH >>>
     var uri = Uri.parse('$baseUrl$endpoint');
     if (queryParams != null && queryParams.isNotEmpty) {
       uri = uri.replace(queryParameters: queryParams);
@@ -170,17 +210,20 @@ class ApiService {
     http.Response? response;
     Map<String, String>? headers;
 
-    // El resto de la función se mantiene casi igual, solo cambia el uso de 'uri'
     try {
       String? token;
+      String? license; // <-- Variable para la licencia
+
       if (requiresAuth) {
+        // Obtenemos tanto el token como la licencia
         token = await _getToken();
+        license = await _getLicense(); // <-- Obtenemos la licencia
+        
         if (token == null || token.isEmpty) {
-          final error =
-              'Token de autenticación no encontrado. Por favor, inicia sesión.';
+          final error = 'Token de autenticación no encontrado. Por favor, inicia sesión.';
           _logRequestDetails(
             method: method.name.toUpperCase(),
-            url: uri.toString(), // Usa la uri ya construida
+            url: uri.toString(),
             error: error,
           );
           if (showErrorDialog) handleAuthError(error, redirectToLogin: true);
@@ -193,16 +236,18 @@ class ApiService {
         }
       }
 
-      headers = _getHeaders(token: token);
+      // Pasamos ambos valores a _getHeaders
+      headers = _getHeaders(token: token, license: license); // <-- Pasamos la licencia
 
       _logRequestDetails(
         method: method.name.toUpperCase(),
-        url: uri.toString(), // Usa la uri ya construida
+        url: uri.toString(),
         headers: headers,
         body: body,
       );
 
       switch (method) {
+        // ... (el switch se mantiene exactamente igual) ...
         case HttpMethod.get:
           response = await http
               .get(uri, headers: headers)
@@ -232,39 +277,36 @@ class ApiService {
               .timeout(timeoutDuration);
           break;
       }
-
+      // ...
       _logRequestDetails(
         method: method.name.toUpperCase(),
-        url: uri.toString(), // Usa la uri ya construida
+        url: uri.toString(),
         response: response,
       );
-
-      // <<< CORRECCIÓN EN _handleResponse >>>
-      // Asegúrate de pasar 'handle404AsSuccess' aquí, que faltaba en tu código original.
+      
       return _handleResponse<T>(
         response,
         parser: parser,
         showErrorDialog: showErrorDialog,
-        handle404AsSuccess: handle404AsSuccess, // <-- Añade esto
+        handle404AsSuccess: handle404AsSuccess,
       );
     } catch (e, stackTrace) {
+      // ... (el catch se mantiene exactamente igual) ...
       _logRequestDetails(
         method: method.name.toUpperCase(),
-        url: uri.toString(), // Usa la uri ya construida
+        url: uri.toString(),
         headers: headers,
         response: response,
         error: e,
         stackTrace: stackTrace,
       );
-      // ... el resto del catch sin cambios ...
       String errorMsg;
       int statusCode = 500;
       if (e is http.ClientException) {
         errorMsg = 'Error de conexión: ${e.message}';
         statusCode = 0;
       } else if (e is TimeoutException) {
-        errorMsg =
-            'Tiempo de espera agotado. Verifica tu conexión e intenta de nuevo.';
+        errorMsg = 'Tiempo de espera agotado. Verifica tu conexión e intenta de nuevo.';
         statusCode = 408;
       } else {
         errorMsg = 'Error inesperado: ${e.toString()}';
@@ -676,6 +718,8 @@ class ApiService {
   }
 
   // Método para Login (ejemplo, se mantiene igual ya que usa http directamente)
+   // <<< CAMBIO 5: MODIFICAMOS EL MÉTODO login PARA GUARDAR LA LICENCIA >>>
+  // Método para Login
   Future<ApiResponse<Map<String, dynamic>>> login({
     required String usuario,
     required String password,
@@ -685,7 +729,7 @@ class ApiService {
       final response = await http
           .post(
             Uri.parse('$baseUrl/api/v1/auth/login'),
-            headers: _getHeaders(includeContentType: true, token: null),
+            headers: _getHeaders(includeContentType: true, token: null, license: null),
             body: json.encode({'usuario': usuario, 'password': password}),
           )
           .timeout(timeoutDuration);
@@ -696,10 +740,26 @@ class ApiService {
         if (responseBody['code'] == 200 ||
             responseBody['success'] == true ||
             responseBody.containsKey('token')) {
+          
+          // 1. Guardar el Token (como antes)
           final token = response.headers['tokenauth'] ?? responseBody['token'];
           if (token != null && token is String && token.isNotEmpty) {
             await _saveToken(token);
             AppLogger.log('🔑 Token guardado exitosamente');
+
+            // <<< ÚNICO CAMBIO REQUERIDO >>>
+            // 2. Extraer y guardar la Licencia desde los HEADERS
+            final license = response.headers['token_licencia']; // <-- Leemos el header 'token_licencia'
+            if (license != null && license.isNotEmpty) {
+              await _saveLicense(license); // <-- Usamos nuestra función para guardarla
+              AppLogger.log('📜 Licencia guardada exitosamente desde el header');
+            } else {
+              AppLogger.log('⚠️  Advertencia: No se encontró el header "token_licencia" en la respuesta del login.');
+              // Opcional: podrías querer limpiar cualquier licencia vieja si no viene una nueva
+              // await _removeLicense(); 
+            }
+            // <<< FIN DEL CAMBIO >>>
+
             return ApiResponse<Map<String, dynamic>>(
               success: true,
               data: responseBody,
@@ -708,7 +768,7 @@ class ApiService {
             );
           } else {
             const error = 'Token no encontrado en la respuesta del login.';
-            if (_context != null) showErrorDialog(error); // <--- CAMBIO
+            if (_context != null) showErrorDialog(error);
             return ApiResponse<Map<String, dynamic>>(
               success: false,
               error: error,
@@ -721,7 +781,7 @@ class ApiService {
               responseBody['Error']?['Message'] ??
               responseBody['message'] ??
               'Respuesta de login inesperada.';
-          if (_context != null) showErrorDialog(errorMessage); // <--- CAMBIO
+          if (_context != null) showErrorDialog(errorMessage);
           return ApiResponse<Map<String, dynamic>>(
             success: false,
             error: errorMessage,
@@ -738,7 +798,7 @@ class ApiService {
     } on http.ClientException catch (e) {
       AppLogger.log('❌ Error de conexión en login: $e');
       final error = 'Error de conexión: ${e.message}';
-      showErrorDialog(error); // <--- CAMBIO
+      showErrorDialog(error);
       return ApiResponse<Map<String, dynamic>>(
         success: false,
         error: error,
@@ -748,7 +808,7 @@ class ApiService {
     } on TimeoutException {
       AppLogger.log('⌛ Tiempo de espera agotado en login');
       const error = 'Tiempo de espera agotado al intentar iniciar sesión.';
-      showErrorDialog(error); // <--- CAMBIO
+      showErrorDialog(error);
       return ApiResponse<Map<String, dynamic>>(
         success: false,
         error: error,
@@ -758,7 +818,7 @@ class ApiService {
     } catch (e) {
       AppLogger.log('❌ Error inesperado en login: $e');
       final error = 'Error inesperado durante el login: ${e.toString()}';
-      showErrorDialog(error); // <--- CAMBIO
+      showErrorDialog(error);
       return ApiResponse<Map<String, dynamic>>(
         success: false,
         error: error,
@@ -769,8 +829,8 @@ class ApiService {
   }
 
   // Método para cerrar sesión con llamada al endpoint (no necesita cambios)
+  // <<< CAMBIO 6: MODIFICAMOS EL MÉTODO logout PARA LIMPIAR LA LICENCIA >>>
   Future<ApiResponse<Map<String, dynamic>>> logout() async {
-    // ... (Tu código de logout no necesita cambios)
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('tokenauth') ?? '';
 
@@ -781,13 +841,16 @@ class ApiService {
             headers: {'tokenauth': token, 'Content-Type': 'application/json'},
           )
           .timeout(timeoutDuration);
-
+      
       final responseHeaders = response.headers;
 
-      if (response.statusCode == 200) {
-        await _removeToken();
-        AppLogger.log('🔑 Token removido exitosamente');
+      // Limpiamos los datos locales sin importar si la petición al backend tuvo éxito.
+      // Es más importante que el usuario no pueda seguir usando la app como si estuviera logueado.
+      await _removeToken();
+      await _removeLicense(); // <-- Limpiamos la licencia
+      AppLogger.log('🔑 Token y 📜 Licencia removidos exitosamente');
 
+      if (response.statusCode == 200) {
         return ApiResponse<Map<String, dynamic>>(
           success: true,
           data: response.body.isNotEmpty ? json.decode(response.body) : {},
@@ -795,6 +858,7 @@ class ApiService {
           headers: responseHeaders,
         );
       } else {
+        // ... (el resto del método logout se mantiene igual) ...
         String errorMessage = 'Error al cerrar sesión: ${response.statusCode}';
         try {
           if (response.body.isNotEmpty) {
@@ -819,7 +883,8 @@ class ApiService {
         );
       }
     } on http.ClientException catch (e) {
-      final error = 'Error de conexión: ${e.message}';
+      // ...
+       final error = 'Error de conexión: ${e.message}';
       return ApiResponse<Map<String, dynamic>>(
         success: false,
         error: error,

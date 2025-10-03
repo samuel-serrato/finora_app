@@ -374,6 +374,7 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
     final response = await _apiService.get<List<Usuario>>(
       '/api/v1/usuarios/tipo/campo',
       parser: (json) => (json as List).map((e) => Usuario.fromJson(e)).toList(),
+      showErrorDialog: false, // <--- ¡AÑADE ESTA LÍNEA!
     );
     if (!mounted) return;
     setState(() {
@@ -1450,7 +1451,7 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
 
     return ElevatedButton.icon(
       onPressed: _agregarCredito, // <--- CAMBIO AQUÍ
-      icon: const Icon(Icons.add_rounded, size: 20),
+      //icon: const Icon(Icons.add_rounded, size: 20),
       label: const Text('Agregar Crédito'),
       style: ElevatedButton.styleFrom(
         backgroundColor: colors.backgroundButton,

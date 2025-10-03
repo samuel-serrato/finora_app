@@ -620,7 +620,7 @@ void _editarCliente(Cliente cliente) {
 
       // --- Textos y animaciones personalizables ---
       appBarTitle: 'Clientes',
-      searchHintText: 'Buscar por nombre, apellido, email...',
+      searchHintText: 'Buscar por nombre, apellido...',
       addItemText: 'Agregar Cliente',
       loadingText: 'Cargando clientes...',
       emptyStateTitle: 'No se encontraron clientes',

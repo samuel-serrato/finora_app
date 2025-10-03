@@ -1,5 +1,6 @@
 // Archivo: lib/widgets/custom_user_menu.dart
 import 'package:finora_app/constants/routes.dart';
+import 'package:finora_app/providers/theme_provider.dart';
 import 'package:finora_app/providers/user_data_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -24,7 +25,10 @@ class CustomUserMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String planUsuario = "Plan Profesional";
+    final String planUsuario = userData.licenciaActiva!.nombre;
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final colors = themeProvider.colors;
+    final isDarkMode = themeProvider.isDarkMode;
 
     return MouseRegion(
       cursor: SystemMouseCursors.click, // Cursor de click al hacer hover
@@ -128,7 +132,7 @@ class CustomUserMenu extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: isDarkMode ? Colors.grey[900] : Colors.white,
+            color: colors.card,
             borderRadius: BorderRadius.circular(50),
             boxShadow: [
               BoxShadow(
@@ -167,7 +171,7 @@ class CustomUserMenu extends StatelessWidget {
                     ),
                     Text(
                       planUsuario != null && planUsuario.isNotEmpty
-                          ? "${userData.tipoUsuario} · ${planUsuario}"
+                          ? "${userData.tipoUsuario} · Plan ${planUsuario}"
                           : userData.tipoUsuario,
                       style: TextStyle(
                         color:

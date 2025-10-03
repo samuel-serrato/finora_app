@@ -18,24 +18,24 @@ const APP_SHELL_URLS = [
 ];
 
 self.addEventListener('install', event => {
-  console.log(`[Service Worker ${VERSION}] - Instalando...`);
+  //console.log(`[Service Worker ${VERSION}] - Instalando...`);
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log(`[Service Worker ${VERSION}] - Precargando App Shell en caché.`);
+      //console.log(`[Service Worker ${VERSION}] - Precargando App Shell en caché.`);
       return cache.addAll(APP_SHELL_URLS);
     })
   );
 });
 
 self.addEventListener('activate', event => {
-  console.log(`[Service Worker ${VERSION}] - Activado y listo para tomar el control.`);
+  //console.log(`[Service Worker ${VERSION}] - Activado y listo para tomar el control.`);
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames
           .filter(name => name.startsWith(CACHE_NAME_PREFIX) && name !== CACHE_NAME)
           .map(name => {
-            console.log(`[Service Worker ${VERSION}] - Borrando caché antigua: ${name}`);
+            //console.log(`[Service Worker ${VERSION}] - Borrando caché antigua: ${name}`);
             return caches.delete(name);
           })
       );
@@ -75,7 +75,7 @@ self.addEventListener('fetch', event => {
 // ¡LA PIEZA CLAVE QUE VAMOS A USAR!
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
-    console.log(`[Service Worker ${VERSION}] - Recibido skipWaiting. Activando inmediatamente.`);
+    //console.log(`[Service Worker ${VERSION}] - Recibido skipWaiting. Activando inmediatamente.`);
     self.skipWaiting();
   }
 });

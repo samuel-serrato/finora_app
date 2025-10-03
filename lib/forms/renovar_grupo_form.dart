@@ -440,10 +440,10 @@ class _RenovarGrupoFormState extends State<RenovarGrupoForm>
                         ),
                     ],
                   ),
-                  subtitle: Text(
+                 /*  subtitle: Text(
                     'Tel: ${suggestion['telefono']}',
                     style: TextStyle(color: colors.textSecondary),
-                  ),
+                  ), */
                 );
               },
               onSelected: (suggestion) {

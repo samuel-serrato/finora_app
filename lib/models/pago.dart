@@ -247,4 +247,47 @@ factory Pago.fromJson(Map<String, dynamic> json) {
     final bool tieneDeuda = this.saldoEnContra > 0.01;
     return saldoFavorTotalAcumulado > 0.01 && tieneDeuda && !estaFinalizado;
   }
+
+  // ▼▼▼ AÑADE ESTE NUEVO GETTER ▼▼▼
+/// Devuelve true si alguno de los abonos de este pago fue marcado como global.
+bool get esPagoGlobal {
+  // Si no hay abonos, no puede ser global.
+  if (abonos.isEmpty) {
+    return false;
+  }
+  // Buscamos si ALGÚN abono tiene la marca de "esPagoGlobal": "Si".
+  return abonos.any((abono) {
+    // Hacemos una comparación segura, por si el campo no viene o es nulo.
+    final esGlobal = (abono['esPagoGlobal'] as String?)?.toLowerCase() == 'si';
+    return esGlobal;
+  });
+}
+// ▲▲▲ FIN DEL GETTER AÑADIDO ▲▲▲
+
+// ▼▼▼ AÑADE ESTE NUEVO GETTER ▼▼▼
+/// Busca el primer abono que sea global y devuelve el monto total de ese depósito global.
+/// Devuelve 0.0 si no se encuentra ningún pago global.
+double get montoTotalDelPagoGlobal {
+  if (!esPagoGlobal) {
+    return 0.0;
+  }
+  // Buscamos el primer abono que esté marcado como global.
+  final abonoGlobal = abonos.firstWhere(
+    (abono) => (abono['esPagoGlobal'] as String?)?.toLowerCase() == 'si',
+    orElse: () => {}, // Devuelve un mapa vacío si no lo encuentra (por seguridad)
+  );
+
+  // Si encontramos el abono, parseamos el monto de 'totalSaldoGlobal'.
+  if (abonoGlobal.isNotEmpty) {
+    final monto = abonoGlobal['totalSaldoGlobal'];
+    if (monto is num) {
+      return monto.toDouble();
+    }
+    if (monto is String) {
+      return double.tryParse(monto) ?? 0.0;
+    }
+  }
+  return 0.0;
+}
+// ▲▲▲ FIN DEL GETTER AÑADIDO ▲▲▲
 }

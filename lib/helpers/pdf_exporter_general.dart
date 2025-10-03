@@ -1,4 +1,4 @@
-// lib/helpers/pdf_exporter_general.dart (Versión final y corregida)
+// lib/helpers/pdf_exporter_general.dart (Versión final y corregida con Simbología y Abono Global)
 
 import 'dart:io';
 import 'package:collection/collection.dart';
@@ -16,7 +16,6 @@ import 'package:intl/intl.dart';
 import 'package:flutter/services.dart' show ByteData, Uint8List, rootBundle;
 import 'package:provider/provider.dart';
 import '../utils/app_logger.dart';
-
 
 class ExportHelperGeneral {
   static void mostrarDialogoError(BuildContext context, String mensaje) {
@@ -47,7 +46,6 @@ class ExportHelperGeneral {
     return data.buffer.asUint8List();
   }
 
-  // --- MÉTODO exportToPdf CORREGIDO PARA SER MULTIPLATAFORMA ---
   static Future<void> exportToPdf({
     required BuildContext context,
     required ReporteGeneralData? reporteData,
@@ -64,68 +62,74 @@ class ExportHelperGeneral {
     try {
       final doc = pw.Document();
       final userData = Provider.of<UserDataProvider>(context, listen: false);
-      final logoColor = userData.imagenes
-          .where((img) => img.tipoImagen == 'logoColor')
-          .firstOrNull;
-      final logoUrl = logoColor != null
-          ? '$baseUrl/imagenes/subidas/${logoColor.rutaImagen}'
-          : null;
+      final logoColor =
+          userData.imagenes
+              .where((img) => img.tipoImagen == 'logoColor')
+              .firstOrNull;
+      final logoUrl =
+          logoColor != null
+              ? '$baseUrl/imagenes/subidas/${logoColor.rutaImagen}'
+              : null;
       final financieraLogo = await _loadNetworkImage(logoUrl);
       final finoraLogo = await _loadAsset('assets/finora.png');
 
-      // Toda tu lógica para construir las páginas del PDF se mantiene intacta.
       void buildPdfPages() {
         final headers = [
-          '#', 'Tipo', 'Grupos', 'Pagos', 'Fecha',
-          'M. Ficha', 'S. Contra', 'Capital', 'Interés', 'S. Favor',
-          'Mor. Gen.', 'Mor. Pag.',
+          '#',
+          'Tipo',
+          'Grupos',
+          'Pagos',
+          'Fecha',
+          'M. Ficha',
+          'S. Contra',
+          'Capital',
+          'Interés',
+          'S. Favor',
+          'Mor. Gen.',
+          'Mor. Pag.',
         ];
 
         doc.addPage(
           pw.MultiPage(
             pageFormat: PdfPageFormat.a4,
             margin: const pw.EdgeInsets.all(20),
-            header: (context) => _buildPdfHeader(
-              selectedReportType: selectedReportType,
-              selectedDateRange: selectedDateRange,
-              reporteData: reporteData,
-              financieraLogo: financieraLogo,
-              finoraLogo: finoraLogo,
-            ),
+            header:
+                (context) => _buildPdfHeader(
+                  selectedReportType: selectedReportType,
+                  selectedDateRange: selectedDateRange,
+                  reporteData: reporteData,
+                  financieraLogo: financieraLogo,
+                  finoraLogo: finoraLogo,
+                ),
             footer: (context) => _buildPdfFooter(context),
-            build: (context) => [
-              _buildPdfTable(headers, listaReportes, currencyFormat),
-              pw.SizedBox(height: 10),
-              _buildPdfTotals(reporteData, currencyFormat, listaReportes),
-              pw.SizedBox(height: 10),
-              _buildTotalsIdealPdfWidget(reporteData, currencyFormat),
-            ],
+            build:
+                (context) => [
+                  _buildPdfTable(headers, listaReportes, currencyFormat),
+                  pw.SizedBox(height: 10),
+                  _buildPdfTotals(reporteData, currencyFormat, listaReportes),
+                  pw.SizedBox(height: 10),
+                  _buildTotalsIdealPdfWidget(reporteData, currencyFormat),
+                  pw.SizedBox(height: 25),
+                  _buildSimbologia(), // <-- La simbología ya estaba aquí, se actualizará su contenido.
+                ],
           ),
         );
       }
 
       buildPdfPages();
 
-      // --- INICIO DE LA LÓGICA DE EXPORTACIÓN CORREGIDA ---
-
-      // 1. Generamos los bytes del documento PDF en memoria.
       final Uint8List pdfBytes = await doc.save();
 
-      // 2. Usamos FilePicker para guardar el archivo, pasando los bytes directamente.
-      // Este método es universal y funciona en web, móvil y escritorio.
       final String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Exportar Reporte General',
-        fileName: 'reporte_general_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf',
-        bytes: pdfBytes, // <-- ¡LA CLAVE! Le damos los datos para guardar.
+        fileName:
+            'reporte_general_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf',
+        bytes: pdfBytes,
         type: FileType.custom,
         allowedExtensions: ['pdf'],
       );
 
-      // 3. Mostramos una confirmación al usuario.
-      // En la web, outputFile es null pero la descarga se inicia.
-      // En móvil/escritorio, outputFile contiene la ruta y podemos ofrecer abrir el archivo.
       if (kIsWeb) {
-        // En la web, el diálogo de guardado del navegador se encarga de todo.
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('La descarga del reporte ha comenzado.'),
@@ -133,7 +137,6 @@ class ExportHelperGeneral {
           ),
         );
       } else if (outputFile != null) {
-        // En móvil o escritorio, podemos ofrecer abrir el archivo.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Reporte exportado correctamente'),
@@ -146,18 +149,88 @@ class ExportHelperGeneral {
           ),
         );
       }
-      
-      // --- FIN DE LA LÓGICA DE EXPORTACIÓN CORREGIDA ---
-      
     } catch (e) {
       mostrarDialogoError(context, 'Error al exportar: ${e.toString()}');
     }
   }
-  
-  // =========================================================================
-  // EL RESTO DE TUS MÉTODOS NO NECESITAN CAMBIOS.
-  // SE INCLUYEN AQUÍ PARA QUE PUEDAS COPIAR Y PEGAR TODO EL ARCHIVO.
-  // =========================================================================
+
+  // --- MÉTODO _buildSimbologia ACTUALIZADO ---
+  static pw.Widget _buildSimbologia() {
+    pw.Widget _legendItem(String text, PdfColor color, {pw.BoxBorder? border}) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.only(right: 12, bottom: 4),
+        child: pw.Row(
+          mainAxisSize: pw.MainAxisSize.min,
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          children: [
+            pw.Container(
+              width: 10,
+              height: 10,
+              decoration: pw.BoxDecoration(
+                color: color,
+                border: border,
+                borderRadius: pw.BorderRadius.circular(2),
+              ),
+            ),
+            pw.SizedBox(width: 6),
+            pw.Text(text, style: const pw.TextStyle(fontSize: 7)),
+          ],
+        ),
+      );
+    }
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Header(
+          level: 4,
+          text: 'Simbología',
+          textStyle: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+            fontSize: 10,
+            color: PdfColor.fromHex('#5162F6'),
+          ),
+        ),
+        pw.Wrap(
+          children: [
+            _legendItem(
+              'Fila sin color: Pagado',
+              PdfColors.white,
+              border: pw.Border.all(color: PdfColors.grey300),
+            ),
+            _legendItem(
+              'Fila naranja: Pago Incompleto',
+              PdfColor.fromHex('#ffe2b0'),
+            ),
+            _legendItem('Fila roja: No Pagado', PdfColor.fromHex('#ffcccc')),
+          ],
+        ),
+        pw.SizedBox(height: 5),
+        pw.Wrap(
+          children: [
+            _legendItem(
+              'Etiqueta rosa: Pago con Garantía',
+              PdfColor.fromHex('#E53888'),
+            ),
+            // ===============================================================
+            // === INICIO DEL CAMBIO: AÑADIR SIMBOLOGÍA PARA ABONO GLOBAL ===
+            // ===============================================================
+            _legendItem(
+              'Etiqueta verde azulado: Abono Global', // <-- CAMBIADO
+              PdfColor.fromHex('#009688'), // Color teal
+            ),
+            // ===============================================================
+            // === FIN DEL CAMBIO ============================================
+            // ===============================================================
+            _legendItem(
+              'Etiqueta verde: Pago con Saldo a Favor',
+              PdfColor.fromHex('#28a745'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
   static String _truncateText(String text, int maxLength) {
     if (text.length <= maxLength) {
@@ -178,21 +251,29 @@ class ExportHelperGeneral {
       ),
       child: pw.Table(
         border: pw.TableBorder.symmetric(
-            inside: const pw.BorderSide(color: PdfColors.grey300, width: 0.5)),
+          inside: const pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+        ),
         columnWidths: {
-          0: const pw.FlexColumnWidth(0.35), 1: const pw.FlexColumnWidth(0.55),
-          2: const pw.FlexColumnWidth(1.3),  3: const pw.FlexColumnWidth(0.9),
-          4: const pw.FlexColumnWidth(0.7),  5: const pw.FlexColumnWidth(0.8),
-          6: const pw.FlexColumnWidth(0.8),  7: const pw.FlexColumnWidth(0.7),
-          8: const pw.FlexColumnWidth(0.7),  9: const pw.FlexColumnWidth(0.9),
-          10: const pw.FlexColumnWidth(0.8), 11: const pw.FlexColumnWidth(0.8),
+          0: const pw.FlexColumnWidth(0.35),
+          1: const pw.FlexColumnWidth(0.55),
+          2: const pw.FlexColumnWidth(1.0),
+          3: const pw.FlexColumnWidth(0.7),
+          4: const pw.FlexColumnWidth(0.7),
+          5: const pw.FlexColumnWidth(0.8),
+          6: const pw.FlexColumnWidth(0.8),
+          7: const pw.FlexColumnWidth(0.8),
+          8: const pw.FlexColumnWidth(0.8),
+          9: const pw.FlexColumnWidth(0.9),
+          10: const pw.FlexColumnWidth(0.8),
+          11: const pw.FlexColumnWidth(0.8),
         },
         children: [
           pw.TableRow(
             decoration: pw.BoxDecoration(
               color: PdfColor.fromHex('#5162F6'),
               borderRadius: const pw.BorderRadius.only(
-                topLeft: pw.Radius.circular(10), topRight: pw.Radius.circular(10),
+                topLeft: pw.Radius.circular(10),
+                topRight: pw.Radius.circular(10),
               ),
             ),
             children:
@@ -201,28 +282,26 @@ class ExportHelperGeneral {
           ...listaReportes.asMap().entries.map((entry) {
             final index = entry.key;
             final reporte = entry.value;
-
             final totalPagos = reporte.pagoficha;
             final montoFicha = reporte.montoficha;
             final moratoriosGenerados = reporte.moratoriosAPagar;
             final moratoriosPagados = reporte.sumaMoratorio;
             final moratoriosPendientes =
                 moratoriosGenerados - moratoriosPagados;
-
             final bool pagoNoRealizado = totalPagos == 0.0;
             final bool fichaCubierta = totalPagos >= montoFicha;
             final bool moratoriosCubiertos = moratoriosPendientes <= 0;
             final bool esCompleto = fichaCubierta && moratoriosCubiertos;
             final bool esIncompleto = !pagoNoRealizado && !esCompleto;
-
             final double saldoContra = montoFicha - totalPagos;
             final double saldoContraDisplay =
                 saldoContra > 0 ? saldoContra : 0.0;
-
             final isLastRow = index == listaReportes.length - 1;
-            final rowDecoration = _rowDecoration(pagoNoRealizado, esIncompleto,
-                isLastRow: isLastRow);
-
+            final rowDecoration = _rowDecoration(
+              pagoNoRealizado,
+              esIncompleto,
+              isLastRow: isLastRow,
+            );
             return pw.TableRow(
               verticalAlignment: pw.TableCellVerticalAlignment.middle,
               decoration: rowDecoration,
@@ -230,15 +309,38 @@ class ExportHelperGeneral {
                 _buildPdfCell((index + 1).toString(), isNumeric: true),
                 _buildPdfCell(reporte.tipoPago),
                 _buildPdfCell(_truncateText(reporte.grupos, 30)),
-                _buildPagosColumnPdf(reporte, currencyFormat),
+                _buildPagosColumnPdf(
+                  reporte,
+                  currencyFormat,
+                ), // <-- Aquí se aplica la lógica
                 _buildFechasColumnPdf(reporte),
-                _buildPdfCell(currencyFormat.format(reporte.montoficha), isNumeric: true),
-                _buildPdfCellSaldoContra(currencyFormat.format(saldoContraDisplay), saldoContra > 0),
-                _buildPdfCell(currencyFormat.format(reporte.capitalsemanal), isNumeric: true),
-                _buildPdfCell(currencyFormat.format(reporte.interessemanal), isNumeric: true),
+                _buildPdfCell(
+                  currencyFormat.format(reporte.montoficha),
+                  isNumeric: true,
+                ),
+                _buildPdfCellSaldoContra(
+                  currencyFormat.format(saldoContraDisplay),
+                  saldoContra > 0,
+                ),
+                _buildPdfCell(
+                  currencyFormat.format(reporte.capitalsemanal),
+                  isNumeric: true,
+                ),
+                _buildPdfCell(
+                  currencyFormat.format(reporte.interessemanal),
+                  isNumeric: true,
+                ),
                 _buildSaldoFavorColumnPdf(reporte, currencyFormat),
-                _buildPdfCellMoratorios(currencyFormat.format(moratoriosGenerados), moratoriosGenerados > 0, isGenerated: true),
-                _buildPdfCellMoratorios(currencyFormat.format(moratoriosPagados), moratoriosPagados > 0, isGenerated: false),
+                _buildPdfCellMoratorios(
+                  currencyFormat.format(moratoriosGenerados),
+                  moratoriosGenerados > 0,
+                  isGenerated: true,
+                ),
+                _buildPdfCellMoratorios(
+                  currencyFormat.format(moratoriosPagados),
+                  moratoriosPagados > 0,
+                  isGenerated: false,
+                ),
               ],
             );
           }).toList(),
@@ -247,8 +349,11 @@ class ExportHelperGeneral {
     );
   }
 
+  // --- MÉTODO _buildPagosColumnPdf ACTUALIZADO ---
   static pw.Widget _buildPagosColumnPdf(
-      ReporteGeneral reporte, NumberFormat currencyFormat) {
+    ReporteGeneral reporte,
+    NumberFormat currencyFormat,
+  ) {
     if (reporte.depositos.isEmpty && reporte.favorUtilizado == 0) {
       return _buildPdfCell(currencyFormat.format(0.0), isNumeric: true);
     }
@@ -257,25 +362,49 @@ class ExportHelperGeneral {
 
     for (final deposito in reporte.depositos) {
       if (deposito.monto > 0) {
+        // ====================================================================
+        // === INICIO DEL CAMBIO: AÑADIR LÓGICA PARA ABONO GLOBAL ===========
+        // ====================================================================
         final bool isGarantia = deposito.garantia == "Si";
+        final bool isSaldoGlobal = deposito.esSaldoGlobal == "Si";
+
+        pw.BoxDecoration? decoration;
+        PdfColor textColor = PdfColors.black;
+
+        if (isGarantia) {
+          decoration = pw.BoxDecoration(
+            color: PdfColor.fromHex('#E53888'),
+            borderRadius: pw.BorderRadius.circular(4),
+          );
+          textColor = PdfColors.white;
+        } else if (isSaldoGlobal) {
+          decoration = pw.BoxDecoration(
+            color: PdfColor.fromHex('#009688'), // Color teal
+            borderRadius: pw.BorderRadius.circular(4),
+          );
+          textColor = PdfColors.white;
+        }
+
         paymentWidgets.add(
           pw.Container(
-            decoration: isGarantia
-                ? pw.BoxDecoration(
-                    color: PdfColor.fromHex('#E53888'),
-                    borderRadius: pw.BorderRadius.circular(4))
-                : null,
-            padding:
-                const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 1.5),
+            decoration: decoration, // Se aplica la decoración determinada
+            padding: const pw.EdgeInsets.symmetric(
+              horizontal: 3,
+              vertical: 1.5,
+            ),
             margin: const pw.EdgeInsets.only(bottom: 1),
             child: pw.Text(
               currencyFormat.format(deposito.monto),
               style: pw.TextStyle(
-                  color: isGarantia ? PdfColors.white : PdfColors.black,
-                  fontSize: 6),
+                color: textColor, // Se aplica el color de texto determinado
+                fontSize: 6,
+              ),
             ),
           ),
         );
+        // ====================================================================
+        // === FIN DEL CAMBIO =================================================
+        // ====================================================================
       }
     }
 
@@ -283,8 +412,9 @@ class ExportHelperGeneral {
       paymentWidgets.add(
         pw.Container(
           decoration: pw.BoxDecoration(
-              color: PdfColor.fromHex('#28a745'),
-              borderRadius: pw.BorderRadius.circular(4)),
+            color: PdfColor.fromHex('#28a745'),
+            borderRadius: pw.BorderRadius.circular(4),
+          ),
           padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 1.5),
           margin: const pw.EdgeInsets.only(bottom: 1),
           child: pw.Text(
@@ -305,12 +435,22 @@ class ExportHelperGeneral {
     );
   }
 
+  // =========================================================================
+  // === EL RESTO DE LOS MÉTODOS AUXILIARES PERMANECEN SIN CAMBIOS ==========
+  // =========================================================================
+
   static pw.Widget _buildSaldoFavorColumnPdf(
-      ReporteGeneral reporte, NumberFormat currencyFormat) {
-    pw.TextStyle mainStyle =
-        const pw.TextStyle(fontSize: 6, color: PdfColors.black);
-    pw.TextStyle subStyle =
-        const pw.TextStyle(fontSize: 5, color: PdfColors.grey);
+    ReporteGeneral reporte,
+    NumberFormat currencyFormat,
+  ) {
+    pw.TextStyle mainStyle = const pw.TextStyle(
+      fontSize: 6,
+      color: PdfColors.black,
+    );
+    pw.TextStyle subStyle = const pw.TextStyle(
+      fontSize: 5,
+      color: PdfColors.grey,
+    );
 
     if (reporte.saldofavor == 0) {
       return _buildPdfCell(currencyFormat.format(0.0), isNumeric: true);
@@ -321,16 +461,18 @@ class ExportHelperGeneral {
         padding: const pw.EdgeInsets.all(3),
         alignment: pw.Alignment.centerRight,
         child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
-            mainAxisAlignment: pw.MainAxisAlignment.center,
-            children: [
-              pw.Text(
-                currencyFormat.format(reporte.saldofavor),
-                style: mainStyle.copyWith(
-                    color: PdfColors.grey,
-                    decoration: pw.TextDecoration.lineThrough),
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          mainAxisAlignment: pw.MainAxisAlignment.center,
+          children: [
+            pw.Text(
+              currencyFormat.format(reporte.saldofavor),
+              style: mainStyle.copyWith(
+                color: PdfColors.grey,
+                decoration: pw.TextDecoration.lineThrough,
               ),
-            ]),
+            ),
+          ],
+        ),
       );
     }
 
@@ -339,19 +481,26 @@ class ExportHelperGeneral {
         padding: const pw.EdgeInsets.all(3),
         alignment: pw.Alignment.centerRight,
         child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
-            mainAxisAlignment: pw.MainAxisAlignment.center,
-            children: [
-              pw.Text(currencyFormat.format(reporte.saldoDisponible),
-                  style: mainStyle),
-              pw.Text("(de ${currencyFormat.format(reporte.saldofavor)})",
-                  style: subStyle),
-            ]),
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          mainAxisAlignment: pw.MainAxisAlignment.center,
+          children: [
+            pw.Text(
+              currencyFormat.format(reporte.saldoDisponible),
+              style: mainStyle,
+            ),
+            pw.Text(
+              "(de ${currencyFormat.format(reporte.saldofavor)})",
+              style: subStyle,
+            ),
+          ],
+        ),
       );
     }
 
-    return _buildPdfCell(currencyFormat.format(reporte.saldofavor),
-        isNumeric: true);
+    return _buildPdfCell(
+      currencyFormat.format(reporte.saldofavor),
+      isNumeric: true,
+    );
   }
 
   static pw.Widget _buildFechasColumnPdf(ReporteGeneral reporte) {
@@ -363,10 +512,15 @@ class ExportHelperGeneral {
       padding: const pw.EdgeInsets.all(3),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: reporte.depositos
-            .map((deposito) =>
-                pw.Text(deposito.fecha, style: const pw.TextStyle(fontSize: 6)))
-            .toList(),
+        children:
+            reporte.depositos
+                .map(
+                  (deposito) => pw.Text(
+                    deposito.fecha,
+                    style: const pw.TextStyle(fontSize: 6),
+                  ),
+                )
+                .toList(),
       ),
     );
   }
@@ -387,80 +541,114 @@ class ExportHelperGeneral {
       final saldo = r.montoficha - r.pagoficha;
       return sum + (saldo > 0 ? saldo : 0);
     });
-    final double totalMoratoriosGenerados =
-        listaReportes.fold(0.0, (sum, r) => sum + r.moratoriosAPagar);
-    final double totalMoratoriosPagados =
-        listaReportes.fold(0.0, (sum, r) => sum + r.sumaMoratorio);
+    final double totalMoratoriosGenerados = listaReportes.fold(
+      0.0,
+      (sum, r) => sum + r.moratoriosAPagar,
+    );
+    final double totalMoratoriosPagados = listaReportes.fold(
+      0.0,
+      (sum, r) => sum + r.sumaMoratorio,
+    );
 
     const flexValues = {
-      0: 35, 1: 55, 2: 130, 3: 90, 4: 70, 5: 80,
-      6: 80, 7: 70, 8: 70, 9: 90, 10: 80, 11: 80,
+      0: 35,
+      1: 55,
+      2: 100,
+      3: 70,
+      4: 70,
+      5: 80,
+      6: 80,
+      7: 80,
+      8: 80,
+      9: 90,
+      10: 80,
+      11: 80,
     };
-
     return pw.Container(
       decoration: pw.BoxDecoration(
-          color: PdfColor.fromHex('#5162F6'),
-          borderRadius: pw.BorderRadius.circular(10)),
+        color: PdfColor.fromHex('#5162F6'),
+        borderRadius: pw.BorderRadius.circular(10),
+      ),
       padding: const pw.EdgeInsets.symmetric(vertical: 4),
       child: pw.Row(
         children: [
           pw.Expanded(
-              flex: (flexValues[0]! + flexValues[1]! + flexValues[2]!),
-              child: _buildTotalCell('Totales', alignLeft: true)),
+            flex: (flexValues[0]! + flexValues[1]! + flexValues[2]!),
+            child: _buildTotalCell('Totales', alignLeft: true),
+          ),
           pw.Expanded(
-              flex: flexValues[3]!,
-              child: _buildTotalCell(currencyFormat.format(totalPagosFicha))),
+            flex: flexValues[3]!,
+            child: _buildTotalCell(currencyFormat.format(totalPagosFicha)),
+          ),
           pw.Expanded(flex: flexValues[4]!, child: _buildTotalCell('')),
           pw.Expanded(
-              flex: flexValues[5]!,
-              child: _buildTotalCell(currencyFormat.format(totalFicha))),
+            flex: flexValues[5]!,
+            child: _buildTotalCell(currencyFormat.format(totalFicha)),
+          ),
           pw.Expanded(
-              flex: flexValues[6]!,
-              child: _buildTotalCell(currencyFormat.format(totalSaldoContra))),
+            flex: flexValues[6]!,
+            child: _buildTotalCell(currencyFormat.format(totalSaldoContra)),
+          ),
           pw.Expanded(
-              flex: flexValues[7]!,
-              child: _buildTotalCell(currencyFormat.format(totalCapital))),
+            flex: flexValues[7]!,
+            child: _buildTotalCell(currencyFormat.format(totalCapital)),
+          ),
           pw.Expanded(
-              flex: flexValues[8]!,
-              child: _buildTotalCell(currencyFormat.format(totalInteres))),
+            flex: flexValues[8]!,
+            child: _buildTotalCell(currencyFormat.format(totalInteres)),
+          ),
           pw.Expanded(
             flex: flexValues[9]!,
             child: pw.Container(
               alignment: pw.Alignment.centerRight,
-              padding:
-                  const pw.EdgeInsets.symmetric(vertical: 2, horizontal: 3),
+              padding: const pw.EdgeInsets.symmetric(
+                vertical: 2,
+                horizontal: 3,
+              ),
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.end,
                 mainAxisAlignment: pw.MainAxisAlignment.center,
                 children: [
-                  pw.Text(currencyFormat.format(totalSaldoDisponible),
-                      style: pw.TextStyle(
-                          color: PdfColors.white,
-                          fontWeight: pw.FontWeight.bold,
-                          fontSize: 6.5)),
                   pw.Text(
-                      "(Hist: ${currencyFormat.format(totalSaldoFavorHistorico)})",
-                      style: const pw.TextStyle(
-                          color: PdfColors.white, fontSize: 5.5)),
+                    currencyFormat.format(totalSaldoDisponible),
+                    style: pw.TextStyle(
+                      color: PdfColors.white,
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 6.5,
+                    ),
+                  ),
+                  pw.Text(
+                    "(Hist: ${currencyFormat.format(totalSaldoFavorHistorico)})",
+                    style: const pw.TextStyle(
+                      color: PdfColors.white,
+                      fontSize: 5.5,
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
           pw.Expanded(
-              flex: flexValues[10]!,
-              child: _buildTotalCell(
-                  currencyFormat.format(totalMoratoriosGenerados))),
+            flex: flexValues[10]!,
+            child: _buildTotalCell(
+              currencyFormat.format(totalMoratoriosGenerados),
+            ),
+          ),
           pw.Expanded(
-              flex: flexValues[11]!,
-              child: _buildTotalCell(
-                  currencyFormat.format(totalMoratoriosPagados))),
+            flex: flexValues[11]!,
+            child: _buildTotalCell(
+              currencyFormat.format(totalMoratoriosPagados),
+            ),
+          ),
         ],
       ),
     );
   }
 
   static pw.Widget _buildTotalsIdealPdfWidget(
-      ReporteGeneralData reporteData, NumberFormat currencyFormat) {
+    ReporteGeneralData reporteData,
+    NumberFormat currencyFormat,
+  ) {
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 15),
       decoration: pw.BoxDecoration(
@@ -470,19 +658,33 @@ class ExportHelperGeneral {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.start,
         children: [
-          _buildTotalPdfItem('Total Ideal', reporteData.totalTotal, currencyFormat),
+          _buildTotalPdfItem(
+            'Total Ideal',
+            reporteData.totalTotal,
+            currencyFormat,
+          ),
           pw.SizedBox(width: 40),
-          _buildTotalPdfItem('Diferencia', reporteData.restante, currencyFormat),
+          _buildTotalPdfItem(
+            'Diferencia',
+            reporteData.restante,
+            currencyFormat,
+          ),
           pw.SizedBox(width: 40),
-          _buildTotalPdfItem('Total Bruto', reporteData.sumaTotalCapMoraFav, currencyFormat),
+          _buildTotalPdfItem(
+            'Total Bruto',
+            reporteData.sumaTotalCapMoraFav,
+            currencyFormat,
+          ),
         ],
       ),
     );
   }
 
   static pw.BoxDecoration _rowDecoration(
-      bool pagoNoRealizado, bool esIncompleto,
-      {bool isLastRow = false}) {
+    bool pagoNoRealizado,
+    bool esIncompleto, {
+    bool isLastRow = false,
+  }) {
     PdfColor backgroundColor;
     if (pagoNoRealizado) {
       backgroundColor = PdfColor.fromHex('#ffcccc');
@@ -493,11 +695,13 @@ class ExportHelperGeneral {
     }
     return pw.BoxDecoration(
       color: backgroundColor,
-      borderRadius: isLastRow
-          ? const pw.BorderRadius.only(
-              bottomLeft: pw.Radius.circular(10),
-              bottomRight: pw.Radius.circular(10))
-          : null,
+      borderRadius:
+          isLastRow
+              ? const pw.BorderRadius.only(
+                bottomLeft: pw.Radius.circular(10),
+                bottomRight: pw.Radius.circular(10),
+              )
+              : null,
     );
   }
 
@@ -505,28 +709,35 @@ class ExportHelperGeneral {
     return pw.Container(
       alignment: pw.Alignment.centerRight,
       padding: const pw.EdgeInsets.all(3),
-      child: pw.Text(text,
-          style: pw.TextStyle(
-              fontSize: 6,
-              color: isPositive ? PdfColors.red : PdfColors.black,
-              fontWeight:
-                  isPositive ? pw.FontWeight.bold : pw.FontWeight.normal)),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontSize: 6,
+          color: isPositive ? PdfColors.red : PdfColors.black,
+          fontWeight: isPositive ? pw.FontWeight.bold : pw.FontWeight.normal,
+        ),
+      ),
     );
   }
 
-  static pw.Widget _buildPdfCellMoratorios(String text, bool isPositive,
-      {required bool isGenerated}) {
+  static pw.Widget _buildPdfCellMoratorios(
+    String text,
+    bool isPositive, {
+    required bool isGenerated,
+  }) {
     final PdfColor positiveColor =
         isGenerated ? PdfColors.red : PdfColors.green;
     return pw.Container(
       alignment: pw.Alignment.centerRight,
       padding: const pw.EdgeInsets.all(3),
-      child: pw.Text(text,
-          style: pw.TextStyle(
-              fontSize: 6,
-              color: isPositive ? positiveColor : PdfColors.black,
-              fontWeight:
-                  isPositive ? pw.FontWeight.bold : pw.FontWeight.normal)),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontSize: 6,
+          color: isPositive ? positiveColor : PdfColors.black,
+          fontWeight: isPositive ? pw.FontWeight.bold : pw.FontWeight.normal,
+        ),
+      ),
     );
   }
 
@@ -534,8 +745,10 @@ class ExportHelperGeneral {
     return pw.Container(
       alignment: pw.Alignment.centerRight,
       margin: const pw.EdgeInsets.only(top: 10),
-      child: pw.Text('Página ${context.pageNumber} de ${context.pagesCount}',
-          style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey)),
+      child: pw.Text(
+        'Página ${context.pageNumber} de ${context.pagesCount}',
+        style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey),
+      ),
     );
   }
 
@@ -580,8 +793,10 @@ class ExportHelperGeneral {
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
-            pw.Text('Período: ${reporteData.fechaSemana}',
-                style: const pw.TextStyle(fontSize: 8)),
+            pw.Text(
+              'Período: ${reporteData.fechaSemana}',
+              style: const pw.TextStyle(fontSize: 8),
+            ),
             pw.Text(
               'Generado: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
               style: const pw.TextStyle(fontSize: 8),
@@ -597,12 +812,15 @@ class ExportHelperGeneral {
     return pw.Container(
       alignment: pw.Alignment.center,
       padding: const pw.EdgeInsets.all(4),
-      child: pw.Text(text,
-          textAlign: pw.TextAlign.center,
-          style: pw.TextStyle(
-              color: PdfColors.white,
-              fontWeight: pw.FontWeight.bold,
-              fontSize: 6.5)),
+      child: pw.Text(
+        text,
+        textAlign: pw.TextAlign.center,
+        style: pw.TextStyle(
+          color: PdfColors.white,
+          fontWeight: pw.FontWeight.bold,
+          fontSize: 6.5,
+        ),
+      ),
     );
   }
 
@@ -610,8 +828,10 @@ class ExportHelperGeneral {
     return pw.Container(
       alignment: isNumeric ? pw.Alignment.centerRight : pw.Alignment.centerLeft,
       padding: const pw.EdgeInsets.all(3),
-      child: pw.Text(text,
-          style: const pw.TextStyle(fontSize: 6, color: PdfColors.black)),
+      child: pw.Text(
+        text,
+        style: const pw.TextStyle(fontSize: 6, color: PdfColors.black),
+      ),
     );
   }
 
@@ -619,31 +839,42 @@ class ExportHelperGeneral {
     return pw.Container(
       alignment: alignLeft ? pw.Alignment.centerLeft : pw.Alignment.centerRight,
       padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 3),
-      child: pw.Text(text,
-          style: pw.TextStyle(
-              color: PdfColors.white,
-              fontWeight: pw.FontWeight.bold,
-              fontSize: 6.5)),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          color: PdfColors.white,
+          fontWeight: pw.FontWeight.bold,
+          fontSize: 6.5,
+        ),
+      ),
     );
   }
 
   static pw.Widget _buildTotalPdfItem(
-      String label, double value, NumberFormat currencyFormat) {
+    String label,
+    double value,
+    NumberFormat currencyFormat,
+  ) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text(label,
-            style: pw.TextStyle(
-                fontSize: 6,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColors.white)),
+        pw.Text(
+          label,
+          style: pw.TextStyle(
+            fontSize: 6,
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.white,
+          ),
+        ),
         pw.SizedBox(height: 2),
-        pw.Text(currencyFormat.format(value),
-            style: pw.TextStyle(
-              fontSize: 6,
-              color: PdfColors.white,
-              fontWeight: pw.FontWeight.bold,
-            )),
+        pw.Text(
+          currencyFormat.format(value),
+          style: pw.TextStyle(
+            fontSize: 6,
+            color: PdfColors.white,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
       ],
     );
   }

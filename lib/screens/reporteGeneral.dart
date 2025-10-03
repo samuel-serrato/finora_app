@@ -673,6 +673,7 @@ class ReporteGeneralWidget extends StatelessWidget {
   }
 
   // === CAMBIO 1 (Continuación): Mejorado para mostrar todos los tipos de pago ===
+   // --- CAMBIO EN VISTA MÓVIL (dentro de _buildMobilePaymentsSection) ---
   Widget _buildMobilePaymentsSection(
     BuildContext context,
     ReporteGeneral reporte,
@@ -700,19 +701,48 @@ class ReporteGeneralWidget extends StatelessWidget {
           const SizedBox(height: 8),
           // Pagos en efectivo / depósitos
           ...reporte.depositos.map((deposito) {
+            // --- NUEVA LÓGICA PARA IDENTIFICAR TIPO DE PAGO ---
             bool isGarantia = deposito.garantia == "Si";
+            bool isSaldoGlobal = deposito.esSaldoGlobal == "Si";
+            Color? chipColor;
+            Widget? subLabel;
+
+            if (isGarantia) {
+              chipColor = const Color(0xFFE53888);
+              subLabel = const Text(
+                'Con garantía',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFFE53888),
+                  fontWeight: FontWeight.w500,
+                ),
+              );
+            } else if (isSaldoGlobal) {
+              chipColor = Colors.teal;
+              subLabel = Tooltip( // En móvil el tooltip se activa con pulsación larga
+                message:
+                    'Es parte de un abono global de: ${currencyFormat.format(deposito.saldoGlobal)}',
+                child: Text(
+                  'Abono global',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: chipColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              );
+            }
+            // --- FIN DE NUEVA LÓGICA ---
+
             return Container(
               margin: const EdgeInsets.only(bottom: 4),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color:
-                    isGarantia
-                        ? const Color(0xFFE53888).withOpacity(0.1)
-                        : null,
+                color: chipColor?.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(6),
                 border:
-                    isGarantia
-                        ? Border.all(color: const Color(0xFFE53888), width: 1)
+                    chipColor != null
+                        ? Border.all(color: chipColor, width: 1)
                         : null,
               ),
               child: Row(
@@ -728,15 +758,7 @@ class ReporteGeneralWidget extends StatelessWidget {
                           color: colors.textSecondary,
                         ),
                       ),
-                      if (isGarantia)
-                        const Text(
-                          'Con garantía',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFFE53888),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                      if (subLabel != null) subLabel, // Muestra el sub-label si existe
                     ],
                   ),
                   Text(
@@ -744,17 +766,14 @@ class ReporteGeneralWidget extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color:
-                          isGarantia
-                              ? const Color(0xFFE53888)
-                              : colors.textPrimary,
+                      color: chipColor ?? colors.textPrimary,
                     ),
                   ),
                 ],
               ),
             );
           }).toList(),
-          // Pago con Saldo a Favor
+          // Pago con Saldo a Favor (sin cambios)
           if (reporte.favorUtilizado > 0)
             Container(
               margin: const EdgeInsets.only(bottom: 4),
@@ -1268,6 +1287,7 @@ class ReporteGeneralWidget extends StatelessWidget {
     );
   }
 
+    // --- CAMBIO EN VISTA DE ESCRITORIO (dentro de _buildPagosColumn) ---
   Widget _buildPagosColumn(ReporteGeneral reporte, BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
@@ -1284,7 +1304,11 @@ class ReporteGeneralWidget extends StatelessWidget {
 
     for (var deposito in reporte.depositos) {
       if (deposito.monto > 0) {
+        // --- NUEVA LÓGICA PARA IDENTIFICAR TIPO DE PAGO ---
         final bool isGarantia = deposito.garantia == "Si";
+        final bool isSaldoGlobal = deposito.esSaldoGlobal == "Si";
+        // --- FIN DE NUEVA LÓGICA ---
+        
         const double epsilon = 0.01;
         final bool montoDifiereDeCompleto =
             reporte.depositoCompleto > 0 &&
@@ -1296,9 +1320,16 @@ class ReporteGeneralWidget extends StatelessWidget {
         String? tooltip;
         Color? bgColor;
 
+        // --- LÓGICA DE PRIORIDAD: Garantía, Saldo Global, otros ---
         if (isGarantia) {
           bgColor = const Color(0xFFE53888);
           tooltip = 'Pago realizado con garantía';
+          if (montoDifiereDeCompleto) {
+            tooltip = '$tooltip\n$depositoCompletoMsg';
+          }
+        } else if (isSaldoGlobal) { // <-- ¡AQUÍ ESTÁ TU CAMBIO!
+          bgColor = Colors.teal;
+          tooltip = 'Es parte de un abono global de: ${currencyFormat.format(deposito.saldoGlobal)}';
           if (montoDifiereDeCompleto) {
             tooltip = '$tooltip\n$depositoCompletoMsg';
           }
@@ -1313,7 +1344,7 @@ class ReporteGeneralWidget extends StatelessWidget {
             backgroundColor: bgColor,
             tooltipMessage: tooltip,
             tooltipColor: bgColor ?? const Color(0xFFE53888),
-            showInfoIcon: montoDifiereDeCompleto && !isGarantia,
+            showInfoIcon: montoDifiereDeCompleto && !isGarantia && !isSaldoGlobal,
           ),
         );
       }
@@ -1324,9 +1355,9 @@ class ReporteGeneralWidget extends StatelessWidget {
         _buildPaymentItem(
           context: context,
           amount: reporte.favorUtilizado,
-          backgroundColor: Colors.green.shade600,
+          backgroundColor: Colors.green,
           tooltipMessage: 'Pago con saldo a favor',
-          tooltipColor: Colors.green.shade600,
+          tooltipColor: Colors.green,
         ),
       );
     }

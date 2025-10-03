@@ -4,7 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart'; // Importamos el pa
 //import 'dart:js' as js;
 
 import 'package:finora_app/constants/colors.dart'; // Asegúrate que esta ruta es correcta
-import 'package:finora_app/helpers/pwa_theme_helper.dart'; // <-- AÑADE ESTA LÍNEA
+import 'package:finora_app/helpers/pwa_theme_helper.dart';
+
+import '../utils/app_logger.dart'; // <-- AÑADE ESTA LÍNEA
 
 
 /* ELIMINA ESTA FUNCIÓN DE AQUÍ
@@ -46,7 +48,7 @@ class ThemeProvider with ChangeNotifier {
 
       // NO necesitamos notifyListeners() aquí porque la UI aún no se ha construido.
     } catch (e) {
-      print('Error al cargar las preferencias del tema: $e');
+      AppLogger.log('Error al cargar las preferencias del tema: $e');
       // Establecemos valores por defecto si algo falla.
       _themeMode = ThemeMode.light;
       colors.setDarkMode(false);

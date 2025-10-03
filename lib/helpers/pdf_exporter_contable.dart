@@ -1,4 +1,4 @@
-// lib/helpers/pdf_exporter_contable.dart (Versión final y corregida)
+// lib/helpers/pdf_exporter_contable.dart (ACTUALIZADO PARA COINCIDIR CON LA UI)
 
 import 'dart:io';
 import 'package:collection/collection.dart';
@@ -17,11 +17,16 @@ import 'package:file_picker/file_picker.dart';
 import 'package:open_file/open_file.dart';
 import '../utils/app_logger.dart';
 
-
 class PDFExportHelperContable {
+  // === CAMBIO CLAVE: Se añadieron más colores para consistencia ===
   static const PdfColor primaryColor = PdfColor.fromInt(0xFF5162F6);
   static const PdfColor guaranteeColor = PdfColor.fromInt(0xFFE53888);
+  static const PdfColor abonoGlobalColor = PdfColor.fromInt(0xFF008080); // Teal
   static const PdfColor favorUsedColor = PdfColor.fromInt(0xFF28a745); // Verde
+  static const PdfColor saldoFavorBgColor = PdfColor.fromInt(0xFFe3f2fd); // Azul claro
+  static const PdfColor saldoFavorFgColor = PdfColor.fromInt(0xFF0d47a1); // Azul oscuro
+  static const PdfColor restanteFichaColor = PdfColor.fromInt(0xFFe9661d);
+  static const PdfColor restanteFichaBgColor = PdfColor.fromInt(0xFFfff3e0);
 
   final ReporteContableData reporteData;
   final NumberFormat currencyFormat;
@@ -41,7 +46,8 @@ class PDFExportHelperContable {
       final Uint8List pdfBytes = await pdfDocument.save();
       final String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Exportar Reporte Contable',
-        fileName: 'reporte_contable_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf',
+        fileName:
+            'reporte_contable_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf',
         bytes: pdfBytes,
         type: FileType.custom,
         allowedExtensions: ['pdf'],
@@ -76,12 +82,265 @@ class PDFExportHelperContable {
       );
     }
   }
+  
+  // =========================================================================
+  // === SECCIÓN DE DEPÓSITOS MODIFICADA PARA INCLUIR NUEVOS ELEMENTOS ======
+  // =========================================================================
 
-  Future<Uint8List> _loadAsset(String path) async {
-    final ByteData data = await rootBundle.load(path);
-    return data.buffer.asUint8List();
+  pw.Widget _buildDepositosSection(
+      Pagoficha pagoficha, double restanteFicha, ReporteContableGrupo grupo) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text('Depósitos',
+                style: pw.TextStyle(
+                    fontSize: 6,
+                    fontWeight: pw.FontWeight.bold,
+                    color: primaryColor)),
+            pw.Text('Fecha prog: ${_formatDateSafe(pagoficha.fechasPago)}',
+                style: const pw.TextStyle(fontSize: 6, color: PdfColors.grey600)),
+          ],
+        ),
+        pw.SizedBox(height: 4),
+        pw.Column(
+            children: (pagoficha.depositos.isEmpty &&
+                    pagoficha.favorUtilizado == 0)
+                ? [
+                    pw.Container(
+                        height: 50,
+                        alignment: pw.Alignment.center,
+                        child: pw.Text('Sin depósitos',
+                            style: pw.TextStyle(
+                                color: PdfColors.grey, fontSize: 6)))
+                  ]
+                : [
+                    ...pagoficha.depositos
+                        .map((deposito) =>
+                            _buildStandardDepositCardPdf(deposito, pagoficha))
+                        .toList(),
+                    if (pagoficha.favorUtilizado > 0)
+                      _buildFavorUtilizadoCardPdf(pagoficha.favorUtilizado),
+                  ]),
+
+        // === CAMBIO CLAVE (1/3): Se añade la tarjeta resumen de Saldo a Favor si existe ===
+        if (pagoficha.saldofavor > 0)
+          _buildSaldoFavorSummaryCardPdf(pagoficha),
+
+        pw.SizedBox(height: 6),
+        pw.Container(
+          padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+          decoration: pw.BoxDecoration(
+              color: const PdfColor.fromInt(0xFFedeffe),
+              borderRadius: pw.BorderRadius.circular(4)),
+          child: _buildSummaryRow('Total depósitos:', pagoficha.sumaDeposito,
+              color: primaryColor),
+        ),
+        pw.SizedBox(height: 4),
+        pw.Container(
+          padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+          decoration: pw.BoxDecoration(
+              color: restanteFichaBgColor,
+              borderRadius: pw.BorderRadius.circular(4)),
+          child: _buildSummaryRow('Restante ficha:', restanteFicha,
+              color: restanteFichaColor),
+        ),
+        pw.SizedBox(height: 6),
+        pw.Container(
+          padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+          decoration: pw.BoxDecoration(
+              borderRadius: pw.BorderRadius.circular(4),
+              border: pw.Border.all(color: PdfColors.grey300)),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('Resumen Global',
+                  style: pw.TextStyle(
+                      fontSize: 6,
+                      fontWeight: pw.FontWeight.bold,
+                      color: primaryColor)),
+              pw.SizedBox(height: 4),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Expanded(
+                      child: _buildFinancialColumn(
+                          'Saldo Global', grupo.saldoGlobal)),
+                  pw.SizedBox(width: 5),
+                  pw.Expanded(
+                      child: _buildFinancialColumn(
+                          'Restante Global', grupo.restanteGlobal)),
+                ],
+              ),
+            ],
+          ),
+        )
+      ],
+    );
   }
 
+  // === CAMBIO CLAVE (2/3): TARJETA DE DEPÓSITO ACTUALIZADA ===
+  // Ahora incluye la etiqueta de "Abono Global"
+  // === REEMPLAZA ESTA FUNCIÓN COMPLETA ===
+pw.Widget _buildStandardDepositCardPdf(
+    Deposito deposito, Pagoficha pagoficha) {
+  final isGarantia = deposito.garantia == "Si";
+  final isSaldoGlobal = deposito.esSaldoGlobal == "Si";
+
+  return pw.Container(
+    margin: const pw.EdgeInsets.only(bottom: 4),
+    decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey300),
+        borderRadius: pw.BorderRadius.circular(4)),
+    child: pw.Column(
+      children: [
+        pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: pw.BoxDecoration(
+              color: const PdfColor.fromInt(0xFFdce0fd),
+              borderRadius: const pw.BorderRadius.only(
+                  topLeft: pw.Radius.circular(4),
+                  topRight: pw.Radius.circular(4))),
+          child: pw.Text(
+              'Fecha depósito: ${_formatDateSafe(deposito.fechaDeposito)}',
+              style: pw.TextStyle(fontSize: 6),
+              textAlign: pw.TextAlign.center),
+        ),
+        pw.Padding(
+          padding: const pw.EdgeInsets.all(6),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start, // Alinea a la izquierda
+            children: [
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Expanded(
+                      child: _buildDepositoDetailPDF('Depósito',
+                          deposito.deposito,
+                          depositoCompleto: pagoficha.depositoCompleto)),
+                  pw.SizedBox(width: 5),
+                  pw.Expanded(
+                      child: _buildDepositoDetailPDF(
+                          'Moratorio', deposito.pagoMoratorio)),
+                ],
+              ),
+              if (isGarantia || isSaldoGlobal)
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(top: 4),
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      if (isGarantia)
+                        _buildTagPdf('Garantía', guaranteeColor),
+
+                      if (isGarantia && isSaldoGlobal) 
+                        pw.SizedBox(width: 4),
+
+                      if (isSaldoGlobal)
+                        _buildTagPdf('Abono Global', abonoGlobalColor),
+
+                      // === CAMBIO CLAVE: AÑADIR TEXTO DESCRIPTIVO PARA ABONO GLOBAL ===
+                      if (isSaldoGlobal)
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.only(left: 4),
+                          child: pw.Text(
+                            '(de ${currencyFormat.format(deposito.saldoGlobal)})',
+                            style: const pw.TextStyle(
+                              fontSize: 5,
+                              color: PdfColors.grey700,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+  // === CAMBIO CLAVE (3/3): NUEVO WIDGET PARA LA TARJETA RESUMEN DE SALDO A FAVOR ===
+  pw.Widget _buildSaldoFavorSummaryCardPdf(Pagoficha pagoficha) {
+    String title;
+    String primaryText;
+    String? secondaryText;
+    pw.TextDecoration? decoration;
+
+    if (pagoficha.utilizadoPago == 'Si') {
+      title = 'S. Favor (Utilizado)';
+      primaryText = currencyFormat.format(pagoficha.saldofavor);
+      secondaryText = 'Usado en otro pago.';
+      decoration = pw.TextDecoration.lineThrough;
+    } else if (pagoficha.saldoUtilizado > 0) {
+      title = 'S. Favor Disponible';
+      primaryText = currencyFormat.format(pagoficha.saldoDisponible);
+      secondaryText =
+          'de ${currencyFormat.format(pagoficha.saldofavor)} total';
+    } else {
+      title = 'S. Favor Generado';
+      primaryText = currencyFormat.format(pagoficha.saldofavor);
+      secondaryText = 'disponible';
+    }
+
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: 4),
+      padding: const pw.EdgeInsets.all(6),
+      decoration: pw.BoxDecoration(
+        color: saldoFavorBgColor,
+        borderRadius: pw.BorderRadius.circular(4),
+        border: pw.Border.all(color: const PdfColor.fromInt(0xFFbbdefb)),
+      ),
+      child: pw.Row(
+        children: [
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  title,
+                  style: pw.TextStyle(
+                    fontSize: 6,
+                    fontWeight: pw.FontWeight.bold,
+                    color: saldoFavorFgColor,
+                  ),
+                ),
+                if (secondaryText != null)
+                  pw.Text(
+                    secondaryText,
+                    style: const pw.TextStyle(
+                      fontSize: 5,
+                      color: PdfColors.grey600,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          pw.Text(
+            primaryText,
+            style: pw.TextStyle(
+              fontSize: 6,
+              fontWeight: pw.FontWeight.bold,
+              color: saldoFavorFgColor,
+              decoration: decoration,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================================
+  // El resto del código permanece igual o con cambios menores
+  // Se incluye completo para que puedas copiar y pegar todo el archivo.
+  // =========================================================================
+  
   Future<Uint8List?> _loadNetworkImage(String? imageUrl) async {
     if (imageUrl == null || imageUrl.isEmpty) return null;
     try {
@@ -97,17 +356,23 @@ class PDFExportHelperContable {
     return null;
   }
 
+  
   Future<pw.Document> _generatePDF() async {
     final pdf = pw.Document();
     final userData = Provider.of<UserDataProvider>(context, listen: false);
-    final logoColor = userData.imagenes.firstWhereOrNull((img) => img.tipoImagen == 'logoColor');
-    final logoUrl = logoColor != null ? '$baseUrl/imagenes/subidas/${logoColor.rutaImagen}' : null;
+    final logoColor =
+        userData.imagenes.firstWhereOrNull((img) => img.tipoImagen == 'logoColor');
+    final logoUrl =
+        logoColor != null ? '$baseUrl/imagenes/subidas/${logoColor.rutaImagen}' : null;
     final financieraLogo = await _loadNetworkImage(logoUrl);
-    final finoraLogo = await _loadAsset('assets/finora.png');
+
+    final ByteData data = await rootBundle.load('assets/finora.png');
+    final finoraLogo = data.buffer.asUint8List();
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
+        // === ASEGÚRATE DE QUE ESTÉ ASÍ (SIN .landscape) ===
+        pageFormat: PdfPageFormat.a4, 
         margin: const pw.EdgeInsets.all(20),
         build: (context) => [
           _buildHeader(
@@ -131,7 +396,7 @@ class PDFExportHelperContable {
 
     return pdf;
   }
-
+  
   pw.Widget _buildHeader({
     required String? selectedReportType,
     required Uint8List? financieraLogo,
@@ -185,8 +450,11 @@ class PDFExportHelperContable {
     );
   }
 
+  // === REEMPLAZA ESTA FUNCIÓN COMPLETA ===
   pw.Widget _buildGrupoCard(ReporteContableGrupo grupo) {
     return pw.Container(
+      // pw.PageBreak() se puede usar para forzar un salto de página antes de un grupo si es necesario.
+      // child: pw.Column(children: [pw.PageBreak(), pw.Container(...)])
       margin: const pw.EdgeInsets.only(bottom: 10),
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: PdfColors.grey300, width: 1),
@@ -199,261 +467,59 @@ class PDFExportHelperContable {
           children: [
             _buildGrupoHeader(grupo),
             pw.Divider(color: PdfColors.grey400, height: 10),
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
+            
+            // Usamos pw.Table en lugar de pw.Row para permitir que el contenido se divida entre páginas.
+            // Esta es la corrección clave para el error 'TooManyPagesException'.
+            pw.Table(
+              columnWidths: const {
+                0: pw.FlexColumnWidth(40), // Columna de Clientes
+                1: pw.FlexColumnWidth(30), // Columna Financiera
+                2: pw.FlexColumnWidth(30), // Columna de Depósitos
+              },
               children: [
-                pw.Expanded(flex: 40, child: _buildClientesTable(grupo)),
-                pw.SizedBox(width: 10),
-                pw.Expanded(flex: 30, child: _buildFinancialInfoSection(grupo)),
-                pw.SizedBox(width: 10),
-                pw.Expanded(
-                    flex: 30,
-                    child: _buildDepositosSection(
-                        grupo.pagoficha, grupo.restanteFicha, grupo)),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // === CAMBIO CLAVE (1/3): SECCIÓN DE DEPÓSITOS MODIFICADA ===
-  pw.Widget _buildDepositosSection(
-      Pagoficha pagoficha, double restanteFicha, ReporteContableGrupo grupo) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children: [
-            pw.Text('Depósitos',
-                style: pw.TextStyle(
-                    fontSize: 6,
-                    fontWeight: pw.FontWeight.bold,
-                    color: primaryColor)),
-            pw.Text('Fecha prog: ${_formatDateSafe(pagoficha.fechasPago)}',
-                style: const pw.TextStyle(fontSize: 6, color: PdfColors.grey600)),
-          ],
-        ),
-        pw.SizedBox(height: 4),
-        pw.Column(
-            children: (pagoficha.depositos.isEmpty &&
-                    pagoficha.favorUtilizado == 0)
-                ? [
-                    pw.Container(
-                        height: 50,
-                        alignment: pw.Alignment.center,
-                        child: pw.Text('Sin depósitos',
-                            style:
-                                pw.TextStyle(color: PdfColors.grey, fontSize: 6)))
-                  ]
-                : [
-                    ...pagoficha.depositos.map((deposito) {
-                      // Se pasa `pagoficha` para la lógica interna si fuera necesaria
-                      return _buildStandardDepositCardPdf(deposito, pagoficha);
-                    }).toList(),
-                    if (pagoficha.favorUtilizado > 0)
-                      _buildFavorUtilizadoCardPdf(
-                          pagoficha.favorUtilizado, pagoficha.fechasPago),
-                  ]),
-        
-        // --- AQUÍ ESTÁ EL CAMBIO PRINCIPAL ---
-        // Se añade la tarjeta resumen de Saldo a Favor si existe.
-        if (pagoficha.saldofavor > 0)
-          _buildSaldoFavorSummaryCardPdf(pagoficha),
-
-        pw.SizedBox(height: 6),
-        pw.Container(
-          padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-          decoration: pw.BoxDecoration(
-              color: const PdfColor.fromInt(0xFFedeffe),
-              borderRadius: pw.BorderRadius.circular(4)),
-          child: _buildSummaryRow('Total depósitos:', pagoficha.sumaDeposito,
-              color: const PdfColor.fromInt(0xFF5465f6)),
-        ),
-        pw.SizedBox(height: 4),
-        pw.Container(
-          padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-          decoration: pw.BoxDecoration(
-              color: const PdfColor.fromInt(0xFFfff3e0),
-              borderRadius: pw.BorderRadius.circular(4)),
-          child: _buildSummaryRow('Restante ficha:', restanteFicha,
-              color: const PdfColor.fromInt(0xFFe9661d)),
-        ),
-        pw.SizedBox(height: 6),
-        pw.Container(
-          padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-          decoration: pw.BoxDecoration(
-              borderRadius: pw.BorderRadius.circular(4),
-              border: pw.Border.all(color: PdfColors.grey300)),
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text('Resumen Global',
-                  style: pw.TextStyle(
-                      fontSize: 6,
-                      fontWeight: pw.FontWeight.bold,
-                      color: primaryColor)),
-              pw.SizedBox(height: 4),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Expanded(
-                      child:
-                          _buildFinancialColumn('Saldo Global', grupo.saldoGlobal)),
-                  pw.SizedBox(width: 5),
-                  pw.Expanded(
-                      child: _buildFinancialColumn(
-                          'Restante Global', grupo.restanteGlobal)),
-                ],
-              ),
-            ],
-          ),
-        )
-      ],
-    );
-  }
-
-  // === CAMBIO CLAVE (2/3): TARJETA DE DEPÓSITO SIMPLIFICADA ===
-  // Se ha eliminado el detalle del Saldo a Favor de aquí.
-  pw.Widget _buildStandardDepositCardPdf(
-      Deposito deposito, Pagoficha pagoficha) {
-    return pw.Container(
-      margin: const pw.EdgeInsets.only(bottom: 4),
-      decoration: pw.BoxDecoration(
-          border: pw.Border.all(color: PdfColors.grey300),
-          borderRadius: pw.BorderRadius.circular(4)),
-      child: pw.Column(
-        children: [
-          pw.Container(
-            width: double.infinity,
-            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: pw.BoxDecoration(
-                color: const PdfColor.fromInt(0xFFdce0fd),
-                borderRadius: const pw.BorderRadius.only(
-                    topLeft: pw.Radius.circular(4),
-                    topRight: pw.Radius.circular(4))),
-            child: pw.Text(
-                'Fecha depósito: ${_formatDateSafe(deposito.fechaDeposito)}',
-                style: pw.TextStyle(fontSize: 6),
-                textAlign: pw.TextAlign.center),
-          ),
-          pw.Padding(
-            padding: const pw.EdgeInsets.all(6),
-            child: pw.Column(
-              children: [
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                pw.TableRow(
+                  // Alineamos el contenido de las celdas en la parte superior.
+                  verticalAlignment: pw.TableCellVerticalAlignment.top, 
                   children: [
-                    pw.Expanded(
-                        child: _buildDepositoDetailPDF('Depósito',
-                            deposito.deposito,
-                            depositoCompleto: pagoficha.depositoCompleto)),
-                    pw.SizedBox(width: 5),
-                    // --- El Saldo a Favor fue removido de aquí ---
-                    // pw.Expanded(child: _buildSaldoFavorDetailPdf(pagoficha)),
-                    // pw.SizedBox(width: 5),
-                    pw.Expanded(
-                        child: _buildDepositoDetailPDF(
-                            'Moratorio', deposito.pagoMoratorio)),
+                    // Columna 1: Clientes (con padding para separarla de la siguiente)
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.only(right: 10),
+                      child: _buildClientesTable(grupo),
+                    ),
+                    // Columna 2: Info Financiera (con padding)
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.only(right: 10),
+                      child: _buildFinancialInfoSection(grupo),
+                    ),
+                    // Columna 3: Depósitos
+                    _buildDepositosSection(
+                      grupo.pagoficha,
+                      grupo.restanteFicha,
+                      grupo,
+                    ),
                   ],
                 ),
-                if (deposito.garantia == "Si")
-                  pw.Align(
-                    alignment: pw.Alignment.centerLeft,
-                    child: pw.Container(
-                      margin: const pw.EdgeInsets.only(top: 4),
-                      padding: const pw.EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 2),
-                      decoration: pw.BoxDecoration(
-                          color: guaranteeColor,
-                          borderRadius: pw.BorderRadius.circular(4)),
-                      child: pw.Text('Garantía',
-                          style: pw.TextStyle(
-                              fontSize: 6, color: PdfColors.white)),
-                    ),
-                  ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  // === CAMBIO CLAVE (3/3): NUEVO WIDGET PARA LA TARJETA RESUMEN ===
-  // Este widget replica la lógica de la UI de Flutter para mostrar el saldo a favor.
-  pw.Widget _buildSaldoFavorSummaryCardPdf(Pagoficha pagoficha) {
-    String title;
-    String primaryText;
-    String? secondaryText;
-    pw.TextDecoration? decoration;
-
-    if (pagoficha.utilizadoPago == 'Si') {
-      title = 'S. Favor (Utilizado)';
-      primaryText = currencyFormat.format(pagoficha.saldofavor);
-      secondaryText = 'Usado en otro pago.';
-      decoration = pw.TextDecoration.lineThrough;
-    } else if (pagoficha.saldoUtilizado > 0) {
-      title = 'S. Favor Disponible';
-      primaryText = currencyFormat.format(pagoficha.saldoDisponible);
-      secondaryText = 'de ${currencyFormat.format(pagoficha.saldofavor)} total';
-    } else {
-      title = 'S. Favor Generado';
-      primaryText = currencyFormat.format(pagoficha.saldofavor);
-      secondaryText = 'disponible';
-    }
-
+  pw.Widget _buildTagPdf(String text, PdfColor color) {
     return pw.Container(
-      margin: const pw.EdgeInsets.only(top: 4),
-      padding: const pw.EdgeInsets.all(6),
-      decoration: pw.BoxDecoration(
-        color: const PdfColor.fromInt(0xFFe3f2fd), // Un azul claro
-        borderRadius: pw.BorderRadius.circular(4),
-        border: pw.Border.all(color: const PdfColor.fromInt(0xFFbbdefb)),
-      ),
-      child: pw.Row(
-        children: [
-          pw.Expanded(
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  title,
-                  style: pw.TextStyle(
-                    fontSize: 6,
-                    fontWeight: pw.FontWeight.bold,
-                    color: const PdfColor.fromInt(0xFF0d47a1), // Azul oscuro
-                  ),
-                ),
-                if (secondaryText != null)
-                  pw.Text(
-                    secondaryText,
-                    style: const pw.TextStyle(
-                      fontSize: 5,
-                      color: PdfColors.grey600,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          pw.Text(
-            primaryText,
-            style: pw.TextStyle(
-              fontSize: 6,
-              fontWeight: pw.FontWeight.bold,
-              color: const PdfColor.fromInt(0xFF0d47a1), // Azul oscuro
-              decoration: decoration,
-            ),
-          ),
-        ],
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration:
+          pw.BoxDecoration(color: color, borderRadius: pw.BorderRadius.circular(4)),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(fontSize: 6, color: PdfColors.white),
       ),
     );
   }
-
-  pw.Widget _buildFavorUtilizadoCardPdf(double favorUtilizado, String fechaOriginal) {
+  
+  pw.Widget _buildFavorUtilizadoCardPdf(double favorUtilizado) {
     return pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 4),
       decoration: pw.BoxDecoration(
@@ -496,13 +562,6 @@ class PDFExportHelperContable {
 
   pw.Widget _buildDepositoDetailPDF(String label, double value,
       {double? depositoCompleto}) {
-    // bool showCompletoInfo = false;
-    // if (label == 'Depósito' &&
-    //     depositoCompleto != null &&
-    //     depositoCompleto > 0) {
-    //   const double epsilon = 0.01;
-    //   showCompletoInfo = (value - depositoCompleto).abs() > epsilon;
-    // }
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -541,7 +600,7 @@ class PDFExportHelperContable {
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text('Saldo Favor Disp.',
+                      pw.Text('S. Favor Disponible',
                           style:
                               const pw.TextStyle(fontSize: 6, color: PdfColors.black)),
                       pw.Text(
@@ -572,10 +631,6 @@ class PDFExportHelperContable {
       ),
     );
   }
-  
-  // =========================================================================
-  // El resto de los métodos no requerían cambios
-  // =========================================================================
 
   pw.Widget _buildGrupoHeader(ReporteContableGrupo grupo) {
     return pw.Row(
@@ -742,17 +797,18 @@ class PDFExportHelperContable {
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
                 _buildFinancialColumn(
-                    'Moratorios Generados', grupo.moratorios.moratoriosAPagar ?? 0.0),
+                    'Moratorios Generados', grupo.moratorios.moratoriosAPagar),
                 pw.SizedBox(width: 5),
                 _buildFinancialColumn(
-                    'Moratorios Pagados', grupo.pagoficha.sumaMoratorio ?? 0.0),
+                    'Moratorios Pagados', grupo.pagoficha.sumaMoratorio),
               ]),
         ),
       ],
     );
   }
 
-  pw.Widget _buildSummaryRow(String label, double value, {required PdfColor color}) {
+  pw.Widget _buildSummaryRow(String label, double value,
+      {required PdfColor color}) {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [

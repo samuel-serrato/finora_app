@@ -85,115 +85,6 @@ class _ResponsiveNavigationScreenState
     super.dispose();
   }
 
-  // 4. Crea el método que muestra el SnackBar
-  // REEMPLAZA TU MÉTODO _showUpdateSnackbar CON ESTE:
-  /* void _showUpdateDialog() {
-    if (_updateService.isUpdateAvailable.value) {
-      final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-      final colors = themeProvider.colors;
-
-      showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext dialogContext) {
-          return WillPopScope(
-            onWillPop: () async => false,
-            child: Dialog(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 500),
-                child: AlertDialog(
-                  insetPadding: const EdgeInsets.symmetric(
-                    horizontal: 24.0,
-                    vertical: 24.0,
-                  ),
-                  backgroundColor: colors.backgroundPrimary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      28,
-                    ), // Un poco más redondeado se ve más moderno
-                  ),
-                  iconPadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                  icon: Icon(
-                    Icons.cloud_download_outlined,
-                    color: colors.brandPrimary,
-                    size: 48,
-                  ),
-
-                  // LA CLAVE: Forzamos al título y al contenido a ocupar todo el ancho disponible.
-                  // V V V V V V V V V V V V V V V V V V V V V V V V V
-                  title: SizedBox(
-                    width: double.infinity, // <-- ESTO HACE LA MAGIA
-                    child: const Text(
-                      'Actualización\n Disponible',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  content: SizedBox(
-                    width: double.infinity, // <-- Y ESTO TAMBIÉN
-                    child: const Text(
-                      'Se ha encontrado una nueva versión de Finora con mejoras y nuevas funciones. '
-                      '\n\nPor favor, actualiza para continuar.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 15,
-                        height:
-                            1.4, // Un poco de interlineado mejora la lectura
-                      ),
-                    ),
-                  ),
-
-                  // ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
-                  actionsAlignment: MainAxisAlignment.center,
-                  actionsPadding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                  actions: <Widget>[
-                    // Para que el botón ocupe todo el ancho también:
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        icon: const Icon(Icons.download_for_offline),
-                        label: const Text('ACTUALIZAR AHORA'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: colors.brandPrimary,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          textStyle: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        onPressed: () async {
-                          Navigator.of(context).pop();
-                          await _updateService.activateNewVersion();
-                        },
-                      ),
-                    ),
-                  ],
-
-                  // Eliminamos los paddings de title y content porque ahora
-                  // el espaciado se controla mejor desde iconPadding y actionsPadding
-                  titlePadding: const EdgeInsets.only(top: 16),
-                  contentPadding: const EdgeInsets.only(
-                    top: 16,
-                    left: 24,
-                    right: 24,
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      );
-    }
-  } */
-
   void _onNavigationItemSelected(int index) {
     if (_selectedIndex == index) return;
 
@@ -275,7 +166,10 @@ class _ResponsiveNavigationScreenState
 
     // <<< CAMBIO 2: Añadir "Bitácora" a la lista de navegación principal >>>
     // Esto hace que aparezca en el menú de Desktop y esté disponible para la navegación.
-    if (userType == 'Admin' || userType == 'Contador') {
+    // <<< CORRECCIÓN CON PARÉNTESIS >>>
+    // Primero validamos si el rol es Admin O Contador, y LUEGO validamos el acceso.
+    if ((userType == 'Admin' || userType == 'Contador') &&
+        userData.tieneAccesoA('bitacora')) {
       items.add(
         _NavigationItemInfo(
           title: 'Bitácora',
@@ -344,6 +238,9 @@ class _ResponsiveNavigationScreenState
   //============================================================================
   // CONSTRUCCIÓN DE LA INTERFAZ DE DESKTOP
   //============================================================================
+  //============================================================================
+  // CONSTRUCCIÓN DE LA INTERFAZ DE DESKTOP
+  //============================================================================
   Widget _buildDesktopLayout() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_pageController.hasClients &&
@@ -368,13 +265,14 @@ class _ResponsiveNavigationScreenState
       body: Row(
         children: [
           SizedBox(
-            width: _isDesktopMenuOpen ? 180 : 80,
+            // El ancho sigue siendo controlado por la misma variable de estado
+            width: _isDesktopMenuOpen ? 180 : 70,
             child: SideMenu(
               controller: _sideMenuController,
               style: SideMenuStyle(
                 itemOuterPadding: const EdgeInsets.symmetric(
                   vertical: 4,
-                  horizontal: 8,
+                  horizontal: 4,
                 ),
                 displayMode:
                     _isDesktopMenuOpen
@@ -392,57 +290,11 @@ class _ResponsiveNavigationScreenState
                   color: isDarkMode ? Colors.white : Colors.black,
                 ),
                 unselectedIconColor: isDarkMode ? Colors.white : Colors.black,
-                backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+                backgroundColor: colors.backgroundCardDark,
               ),
-              title: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 20, 10, 20),
-                child: Row(
-                  children: [
-                    if (_isDesktopMenuOpen)
-                      Padding(
-                        padding: const EdgeInsets.all(6.0),
-                        child: SizedBox(
-                          height: 35,
-                          child: Image.asset(
-                            isDarkMode
-                                ? 'assets/finora_blanco.png'
-                                : 'assets/finora.png',
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                      ),
-                    if (!_isDesktopMenuOpen)
-                      SizedBox(
-                        width: 30,
-                        height: 30,
-                        child: Image.asset(
-                          'assets/finora_icon.png',
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    if (_isDesktopMenuOpen) const Spacer(),
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: IconButton(
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        icon: Icon(
-                          _isDesktopMenuOpen
-                              ? Icons.arrow_back_ios
-                              : Icons.arrow_forward_ios,
-                          size: 12,
-                          color: isDarkMode ? Colors.white70 : Colors.grey[700],
-                        ),
-                        onPressed:
-                            () => setState(
-                              () => _isDesktopMenuOpen = !_isDesktopMenuOpen,
-                            ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              // <<< ¡CAMBIO PRINCIPAL AQUÍ! >>>
+              // Se reemplaza el widget complejo por una llamada a un método más limpio.
+              title: _buildDesktopMenuTitle(isDarkMode),
               items:
                   _navigationItems.asMap().entries.map((entry) {
                     return SideMenuItem(
@@ -459,7 +311,7 @@ class _ResponsiveNavigationScreenState
           Container(
             width: 1,
             height: double.infinity,
-            color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+            color: isDarkMode ? const Color(0xFF353641)! : Colors.grey[300]!,
           ),
           Expanded(
             child: PageView(
@@ -470,19 +322,82 @@ class _ResponsiveNavigationScreenState
           ),
         ],
       ),
-      // <<< ======================= FIN DE LA MODIFICACIÓN ====================== >>>
-      // --- AÑADE ESTE BOTÓN TEMPORAL ---
-      /* floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Simplemente cambia el valor para disparar el listener.
-          _updateService.isUpdateAvailable.value = true;
-        },
-        tooltip: 'Simular Actualización',
-        child: const Icon(Icons.update),
-        backgroundColor:
-            Colors.orange, // Un color diferente para que sepas que es de prueba
-      ), */
-      // --- FIN DEL CÓDIGO AÑADIDO ---
+    );
+  }
+
+  // <<<  NUEVO MÉTODO AUXILIAR PARA EL TÍTULO DEL MENÚ  >>>
+  // Este método replica la lógica de tu app CODX para mostrar el título
+  // de forma diferente si el menú está abierto o cerrado.
+  Widget _buildDesktopMenuTitle(bool isDarkMode) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
+      child:
+          _isDesktopMenuOpen
+              // --- ESTADO ABIERTO: Muestra logo grande y botón al lado ---
+              ? Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 20.0),
+                    child: SizedBox(
+                      height: 35,
+                      child: Image.asset(
+                        isDarkMode
+                            ? 'assets/finora_blanco.png'
+                            : 'assets/finora.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                 IconButton(
+                // <<< INICIO DE LA CORRECCIÓN >>>
+                padding: EdgeInsets.all(6),
+                constraints: const BoxConstraints(),
+                tooltip: 'Cerrar menú', // Es buena práctica añadir un tooltip en desktop
+                // <<< FIN DE LA CORRECCIÓN >>>
+                icon: Icon(
+                  Icons.arrow_back_ios,
+                  size: 14,
+                  color: isDarkMode ? Colors.white70 : Colors.grey[700],
+                ),
+                onPressed: () => setState(() => _isDesktopMenuOpen = false),
+              ),
+
+                ],
+              )
+              // --- ESTADO CERRADO: Muestra logo pequeño y botón debajo ---
+              : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: SizedBox(
+                      width: 30,
+                      height: 30,
+                      child: Image.asset(
+                        'assets/finora_icon.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(
+                    height: 15,
+                  ), // Espacio entre el logo y el botón
+                   IconButton(
+                // <<< INICIO DE LA CORRECCIÓN >>>
+                padding: EdgeInsets.all(6),
+                constraints: const BoxConstraints(),
+                tooltip: 'Abrir menú',
+                // <<< FIN DE LA CORRECCIÓN >>>
+                icon: Icon(
+                  Icons.arrow_forward_ios,
+                  size: 14,
+                  color: isDarkMode ? Colors.white70 : Colors.grey[700],
+                ),
+                onPressed: () => setState(() => _isDesktopMenuOpen = true),
+              ),
+                ],
+              ),
     );
   }
 
@@ -955,7 +870,8 @@ class _ResponsiveNavigationScreenState
     final userData = Provider.of<UserDataProvider>(context, listen: false);
     final isDarkMode = themeProvider.isDarkMode;
 
-        final String planUsuario = "Plan Profesional";
+    // --- CÓDIGO CORRECTO ---
+    final String? planUsuario = userData.licenciaActiva?.nombre;
 
     return Drawer(
       child: Container(
@@ -1008,18 +924,17 @@ class _ResponsiveNavigationScreenState
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
-                            Text(
-                          planUsuario != null &&
-                                  planUsuario.isNotEmpty
-                              ? "${userData.tipoUsuario} · ${planUsuario}"
-                              : userData.tipoUsuario,
-                          style: TextStyle(
-                            color: colors.textSecondary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400,
+                          Text(
+                            planUsuario != null && planUsuario.isNotEmpty
+                                ? "${userData.tipoUsuario} · Plan ${planUsuario}"
+                                : userData.tipoUsuario,
+                            style: TextStyle(
+                              color: colors.textSecondary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w400,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
                         ],
                       ),
                     ),
@@ -1062,8 +977,10 @@ class _ResponsiveNavigationScreenState
                         colors: colors,
                       ),
                     // <<< CAMBIO 4: Añadir "Bitácora" al menú lateral de móvil >>>
-                    if (userData.tipoUsuario == 'Admin' ||
-                        userData.tipoUsuario == 'Contador')
+                    // <<< CORRECCIÓN CON PARÉNTESIS AQUÍ TAMBIÉN >>>
+                    if ((userData.tipoUsuario == 'Admin' ||
+                            userData.tipoUsuario == 'Contador') &&
+                        userData.tieneAccesoA('bitacora'))
                       _buildMinimalDrawerItem(
                         icon: Icons.history_outlined,
                         title: 'Bitácora',
@@ -1301,16 +1218,15 @@ class CustomDesktopAppBar extends StatelessWidget
     final themeProvider = Provider.of<ThemeProvider>(context);
     final userData = Provider.of<UserDataProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
+    final colors = themeProvider.colors;
 
     return AppBar(
       automaticallyImplyLeading: false,
       elevation: 1,
       shadowColor:
-          isDarkMode
-              ? Colors.black.withOpacity(0.5)
-              : Colors.grey.withOpacity(0.3),
-      surfaceTintColor: Colors.grey,
-      backgroundColor: isDarkMode ? const Color(0xff1e1e1e) : Colors.white,
+         isDarkMode ? Color(0xFF8C8FAD) : Colors.grey[300]!,
+      surfaceTintColor: colors.backgroundCardDark,
+      backgroundColor: colors.backgroundCardDark,
       titleSpacing: 24,
 
       title: Text(

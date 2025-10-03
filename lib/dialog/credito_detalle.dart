@@ -887,6 +887,11 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
   //==============================================================================
   // <<< TABLA RESPONSIVA PARA DESKTOP (CON LÓGICA DE REDONDEO) >>>
   //==============================================================================
+  // En lib/dialog/credito_detalle_dialog.dart, dentro de _CreditoDetalleConTabsState
+
+  //==============================================================================
+  // <<< TABLA RESPONSIVA CORREGIDA PARA MANEJAR OVERFLOW >>>
+  //==============================================================================
   Widget _buildResponsiveIntegrantesTable({
     required List<ClienteMonto> clientes,
     required ThemeProvider themeProvider,
@@ -899,7 +904,6 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
     required double sumTotalIntereses,
     required double sumCapitalMasInteres,
     required double sumTotal,
-    // <<< NUEVO: Parámetros para el redondeo >>>
     required double pagoCuotaRedondeado,
     required double totalRedondeado,
   }) {
@@ -909,14 +913,13 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
     final int flexNombre = 3;
     final int flexMonto = 2;
 
-    // <<< NUEVO: Condición para mostrar la fila de redondeo >>>
     final bool mostrarRedondeo = pagoCuotaRedondeado != sumCapitalMasInteres;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
       child: Column(
         children: [
-          // --- FILA DE ENCABEZADO (sin cambios) ---
+          // --- FILA DE ENCABEZADO (queda fija arriba) ---
           Container(
             height: 50,
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
@@ -945,139 +948,145 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
           ),
           const SizedBox(height: 4),
 
-          // --- FILAS DE DATOS ---
-          ...clientes.map((cliente) {
-            final descuento = _descuentos[cliente.idclientes] ?? 0.0;
-            final garantiaMonto =
-                cliente.capitalIndividual * (garantiaPorcentaje / 100);
-            final montoDesembolsado =
-                cliente.capitalIndividual - descuento - garantiaMonto;
-            final tieneDescuento = descuento > 0.0 || garantiaMonto > 0.0;
+          // --- INICIO DE LA CORRECCIÓN ---
+          // Usamos Expanded para que la lista ocupe todo el espacio vertical disponible.
+          // ListView.builder es eficiente porque solo construye las filas que son visibles en pantalla.
+          Expanded(
+            child: ListView.builder(
+              itemCount: clientes.length,
+              itemBuilder: (context, index) {
+                final cliente = clientes[index];
+                final descuento = _descuentos[cliente.idclientes] ?? 0.0;
+                final garantiaMonto =
+                    cliente.capitalIndividual * (garantiaPorcentaje / 100);
+                final montoDesembolsado =
+                    cliente.capitalIndividual - descuento - garantiaMonto;
+                final tieneDescuento = descuento > 0.0 || garantiaMonto > 0.0;
 
-            return Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8.0,
-                vertical: 12.0,
-              ),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: colors.divider, width: 1.0),
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _buildDataCell(
-                    Text(cliente.nombreCompleto),
-                    flexNombre,
-                    colors,
-                    alignment: Alignment.centerLeft,
+                // El contenedor de cada fila se crea aquí dentro
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 12.0,
                   ),
-                  _buildDataCell(
-                    Text('\$${formatearNumero(cliente.capitalIndividual)}'),
-                    flexMonto,
-                    colors,
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: colors.divider, width: 1.0),
+                    ),
                   ),
-                  _buildDataCell(
-                    // Widget del desglose (igual que antes)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '\$${formatearNumero(montoDesembolsado)}',
-                          style: TextStyle(
-                            color:
-                                tieneDescuento
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _buildDataCell(
+                        Text(cliente.nombreCompleto),
+                        flexNombre,
+                        colors,
+                        alignment: Alignment.centerLeft,
+                      ),
+                      _buildDataCell(
+                        Text('\$${formatearNumero(cliente.capitalIndividual)}'),
+                        flexMonto,
+                        colors,
+                      ),
+                      _buildDataCell(
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '\$${formatearNumero(montoDesembolsado)}',
+                              style: TextStyle(
+                                color: tieneDescuento
                                     ? Colors.green.shade600
                                     : colors.textSecondary,
-                            fontWeight:
-                                tieneDescuento
+                                fontWeight: tieneDescuento
                                     ? FontWeight.bold
                                     : FontWeight.normal,
-                          ),
-                        ),
-                        if (tieneDescuento)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 6.0),
-                            child: Tooltip(
-                              richMessage: WidgetSpan(
-                                baseline: TextBaseline.alphabetic,
-                                child: _DesgloseTooltipContent(
-                                  capitalIndividual: cliente.capitalIndividual,
-                                  garantiaMonto: garantiaMonto,
-                                  descuento: descuento,
-                                  themeProvider: themeProvider,
-                                ),
-                              ),
-                              waitDuration: Duration.zero,
-                              showDuration: const Duration(seconds: 6),
-                              preferBelow: false,
-                              decoration: const BoxDecoration(
-                                color: Colors.transparent,
-                              ),
-                              child: Icon(
-                                Icons.info_outline,
-                                size: 16,
-                                color: colors.textSecondary,
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                    flexMonto,
-                    colors,
+                            if (tieneDescuento)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 6.0),
+                                child: Tooltip(
+                                  richMessage: WidgetSpan(
+                                    baseline: TextBaseline.alphabetic,
+                                    child: _DesgloseTooltipContent(
+                                      capitalIndividual:
+                                          cliente.capitalIndividual,
+                                      garantiaMonto: garantiaMonto,
+                                      descuento: descuento,
+                                      themeProvider: themeProvider,
+                                    ),
+                                  ),
+                                  waitDuration: Duration.zero,
+                                  showDuration: const Duration(seconds: 6),
+                                  preferBelow: false,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.transparent,
+                                  ),
+                                  child: Icon(
+                                    Icons.info_outline,
+                                    size: 16,
+                                    color: colors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        flexMonto,
+                        colors,
+                      ),
+                      _buildDataCell(
+                        Text('\$${formatearNumero(cliente.periodoCapital)}'),
+                        flexMonto,
+                        colors,
+                      ),
+                      _buildDataCell(
+                        Text('\$${formatearNumero(cliente.periodoInteres)}'),
+                        flexMonto,
+                        colors,
+                      ),
+                      _buildDataCell(
+                        Text('\$${formatearNumero(cliente.totalCapital)}'),
+                        flexMonto,
+                        colors,
+                      ),
+                      _buildDataCell(
+                        Text('\$${formatearNumero(cliente.totalIntereses)}'),
+                        flexMonto,
+                        colors,
+                      ),
+                      _buildDataCell(
+                        Text('\$${formatearNumero(cliente.capitalMasInteres)}'),
+                        flexMonto,
+                        colors,
+                      ),
+                      _buildDataCell(
+                        Text('\$${formatearNumero(cliente.total)}'),
+                        flexMonto,
+                        colors,
+                      ),
+                    ],
                   ),
-                  _buildDataCell(
-                    Text('\$${formatearNumero(cliente.periodoCapital)}'),
-                    flexMonto,
-                    colors,
-                  ),
-                  _buildDataCell(
-                    Text('\$${formatearNumero(cliente.periodoInteres)}'),
-                    flexMonto,
-                    colors,
-                  ),
-                  _buildDataCell(
-                    Text('\$${formatearNumero(cliente.totalCapital)}'),
-                    flexMonto,
-                    colors,
-                  ),
-                  _buildDataCell(
-                    Text('\$${formatearNumero(cliente.totalIntereses)}'),
-                    flexMonto,
-                    colors,
-                  ),
-                  _buildDataCell(
-                    Text('\$${formatearNumero(cliente.capitalMasInteres)}'),
-                    flexMonto,
-                    colors,
-                  ),
-                  _buildDataCell(
-                    Text('\$${formatearNumero(cliente.total)}'),
-                    flexMonto,
-                    colors,
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
+                );
+              },
+            ),
+          ),
+          // --- FIN DE LA CORRECCIÓN ---
 
-          // --- FILA DE TOTALES ---
-          // --- FILA DE TOTALES ---
+
+          // --- FILA DE TOTALES (queda fija abajo) ---
           Container(
             height: 50,
             margin: const EdgeInsets.only(top: 8),
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             decoration: BoxDecoration(
               color: colors.brandPrimary.withOpacity(0.08),
-              // <<< CAMBIO: El borde se redondea arriba si hay fila de redondeo, o completo si no la hay >>>
-              borderRadius:
-                  mostrarRedondeo
-                      ? const BorderRadius.only(
-                        topLeft: Radius.circular(12),
-                        topRight: Radius.circular(12),
-                      )
-                      : BorderRadius.circular(12),
+              borderRadius: mostrarRedondeo
+                  ? const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
+                    )
+                  : BorderRadius.circular(12),
             ),
             child: Row(
               children: [
@@ -1130,15 +1139,13 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
               ],
             ),
           ),
-
-          // <<< NUEVO: Fila condicional para el redondeo >>>
+          
           if (mostrarRedondeo)
             Container(
               height: 50,
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               decoration: BoxDecoration(
                 color: colors.brandPrimary.withOpacity(0.08),
-                // <<< CAMBIO: Redondea solo las esquinas inferiores para unirse a la fila de totales >>>
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(12),
                   bottomRight: Radius.circular(12),
@@ -1152,19 +1159,17 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
                     colors,
                     alignment: TextAlign.left,
                   ),
-                  _buildTotalCell('', flexMonto, colors), // Celda vacía
-                  _buildTotalCell('', flexMonto, colors), // Celda vacía
-                  _buildTotalCell('', flexMonto, colors), // Celda vacía
-                  _buildTotalCell('', flexMonto, colors), // Celda vacía
-                  _buildTotalCell('', flexMonto, colors), // Celda vacía
-                  _buildTotalCell('', flexMonto, colors), // Celda vacía
-                  // Muestra el pago por periodo redondeado
+                  _buildTotalCell('', flexMonto, colors),
+                  _buildTotalCell('', flexMonto, colors),
+                  _buildTotalCell('', flexMonto, colors),
+                  _buildTotalCell('', flexMonto, colors),
+                  _buildTotalCell('', flexMonto, colors),
+                  _buildTotalCell('', flexMonto, colors),
                   _buildTotalCell(
                     '\$${formatearNumero(pagoCuotaRedondeado)}',
                     flexMonto,
                     colors,
                   ),
-                  // Muestra el pago total con el redondeo aplicado
                   _buildTotalCell(
                     '\$${formatearNumero(totalRedondeado)}',
                     flexMonto,

@@ -1,4 +1,5 @@
 import 'package:finora_app/models/advancedOptionsViewModel.dart';
+import 'package:finora_app/models/calendario_response.dart';
 import 'package:finora_app/models/cliente_monto.dart';
 import 'package:finora_app/models/pago.dart';
 import 'package:finora_app/providers/theme_provider.dart';
@@ -51,7 +52,9 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
   late final Map<String, TextEditingController> _montoRenovacionControllers;
   late final TextEditingController _saldoFavorController;
   final PagoService _pagoService = PagoService();
-  late Future<ApiResponse<List<Pago>>> _pagosFuture;
+  //late Future<ApiResponse<List<Pago>>> _pagosFuture;
+    // <<< CAMBIO 1: Actualiza el tipo y nombre del Future >>>
+  late Future<ApiResponse<CalendarioResponse>> _calendarioFuture;
 
   @override
   void initState() {
@@ -61,6 +64,9 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
     // <<< INICIO DE CAMBIOS (2/3): INICIALIZAR EL CONTROLLER >>>
     _moratorioEditableController = TextEditingController();
     // <<< FIN DE CAMBIOS (2/3) >>>
+     // <<< CAMBIO 2: Llama al método recargar al iniciar >>>
+    // Esto es buena práctica para asegurar que el Future esté inicializado.
+    _recargarPagos();
   }
 
   @override
@@ -74,9 +80,7 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
   }
 
   void _recargarPagos() {
-    setState(() {
-      _pagosFuture = _pagoService.getCalendarioPagos(widget.idCredito);
-    });
+    _calendarioFuture = _pagoService.getCalendarioPagos(widget.idCredito);
   }
 
   // Función para mostrar diálogos de confirmación, se mantiene aquí por ser de UI.
@@ -251,16 +255,14 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
 
     // Creamos y proveemos el ViewModel aquí. Solo existirá mientras el modal esté visible.
     return ChangeNotifierProvider(
-      create:
-          (context) => AdvancedOptionsViewModel(
-            // Obtenemos el PagoService del Provider que debe estar más arriba en el árbol de widgets.
-            pagoService: widget.pagoService, // <--- CAMBIA ESTA LÍNEA
-            pago: widget.pago,
-            idCredito: widget.idCredito,
-            clientesParaRenovar: widget.clientesParaRenovar,
-            saldoFavorTotalAcumulado: widget.saldoFavorTotalAcumulado,
-            onDataChanged: widget.onDataChanged,
-          ),
+      create: (context) => AdvancedOptionsViewModel(
+        pagoService: widget.pagoService,
+        pago: widget.pago,
+        idCredito: widget.idCredito,
+        clientesParaRenovar: widget.clientesParaRenovar,
+        saldoFavorTotalAcumulado: widget.saldoFavorTotalAcumulado,
+        onDataChanged: widget.onDataChanged,
+      ),
       // Consumer se reconstruirá cada vez que notifyListeners() es llamado en el ViewModel.
       child: Consumer<AdvancedOptionsViewModel>(
         builder: (context, viewModel, child) {
@@ -274,11 +276,13 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
                 top: Radius.circular(24),
               ),
             ),
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+            // Se ajusta el padding: el horizontal y superior se mantienen, 
+            // y el inferior se moverá dentro del área desplazable.
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Handle para arrastrar
+                // Handle para arrastrar (queda fijo arriba)
                 Container(
                   width: 40,
                   height: 4,
@@ -289,22 +293,31 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
                   margin: const EdgeInsets.only(bottom: 12),
                 ),
 
-                // Fila de Título con Botón de Regreso
+                // Fila de Título (queda fija arriba)
                 _buildHeader(context, viewModel),
 
                 const SizedBox(height: 16),
 
-                // AnimatedSwitcher para transiciones suaves entre vistas
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  transitionBuilder: (
-                    Widget child,
-                    Animation<double> animation,
-                  ) {
-                    return FadeTransition(opacity: animation, child: child);
-                  },
-                  child: _buildCurrentView(context, viewModel),
+                // --- INICIO DE LA CORRECCIÓN ---
+                // Se usa Flexible para que el área de contenido ocupe el espacio restante
+                // y se combina con SingleChildScrollView para permitir el scroll.
+                Flexible(
+                  child: SingleChildScrollView(
+                    // Añadimos un padding al final del contenido para que no quede pegado al borde.
+                    padding: const EdgeInsets.only(bottom: 32.0),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      transitionBuilder: (
+                        Widget child,
+                        Animation<double> animation,
+                      ) {
+                        return FadeTransition(opacity: animation, child: child);
+                      },
+                      child: _buildCurrentView(context, viewModel),
+                    ),
+                  ),
                 ),
+                // --- FIN DE LA CORRECCIÓN ---
               ],
             ),
           );
@@ -314,7 +327,7 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
   }
 
   /// Construye la cabecera del modal (título y botón de regreso).
-  Widget _buildHeader(
+    Widget _buildHeader(
     BuildContext context,
     AdvancedOptionsViewModel viewModel,
   ) {
@@ -332,6 +345,11 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
       case OpcionVista.saldoFavor:
         titulo = 'Utilizar Saldo a Favor';
         break;
+    /*   // <<< INICIO: AÑADIR TÍTULO PARA LA NUEVA VISTA >>>
+      case OpcionVista.abonoGlobal:
+        titulo = 'Registrar Abono Global';
+        break; */
+      // <<< FIN: AÑADIR TÍTULO PARA LA NUEVA VISTA >>>
     }
 
     return Stack(
@@ -360,7 +378,7 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
   }
 
   /// Determina qué vista construir basándose en el estado del ViewModel.
-  Widget _buildCurrentView(
+    Widget _buildCurrentView(
     BuildContext context,
     AdvancedOptionsViewModel viewModel,
   ) {
@@ -381,6 +399,13 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
           key: const ValueKey('vista_saldofavor'),
           child: _buildVistaSaldoFavor(context, viewModel),
         );
+      // <<< INICIO: AÑADIR CASE PARA LA NUEVA VISTA >>>
+     /*  case OpcionVista.abonoGlobal:
+        return Container(
+          key: const ValueKey('vista_abono_global'),
+          child: _buildVistaAbonoGlobal(context, viewModel),
+        ); */
+      // <<< FIN: AÑADIR CASE PARA LA NUEVA VISTA >>>
       case OpcionVista.menuPrincipal:
       default:
         return Container(
@@ -472,6 +497,16 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
           onTap: () => viewModel.cambiarVista(OpcionVista.saldoFavor),
           isDarkMode: isDarkMode,
         ),
+         // <<< INICIO: AÑADIR NUEVO BOTÓN AL MENÚ >>>
+      /*   _buildOptionTile(
+          icon: Icons.all_inclusive,  // Un ícono que sugiere "global" o "todo"
+           title: 'Abono Global', // <-- Nuevo Título
+          subtitle: 'Aplica un pago a varias semanas pendientes', // <-- Nuevo Subtítulo
+          color: Colors.teal, // Un color distinto para diferenciarlo
+          onTap: () => viewModel.cambiarVista(OpcionVista.abonoGlobal),
+          isDarkMode: isDarkMode,
+        ), */
+        // <<< FIN: AÑADIR NUEVO BOTÓN AL MENÚ >>>
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 12.0),
           child: Divider(color: themeProvider.colors.divider, thickness: 1),
@@ -489,6 +524,12 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
           ),
       ],
     );
+  }
+
+  // Helper para formatear fechas, si no lo tienes ya en este archivo.
+  // Puedes ponerlo fuera de la clase del Widget.
+  String formatearFecha(DateTime date) {
+    return DateFormat('dd/MM/yyyy').format(date);
   }
 
   // En tu archivo lib/widgets/pago/advanced_options_sheet.dart
@@ -636,9 +677,12 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
                 child:
                     viewModel.moratorioEditableHabilitado
                         ? (viewModel.moratorioManualEstaPagado
-                            // Caso 1: Habilitado Y ya está pagado -> Mostrar mensaje de éxito
+                            // <<< INICIO DEL CAMBIO: VISTA CUANDO YA ESTÁ PAGADO >>>
+                            // Ahora, en lugar de solo un mensaje, mostramos el mensaje Y la fecha.
                             ? Container(
-                              key: const ValueKey('moratorio_pagado'),
+                              key: const ValueKey(
+                                'moratorio_pagado_con_fecha',
+                              ), // Usamos una nueva clave
                               margin: const EdgeInsets.only(top: 16),
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
@@ -653,24 +697,48 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
                                   Icon(
                                     Icons.check_circle_outline,
                                     color: Colors.green[700],
-                                    size: 18,
+                                    size: 20,
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
-                                    child: Text(
-                                      'El moratorio manual ya fue cubierto.',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color:
-                                            isDarkMode
-                                                ? Colors.green[200]
-                                                : Colors.green[800],
+                                    child: Text.rich(
+                                      TextSpan(
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color:
+                                              isDarkMode
+                                                  ? Colors.green[200]
+                                                  : Colors.green[800],
+                                        ),
+                                        children: [
+                                          const TextSpan(
+                                            text:
+                                                'El moratorio ya fue cubierto el: ',
+                                          ),
+                                          // Mostramos la fecha que ya cargamos en el ViewModel
+                                          TextSpan(
+                                            text:
+                                                viewModel.fechaMoratorioSeleccionada !=
+                                                        null
+                                                    ? formatearFecha(
+                                                      viewModel
+                                                          .fechaMoratorioSeleccionada!,
+                                                    )
+                                                    : 'Fecha no disponible',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
                             )
+                            // <<< FIN DEL CAMBIO >>>
+                            // Caso 2: Habilitado pero NO pagado -> Mostrar campo para editar
+                            // Caso 2: Habilitado pero NO pagado -> Mostrar campo para editar
                             // Caso 2: Habilitado pero NO pagado -> Mostrar campo para editar
                             : Padding(
                               key: const ValueKey('moratorio_textfield'),
@@ -679,40 +747,114 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
+                                      // El TextFormField y el botón de fecha ahora están dentro de este Expanded
                                       Expanded(
-                                        child: TextFormField(
-                                          controller:
-                                              viewModel
-                                                  .moratorioEditableController,
-                                          enabled:
-                                              !viewModel.isSaving &&
-                                              puedeEditarMonto,
-                                          keyboardType:
-                                              const TextInputType.numberWithOptions(
-                                                decimal: true,
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            // <<< CAMBIO 1: USAMOS 'flex' PARA CONTROLAR EL ANCHO >>>
+                                            // El TextFormField tomará 2/3 del espacio disponible en esta sección.
+                                            Expanded(
+                                              flex:
+                                                  1, // <--- Proporción de ancho
+                                              child: TextFormField(
+                                                controller:
+                                                    viewModel
+                                                        .moratorioEditableController,
+                                                enabled:
+                                                    !viewModel.isSaving &&
+                                                    puedeEditarMonto,
+                                                keyboardType:
+                                                    const TextInputType.numberWithOptions(
+                                                      decimal: true,
+                                                    ),
+                                                    style: TextStyle(fontSize: 14),
+                                                decoration: InputDecoration(
+                                                  hintStyle: TextStyle(fontSize: 14),
+                                                  labelStyle: TextStyle(fontSize: 14),
+                                                  labelText: 'Monto Moratorio',
+                                                  hintText: '0.00',
+                                                  prefixText: '\$ ',
+                                                  border: OutlineInputBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                  filled: true,
+                                                  fillColor:
+                                                      puedeEditarMonto
+                                                          ? themeProvider
+                                                              .colors
+                                                              .backgroundCard
+                                                          : themeProvider
+                                                              .colors
+                                                              .disabledCard,
+                                                  isDense: true,
+                                                ),
                                               ),
-                                          decoration: InputDecoration(
-                                            labelText: 'Monto Moratorio Manual',
-                                            hintText: '0.00',
-                                            prefixText: '\$ ',
-                                            border: OutlineInputBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
                                             ),
-                                            filled: true,
-                                            fillColor:
-                                                puedeEditarMonto
-                                                    ? themeProvider
-                                                        .colors
-                                                        .backgroundCard
-                                                    : themeProvider
-                                                        .colors
-                                                        .disabledCard,
-                                            isDense: true,
-                                          ),
+
+                                            const SizedBox(width: 8),
+
+                                            // El botón de fecha tomará 1/3 del espacio disponible.
+                                            Expanded(
+                                              flex:
+                                                  1, // <--- Proporción de ancho
+                                              child: TextButton.icon(
+                                                icon: Icon(
+                                                  Icons.calendar_today,
+                                                  size: 16,
+                                                ), // Re-añadimos el ícono
+                                                label: Text(
+                                                  formatearFecha(
+                                                    viewModel
+                                                            .fechaMoratorioSeleccionada ??
+                                                        DateTime.now(),
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                      style: TextStyle(fontSize: 13),
+                                                ),
+                                                onPressed:
+                                                    viewModel.isSaving ||
+                                                            !puedeEditarMonto
+                                                        ? null
+                                                        : () => viewModel
+                                                            .seleccionarFechaMoratorio(
+                                                              context,
+                                                            ),
+                                                style: TextButton.styleFrom(
+                                                  foregroundColor: Color(
+                                                    0xFF4F46E5,
+                                                  ),
+                                                  padding: EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 14,
+                                                  ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                    side: BorderSide(
+                                                      color:
+                                                          Colors.grey.shade300,
+                                                    ),
+                                                  ),
+                                                  minimumSize: Size(0, 48),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
+
                                       const SizedBox(width: 12),
                                       ElevatedButton(
                                         onPressed:
@@ -1002,34 +1144,33 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
         // ===================================================================
         // --- FIN DE LA SECCIÓN DE TOTALES ---
         // ===================================================================
-
         Container(
-            margin: const EdgeInsets.only(top: 16),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.blue.withOpacity(0.2)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.info_outline, color: Colors.blue[700], size: 18),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                   "Al guardar los clientes a renovar el pago se tomará como pagado.",
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDarkMode ? Colors.blue[200] : Colors.blue[800],
-                    ),
+          margin: const EdgeInsets.only(top: 16),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.blue.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue.withOpacity(0.2)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, color: Colors.blue[700], size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  "Al guardar los clientes a renovar el pago se tomará como pagado.",
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDarkMode ? Colors.blue[200] : Colors.blue[800],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+        ),
 
-         const SizedBox(height: 24),
+        const SizedBox(height: 24),
 
         // --- Botones de Acción ---
         // Esta sección no cambia
@@ -1587,7 +1728,7 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
                       Text(
                         title,
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: isDarkMode ? Colors.white : Colors.grey[800],
                         ),
@@ -1596,7 +1737,7 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
                       Text(
                         subtitle,
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           color: isDarkMode ? Colors.white60 : Colors.grey[600],
                         ),
                       ),
@@ -1615,4 +1756,74 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
       ),
     );
   }
+
+   // <<< INICIO: CREAR EL WIDGET PARA LA NUEVA VISTA >>>
+  /// Construye la vista para registrar un pago de ajuste/regularización.
+  
+  // <<< INICIO: RENOMBRAR Y ACTUALIZAR EL WIDGET DE LA NUEVA VISTA >>>
+  /// Construye la vista para registrar un Abono Global.
+  Widget _buildVistaAbonoGlobal(
+    BuildContext context,
+    AdvancedOptionsViewModel viewModel,
+  ) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Ingresa un monto que se distribuirá automáticamente entre todas las semanas con adeudo, comenzando por la más antigua. El sobrante se registrará como saldo a favor.",
+          style: TextStyle(
+            fontSize: 14,
+            color: themeProvider.isDarkMode ? Colors.white70 : Colors.grey[600],
+          ),
+        ),
+        const SizedBox(height: 24),
+        TextFormField(
+          controller: viewModel.ajusteController,
+          enabled: !viewModel.isSaving,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            labelText: 'Monto del Abono Global', // <-- Etiqueta actualizada
+            hintText: '0.00',
+            prefixText: '\$ ',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            filled: true,
+            fillColor: themeProvider.colors.backgroundCard,
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: viewModel.isSaving ? null : () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("Lógica de guardado no implementada aún."),
+                  backgroundColor: Colors.blue,
+                ),
+              );
+            },
+            icon: viewModel.isSaving
+                ? const SizedBox.shrink()
+                : const Icon(Icons.save_alt),
+            label: viewModel.isSaving
+                ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                : const Text("Aplicar Abono"), // <-- Texto del botón actualizado
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  // <<< FIN: CREAR EL WIDGET PARA LA NUEVA VISTA >>>
+
 }

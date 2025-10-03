@@ -1,3 +1,4 @@
+// lib/models/reporte_contable.dart (ACTUALIZADO)
 
 import 'package:finora_app/models/moratorios.dart';
 import 'package:finora_app/models/parseHelper.dart';
@@ -29,7 +30,7 @@ class ReporteContableData {
   final double totalInteres;
   final double totalPagoficha;
   final double totalSaldoFavor;
-  final double totalSaldoDisponible; // <-- AÑADE ESTE CAMPO
+  final double totalSaldoDisponible;
   final double saldoMoratorio;
   final double totalTotal;
   final double restante;
@@ -44,7 +45,7 @@ class ReporteContableData {
     required this.totalInteres,
     required this.totalPagoficha,
     required this.totalSaldoFavor,
-    required this.totalSaldoDisponible, // <-- AÑADE AL CONSTRUCTOR
+    required this.totalSaldoDisponible,
     required this.saldoMoratorio,
     required this.totalTotal,
     required this.restante,
@@ -54,10 +55,6 @@ class ReporteContableData {
   });
 
   factory ReporteContableData.fromJson(Map<String, dynamic> json) {
-    AppLogger.log('JSON recibido en fromJson:');
-    AppLogger.log('Keys disponibles: ${json.keys}');
-    AppLogger.log('¿Existe fechaSemana? ${json.containsKey('fechaSemana')}');
-    AppLogger.log('¿Existe listaGrupos? ${json.containsKey('listaGrupos')}');
     return ReporteContableData(
       fechaSemana: _formatearFechaSemana(json['fechaSemana'] ?? 'N/A'),
       fechaActual: json['fechaActual'] ?? '',
@@ -90,7 +87,7 @@ class ReporteContableGrupo {
   final String grupos;
   final String estado;
   final Pagoficha pagoficha;
-  final MoratoriosContable moratorios; // <--- ANTES ERA 'Moratorios'
+  final MoratoriosContable moratorios;
   final String garantia;
   final double montoDesembolsado;
   final double montoSolicitado;
@@ -114,7 +111,7 @@ class ReporteContableGrupo {
     required this.grupos,
     required this.estado,
     required this.pagoficha,
-    required this.moratorios, // <--- NUEVO: Añadido al constructor
+    required this.moratorios,
     required this.garantia,
     required this.montoDesembolsado,
     required this.montoSolicitado,
@@ -140,8 +137,7 @@ class ReporteContableGrupo {
       grupos: json['grupos'] ?? '',
       estado: json['estado'] ?? '',
       pagoficha: Pagoficha.fromJson(json['pagoficha'] ?? {}),
-      // --- CAMBIO 2: Llama al constructor de la nueva clase ---
-      moratorios: MoratoriosContable.fromJson(json['Moratorios'] ?? {}), // <--- ANTES ERA 'Moratorios.fromJson'
+      moratorios: MoratoriosContable.fromJson(json['Moratorios'] ?? {}),
       garantia: json['garantia'] ?? '',
       montoDesembolsado: ParseHelpers.parseDouble(json['montoDesembolsado']),
       montoSolicitado: ParseHelpers.parseDouble(json['montoSolicitado']),
@@ -161,7 +157,6 @@ class ReporteContableGrupo {
   }
 }
 
-// --- CAMBIO CLAVE 1: Actualizar la clase Pagoficha ---
 class Pagoficha {
   final String idpagosdetalles;
   final String idgrupos;
@@ -171,10 +166,8 @@ class Pagoficha {
   final double sumaMoratorio;
   final List<Deposito> depositos;
   final double depositoCompleto;
-
-  // --- Añadimos los campos de saldo que ahora pertenecen a la ficha de pago completa ---
   final double favorUtilizado;
-  final double saldofavor; // Saldo a favor generado en este pago
+  final double saldofavor;
   final double saldoUtilizado;
   final double saldoDisponible;
   final String utilizadoPago;
@@ -189,7 +182,6 @@ class Pagoficha {
     required this.sumaMoratorio,
     required this.depositos,
     required this.depositoCompleto,
-    // --- Añadidos al constructor ---
     required this.favorUtilizado,
     required this.saldofavor,
     required this.saldoUtilizado,
@@ -210,7 +202,6 @@ class Pagoficha {
         (item) => Deposito.fromJson(item),
       ),
       depositoCompleto: ParseHelpers.parseDouble(json['depositoCompleto']),
-      // --- Leer los nuevos campos del JSON ---
       favorUtilizado: ParseHelpers.parseDouble(json['favorUtilizado']),
       saldofavor: ParseHelpers.parseDouble(json['saldofavor']),
       saldoUtilizado: ParseHelpers.parseDouble(json['saldoUtilizado']),
@@ -220,20 +211,27 @@ class Pagoficha {
   }
 }
 
-// --- CAMBIO CLAVE 2: Simplificar la clase Deposito ---
-// Ya no contiene los campos de saldo, solo la información del depósito en sí.
+// ===============================================================
+// === INICIO DEL CAMBIO: Actualizar la clase Deposito ===========
+// ===============================================================
 class Deposito {
   final double deposito;
   final double pagoMoratorio;
   final String garantia;
   final String fechaDeposito;
-  // Los campos de saldo se han movido a Pagoficha
+  // --- CAMPOS AÑADIDOS ---
+  final String esSaldoGlobal;
+  final double saldoGlobal;
+
 
   Deposito({
     required this.deposito,
     required this.pagoMoratorio,
     required this.garantia,
     required this.fechaDeposito,
+    // --- AÑADIDOS AL CONSTRUCTOR ---
+    required this.esSaldoGlobal,
+    required this.saldoGlobal,
   });
 
   factory Deposito.fromJson(Map<String, dynamic> json) {
@@ -242,10 +240,15 @@ class Deposito {
       pagoMoratorio: ParseHelpers.parseDouble(json['pagoMoratorio']),
       garantia: json['garantia'] ?? 'No',
       fechaDeposito: json['fechaDeposito'] ?? '',
+      // --- LEER LOS NUEVOS VALORES DEL JSON ---
+      esSaldoGlobal: json['esSaldoGlobal']?.toString() ?? 'No',
+      saldoGlobal: ParseHelpers.parseDouble(json['saldoGlobal']),
     );
   }
 }
-
+// ===============================================================
+// === FIN DEL CAMBIO ============================================
+// ===============================================================
 
 class Cliente {
   final String nombreCompleto;
@@ -282,11 +285,9 @@ class Cliente {
   }
 }
 
-
-// --- NUEVA CLASE: Para manejar los datos de moratorios del reporte ---
 class MoratoriosContable {
   final double moratoriosPagados;
-  final double moratoriosAPagar; // <-- El dato que necesitas
+  final double moratoriosAPagar;
   final double restanteMoratorios;
 
   MoratoriosContable({

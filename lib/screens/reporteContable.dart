@@ -1,4 +1,4 @@
-// lib/screens/reporteContable.dart o donde lo tengas
+// lib/screens/reporteContable.dart (ACTUALIZADO CON TOOLTIP EN ESCRITORIO Y MÓVIL)
 
 import 'package:finora_app/helpers/responsive_helpers.dart';
 import 'package:finora_app/models/reporte_contable.dart';
@@ -22,6 +22,11 @@ class ReporteContableWidget extends StatelessWidget {
   });
 
   static const Color primaryColor = Color(0xFF5162F6);
+  static const Color abonoGlobalColor = Colors.teal;
+  static const Color garantiaColor = Color(0xFFE53888); // <--- AÑADE ESTA LÍNEA
+
+  // === AÑADIDO: Color para Saldo a Favor ===
+  static final Color saldoFavorColor = Colors.green.shade700;
 
   @override
   Widget build(BuildContext context) {
@@ -30,13 +35,127 @@ class ReporteContableWidget extends StatelessWidget {
         : _buildDesktopLayout(context);
   }
 
-  //============================================================================
-  // === VISTA DE ESCRITORIO (SIN CAMBIOS, USADA COMO REFERENCIA) ==============
-  //============================================================================
+  // =========================================================================
+  // === CAMBIO PRINCIPAL: Añadir Tooltip para Abono Global en Escritorio ====
+  // =========================================================================
+  Widget _buildDesktopStandardDepositCard(
+    BuildContext context,
+    Deposito deposito,
+    Pagoficha pagoficha,
+  ) {
+    final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
+    final isSaldoGlobal = deposito.esSaldoGlobal == "Si";
+
+    // 1. Creamos el widget de la etiqueta visual
+    Widget labelWidget = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: isSaldoGlobal ? abonoGlobalColor : const Color(0xFFE53888),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        isSaldoGlobal ? 'Abono Global' : 'Garantía',
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w500,
+          color: Colors.white,
+        ),
+      ),
+    );
+
+    // 2. Si es un abono global, envolvemos la etiqueta en un Tooltip con el nuevo diseño
+    if (isSaldoGlobal) {
+      labelWidget = Tooltip(
+        message:
+            'Es parte de un abono global de: ${currencyFormat.format(deposito.saldoGlobal)}',
+        // === MODIFICADO: Estilo del Tooltip ===
+        decoration: BoxDecoration(
+          color: abonoGlobalColor,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+        waitDuration: const Duration(milliseconds: 300),
+        child: labelWidget,
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: isDarkMode ? Colors.grey[850] : Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+        ),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF5162F6).withOpacity(0.2),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+              ),
+            ),
+            child: Align(
+              alignment: Alignment.center,
+              child: Text(
+                'Fecha depósito: ${_formatDateSafe(deposito.fechaDeposito)}',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isDarkMode ? Colors.grey[200] : Colors.black,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildDesktopDepositoDetail(
+                      context,
+                      'Depósito',
+                      deposito.deposito,
+                      Icons.arrow_downward,
+                      depositoCompleto: pagoficha.depositoCompleto,
+                    ),
+                    _buildDesktopDepositoDetail(
+                      context,
+                      'Moratorio',
+                      deposito.pagoMoratorio,
+                      Icons.warning,
+                    ),
+                  ],
+                ),
+                if (deposito.garantia == "Si" || isSaldoGlobal)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      // 3. Usamos el widget (con o sin tooltip)
+                      child: labelWidget,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =========================================================================
+  // === EL RESTO DEL CÓDIGO PERMANECE IGUAL (SALVO OTROS TOOLTIPS) ==========
+  // =========================================================================
 
   Widget _buildDesktopLayout(BuildContext context) {
-    // ... Tu código de escritorio se mantiene sin cambios ...
-    // ... Lo pego al final para mantener la integridad del archivo ...
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
 
@@ -81,12 +200,6 @@ class ReporteContableWidget extends StatelessWidget {
       ),
     );
   }
-
-  // ... Todos los demás widgets de escritorio ...
-
-  //============================================================================
-  // === VISTA MÓVIL (CORREGIDA PARA PARIDAD 1:1) ==============================
-  //============================================================================
 
   Widget _buildMobileLayout(BuildContext context) {
     return Scaffold(
@@ -251,7 +364,6 @@ class ReporteContableWidget extends StatelessWidget {
                   _buildMobileClientesList(context, grupo),
                 ),
                 const SizedBox(height: 12),
-                // === CORRECCIÓN: Esta sección ahora tiene toda la lógica de escritorio ===
                 _buildMobileDetailSection(
                   context,
                   'Depósitos',
@@ -394,7 +506,7 @@ class ReporteContableWidget extends StatelessWidget {
               child: _buildMobileStatCard(
                 context,
                 'Moratorios Generados',
-                currencyFormat.format(grupo.moratorios.moratoriosAPagar ?? 0.0),
+                currencyFormat.format(grupo.moratorios.moratoriosAPagar),
                 color: Colors.red.shade400,
               ),
             ),
@@ -403,7 +515,7 @@ class ReporteContableWidget extends StatelessWidget {
               child: _buildMobileStatCard(
                 context,
                 'Moratorios Pagados',
-                currencyFormat.format(grupo.pagoficha.sumaMoratorio ?? 0.0),
+                currencyFormat.format(grupo.pagoficha.sumaMoratorio),
                 color: Colors.green.shade600,
               ),
             ),
@@ -554,7 +666,6 @@ class ReporteContableWidget extends StatelessWidget {
     );
   }
 
-  // === CORRECCIÓN PRINCIPAL: Esta sección ahora refleja 1:1 la lógica del escritorio ===
   Widget _buildMobileDepositosList(
     BuildContext context,
     ReporteContableGrupo grupo,
@@ -580,29 +691,11 @@ class ReporteContableWidget extends StatelessWidget {
           context,
         ),
         const SizedBox(height: 12),
-
-        // El bucle que muestra los depósitos se mantiene igual
         ...pagoficha.depositos
-            .map(
-              (deposito) =>
-              // _buildMobileStandardDepositCard(context, deposito, pagoficha),
-              // --- AHORA ---
-              _buildMobileCompactDepositRow(context, deposito),
-            )
+            .map((deposito) => _buildMobileCompactDepositRow(context, deposito))
             .toList(),
-
-        // --- NUEVO: AÑADIMOS LA TARJETA RESUMEN DEL SALDO A FAVOR AQUÍ ---
-        // Solo la mostramos si hay un saldo a favor que reportar.
         if (pagoficha.saldofavor > 0)
-          _buildSaldoFavorSummaryCard(
-            context,
-            pagoficha,
-          ), // Widget que crearemos
-
-        if (pagoficha.favorUtilizado > 0)
-          _buildMobileFavorUtilizadoCard(context, pagoficha.favorUtilizado),
-
-        const Divider(height: 20),
+          _buildSaldoFavorSummaryCard(context, pagoficha),
         if (pagoficha.favorUtilizado > 0)
           _buildMobileFavorUtilizadoCard(context, pagoficha.favorUtilizado),
         const Divider(height: 20),
@@ -633,15 +726,12 @@ class ReporteContableWidget extends StatelessWidget {
     );
   }
 
-  // --- Pega este nuevo widget dentro de tu clase ReporteContableWidget ---
-
   Widget _buildSaldoFavorSummaryCard(
     BuildContext context,
     Pagoficha pagoficha,
   ) {
     final colors = Provider.of<ThemeProvider>(context).colors;
 
-    // Lógica para determinar qué mostrar
     String title;
     String primaryText;
     String? secondaryText;
@@ -670,6 +760,13 @@ class ReporteContableWidget extends StatelessWidget {
 
     return Tooltip(
       message: tooltipMessage,
+      // === MODIFICADO: Estilo del Tooltip ===
+      decoration: BoxDecoration(
+        color: saldoFavorColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+      waitDuration: const Duration(milliseconds: 300),
       child: Container(
         margin: const EdgeInsets.only(top: 4, bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -727,101 +824,146 @@ class ReporteContableWidget extends StatelessWidget {
     );
   }
 
-  // === NUEVO WIDGET: Tarjeta para un depósito estándar, con toda la info del desktop ===
-  Widget _buildMobileStandardDepositCard(
-    BuildContext context,
-    Deposito deposito,
-    Pagoficha pagoficha,
-  ) {
-    final colors = Provider.of<ThemeProvider>(context).colors;
-    final isGarantia = deposito.garantia == "Si";
+  // REEMPLAZA ESTA FUNCIÓN COMPLETA
+Widget _buildMobileCompactDepositRow(
+  BuildContext context,
+  Deposito deposito,
+) {
+  final colors = Provider.of<ThemeProvider>(context).colors;
+  final isGarantia = deposito.garantia == "Si";
+  final isSaldoGlobal = deposito.esSaldoGlobal == "Si";
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: colors.backgroundCard,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color:
-              isGarantia
-                  ? const Color(0xFFE53888)
-                  : Colors.grey.withOpacity(0.3),
-        ),
+  return Container(
+    margin: const EdgeInsets.only(bottom: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: colors.backgroundCard.withOpacity(0.7),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(
+        color: isGarantia
+            ? garantiaColor
+            : isSaldoGlobal
+                ? abonoGlobalColor
+                : Colors.grey.withOpacity(0.2),
+        width: (isGarantia || isSaldoGlobal) ? 1.5 : 1.0,
       ),
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: primaryColor.withOpacity(0.1),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(7),
-                topRight: Radius.circular(7),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start, // Alinea al inicio
+      children: [
+        // Columna de la izquierda (Depósito e Info)
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Depósito: ${_formatDateSafe(deposito.fechaDeposito)}',
+                style: TextStyle(fontSize: 11, color: colors.textSecondary),
               ),
-            ),
-            child: Text(
-              'Fecha depósito: ${_formatDateSafe(deposito.fechaDeposito)}',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                color: colors.textPrimary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(10.0),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildMobileDepositoDetail(
-                      context,
-                      'Depósito',
-                      deposito.deposito,
-                      Icons.arrow_downward,
-                    ),
-                    //_buildMobileSaldoFavorInCard(context, pagoficha),
-                    _buildMobileDepositoDetail(
-                      context,
-                      'Moratorio',
-                      deposito.pagoMoratorio,
-                      Icons.warning,
-                    ),
-                  ],
+              const SizedBox(height: 4),
+              Text(
+                currencyFormat.format(deposito.deposito),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: colors.textPrimary,
                 ),
-                if (isGarantia)
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: EdgeInsets.only(top: 8.0),
-                      child: Text(
-                        'Pago con garantía',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Color(0xFFE53888),
-                          fontWeight: FontWeight.w500,
+              ),
+              // --- CAMBIO PRINCIPAL: Mostrar etiquetas de texto ---
+              if (isGarantia || isSaldoGlobal)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6.0),
+                  child: Wrap(
+                    spacing: 6.0,
+                    runSpacing: 4.0,
+                    children: [
+                      if (isGarantia)
+                        _buildMobileDepositTag(
+                          text: 'Garantía',
+                          color: garantiaColor,
+                          tooltipMessage: 'Pago con garantía',
                         ),
-                      ),
-                    ),
+                      if (isSaldoGlobal)
+                        _buildMobileDepositTag(
+                          text: 'Abono Global',
+                          color: abonoGlobalColor,
+                          tooltipMessage:
+                              'Es parte de un abono global de: ${currencyFormat.format(deposito.saldoGlobal)}',
+                        ),
+                    ],
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
-        ],
+        ),
+        const SizedBox(width: 8),
+        // Columna de la derecha (Moratorio)
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              'Moratorio',
+              style: TextStyle(fontSize: 11, color: colors.textSecondary),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              currencyFormat.format(deposito.pagoMoratorio),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: colors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+// AÑADE ESTA NUEVA FUNCIÓN AUXILIAR
+Widget _buildMobileDepositTag({
+  required String text,
+  required Color color,
+  String? tooltipMessage,
+}) {
+  final tag = Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 10,
+        color: Colors.white,
+        fontWeight: FontWeight.w500,
       ),
+    ),
+  );
+
+  if (tooltipMessage != null) {
+    return Tooltip(
+      message: tooltipMessage,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+      waitDuration: const Duration(milliseconds: 300),
+      child: tag,
     );
   }
 
-  // === NUEVO WIDGET: Tarjeta para un abono con Saldo a Favor, imitando al desktop ===
+  return tag;
+}
+
   Widget _buildMobileFavorUtilizadoCard(
     BuildContext context,
     double favorUtilizado,
   ) {
-    final colors = Provider.of<ThemeProvider>(context).colors;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -862,127 +1004,6 @@ class ReporteContableWidget extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-
-  // === NUEVO WIDGET: Muestra el "Saldo a Favor" generado dentro de la tarjeta de depósito ===
-  Widget _buildMobileSaldoFavorInCard(
-    BuildContext context,
-    Pagoficha pagoficha,
-  ) {
-    final colors = Provider.of<ThemeProvider>(context).colors;
-    Widget valueDisplay;
-    String? tooltipMessage;
-
-    if (pagoficha.saldofavor == 0) {
-      valueDisplay = Text(
-        currencyFormat.format(0.0),
-        style: TextStyle(
-          fontWeight: FontWeight.w500,
-          fontSize: 11,
-          color: colors.textPrimary,
-        ),
-      );
-    } else if (pagoficha.utilizadoPago == 'Si') {
-      tooltipMessage =
-          'Saldo de ${currencyFormat.format(pagoficha.saldofavor)} utilizado completamente en otro pago.';
-      valueDisplay = Text(
-        currencyFormat.format(pagoficha.saldofavor),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: colors.textSecondary,
-          decoration: TextDecoration.lineThrough,
-        ),
-      );
-    } else if (pagoficha.saldoUtilizado > 0) {
-      tooltipMessage =
-          'Original: ${currencyFormat.format(pagoficha.saldofavor)}\nUtilizado: ${currencyFormat.format(pagoficha.saldoUtilizado)}';
-      valueDisplay = Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            currencyFormat.format(pagoficha.saldoDisponible),
-            style: TextStyle(
-              fontWeight: FontWeight.w500,
-              fontSize: 11,
-              color: colors.textPrimary,
-            ),
-          ),
-          Text(
-            '(de ${currencyFormat.format(pagoficha.saldofavor)})',
-            style: TextStyle(fontSize: 9, color: colors.textSecondary),
-          ),
-        ],
-      );
-    } else {
-      valueDisplay = Text(
-        currencyFormat.format(pagoficha.saldofavor),
-        style: TextStyle(
-          fontWeight: FontWeight.w500,
-          fontSize: 11,
-          color: colors.textPrimary,
-        ),
-      );
-    }
-
-    Widget content = Column(
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.account_balance_wallet,
-              size: 10,
-              color: colors.textSecondary,
-            ),
-            const SizedBox(width: 3),
-            Text(
-              'Saldo Favor',
-              style: TextStyle(fontSize: 10, color: colors.textSecondary),
-            ),
-          ],
-        ),
-        valueDisplay,
-      ],
-    );
-
-    if (tooltipMessage != null) {
-      return Tooltip(message: tooltipMessage, child: content);
-    }
-    return content;
-  }
-
-  // === NUEVO WIDGET: Muestra una pieza de información dentro de la tarjeta de depósito ===
-  Widget _buildMobileDepositoDetail(
-    BuildContext context,
-    String label,
-    double value,
-    IconData icon,
-  ) {
-    final colors = Provider.of<ThemeProvider>(context).colors;
-    return Column(
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 10, color: colors.textSecondary),
-            const SizedBox(width: 3),
-            Text(
-              label,
-              style: TextStyle(fontSize: 10, color: colors.textSecondary),
-            ),
-          ],
-        ),
-        Text(
-          currencyFormat.format(value),
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 11,
-            color: colors.textPrimary,
-          ),
-        ),
-      ],
     );
   }
 
@@ -1072,6 +1093,13 @@ class ReporteContableWidget extends StatelessWidget {
               Tooltip(
                 message:
                     'Total generado históricamente: ${currencyFormat.format(reporteData.totalSaldoFavor)}',
+                // === MODIFICADO: Estilo del Tooltip ===
+                decoration: BoxDecoration(
+                  color: saldoFavorColor,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+                waitDuration: const Duration(milliseconds: 300),
                 child: Row(
                   children: [
                     Text(
@@ -1164,10 +1192,6 @@ class ReporteContableWidget extends StatelessWidget {
       return dateString;
     }
   }
-
-  //============================================================================
-  // === CÓDIGO DE DESKTOP PEGADO PARA INTEGRIDAD ===============================
-  //============================================================================
 
   Widget _buildDesktopHeader(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -1332,6 +1356,13 @@ class ReporteContableWidget extends StatelessWidget {
         Tooltip(
           message:
               'Total generado históricamente: ${currencyFormat.format(reporteData.totalSaldoFavor)}',
+          // === MODIFICADO: Estilo del Tooltip ===
+          decoration: BoxDecoration(
+            color: saldoFavorColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+          waitDuration: const Duration(milliseconds: 300),
           child: MouseRegion(
             cursor: SystemMouseCursors.help,
             child: Icon(
@@ -1638,7 +1669,7 @@ class ReporteContableWidget extends StatelessWidget {
               child: _buildDesktopFinancialInfo(
                 context,
                 'Moratorios Generados',
-                grupo.moratorios.moratoriosAPagar ?? 0.0,
+                grupo.moratorios.moratoriosAPagar,
               ),
             ),
             const SizedBox(width: 4),
@@ -1646,7 +1677,7 @@ class ReporteContableWidget extends StatelessWidget {
               child: _buildDesktopFinancialInfo(
                 context,
                 'Moratorios Pagados',
-                grupo.pagoficha.sumaMoratorio ?? 0.0,
+                grupo.pagoficha.sumaMoratorio,
               ),
             ),
           ],
@@ -2000,84 +2031,6 @@ class ReporteContableWidget extends StatelessWidget {
     );
   }
 
-  // --- Pega este nuevo widget para ESCRITORIO ---
-
-  Widget _buildDesktopCompactDepositRow(
-    BuildContext context,
-    Deposito deposito,
-  ) {
-    final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
-    final isGarantia = deposito.garantia == "Si";
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
-            width: 0.5,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Columna 1: Fecha
-          SizedBox(
-            width: 90,
-            child: Text(
-              _formatDateSafe(deposito.fechaDeposito),
-              style: TextStyle(
-                fontSize: 11,
-                color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
-              ),
-            ),
-          ),
-
-          // Columna 2: Monto del depósito y tooltip de garantía
-          Expanded(
-            child: Row(
-              children: [
-                Text(
-                  currencyFormat.format(deposito.deposito),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: isDarkMode ? Colors.white70 : Colors.black87,
-                  ),
-                ),
-                if (isGarantia)
-                  Tooltip(
-                    message: "Pago con garantía",
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 6.0),
-                      child: Icon(
-                        Icons.shield,
-                        size: 12,
-                        color: const Color(0xFFE53888),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // Columna 3: Moratorio
-          SizedBox(
-            width: 80,
-            child: Text(
-              currencyFormat.format(deposito.pagoMoratorio),
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 11,
-                color: isDarkMode ? Colors.white70 : Colors.black87,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildDesktopDepositosSection(
     BuildContext context,
     Pagoficha pagoficha,
@@ -2147,13 +2100,10 @@ class ReporteContableWidget extends StatelessWidget {
                           pagoficha.favorUtilizado,
                           pagoficha.fechasPago,
                         ),
-
                     ],
                   ),
         ),
-        // --- NUEVO: AÑADIMOS LA FILA ESTÁTICA SI HAY SALDO A FAVOR ---
         if (pagoficha.saldofavor > 0)
-          //_buildDesktopSaldoFavorStaticRow(context, pagoficha),
           _buildDesktopSaldoFavorSummaryRow(context, pagoficha),
         Container(
           width: double.infinity,
@@ -2274,15 +2224,12 @@ class ReporteContableWidget extends StatelessWidget {
     );
   }
 
-  // --- Pega este nuevo widget dentro de tu clase ReporteContableWidget ---
-
   Widget _buildDesktopSaldoFavorSummaryRow(
     BuildContext context,
     Pagoficha pagoficha,
   ) {
     final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
 
-    // Lógica para determinar el texto y el tooltip
     String title;
     String primaryText;
     String? secondaryText;
@@ -2308,18 +2255,24 @@ class ReporteContableWidget extends StatelessWidget {
           'Se generó un saldo a favor de ${currencyFormat.format(pagoficha.saldofavor)} en este pago, que está disponible para usarse.';
     }
 
-    // UI del widget, estilizada para escritorio
     return Tooltip(
       message: tooltipMessage,
+      // === MODIFICADO: Estilo del Tooltip ===
+      decoration: BoxDecoration(
+        color: saldoFavorColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+      waitDuration: const Duration(milliseconds: 300),
       child: Container(
         margin: const EdgeInsets.only(top: 6),
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color:
-              isDarkMode ? Colors.blue[900]!.withOpacity(0.3) : Colors.blue[50],
+              isDarkMode ? Colors.green[900]!.withOpacity(0.3) : Colors.green[50],
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: isDarkMode ? Colors.blue[800]! : Colors.blue[200]!,
+            color: isDarkMode ? Colors.green[800]! : Colors.green[200]!,
           ),
         ),
         child: Row(
@@ -2327,7 +2280,7 @@ class ReporteContableWidget extends StatelessWidget {
             Icon(
               Icons.account_balance_wallet_outlined,
               size: 14,
-              color: isDarkMode ? Colors.blue[300] : Colors.blue[700],
+              color: isDarkMode ? Colors.green[300] : Colors.green[700],
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -2340,7 +2293,7 @@ class ReporteContableWidget extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
-                      color: isDarkMode ? Colors.blue[200] : Colors.blue[800],
+                      color: isDarkMode ? Colors.green[200] : Colors.green[800],
                     ),
                   ),
                   if (secondaryText != null)
@@ -2359,7 +2312,7 @@ class ReporteContableWidget extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
-                color: isDarkMode ? Colors.blue[200] : Colors.blue[900],
+                color: isDarkMode ? Colors.green[200] : Colors.green[900],
                 decoration:
                     (pagoficha.utilizadoPago == 'Si')
                         ? TextDecoration.lineThrough
@@ -2372,186 +2325,6 @@ class ReporteContableWidget extends StatelessWidget {
     );
   }
 
-  // --- Pega este nuevo widget dentro de tu clase ReporteContableWidget ---
-
-  Widget _buildMobileCompactDepositRow(
-    BuildContext context,
-    Deposito deposito,
-  ) {
-    final colors = Provider.of<ThemeProvider>(context).colors;
-    final isGarantia = deposito.garantia == "Si";
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: colors.backgroundCard.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color:
-              isGarantia
-                  ? const Color(0xFFE53888)
-                  : Colors.grey.withOpacity(0.2),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Columna Izquierda: Fecha y Monto del depósito
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Depósito: ${_formatDateSafe(deposito.fechaDeposito)}',
-                style: TextStyle(fontSize: 11, color: colors.textSecondary),
-              ),
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  Text(
-                    currencyFormat.format(deposito.deposito),
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: colors.textPrimary,
-                    ),
-                  ),
-                  if (isGarantia)
-                    Tooltip(
-                      message: "Pago con garantía",
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 6.0),
-                        child: Icon(
-                          Icons.shield,
-                          size: 14,
-                          color: const Color(0xFFE53888),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-
-          // Columna Derecha: Moratorio
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'Moratorio',
-                style: TextStyle(fontSize: 11, color: colors.textSecondary),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                currencyFormat.format(deposito.pagoMoratorio),
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: colors.textPrimary,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDesktopStandardDepositCard(
-    BuildContext context,
-    Deposito deposito,
-    Pagoficha pagoficha,
-  ) {
-    final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey[850] : Colors.white,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
-        ),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF5162F6).withOpacity(0.2),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(4),
-                topRight: Radius.circular(4),
-              ),
-            ),
-            child: Align(
-              alignment: Alignment.center,
-              child: Text(
-                'Fecha depósito: ${_formatDateSafe(deposito.fechaDeposito)}',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isDarkMode ? Colors.grey[200] : Colors.black,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _buildDesktopDepositoDetail(
-                      context,
-                      'Depósito',
-                      deposito.deposito,
-                      Icons.arrow_downward,
-                      depositoCompleto: pagoficha.depositoCompleto,
-                    ),
-                    //_buildDesktopSaldoFavorDetail(context, pagoficha),
-                    _buildDesktopDepositoDetail(
-                      context,
-                      'Moratorio',
-                      deposito.pagoMoratorio,
-                      Icons.warning,
-                    ),
-                  ],
-                ),
-                if (deposito.garantia == "Si")
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE53888),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'Garantía',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildDesktopFavorUtilizadoCard(
     BuildContext context,
     double favorUtilizado,
@@ -2560,6 +2333,13 @@ class ReporteContableWidget extends StatelessWidget {
     return Tooltip(
       message:
           'Este abono se realizó utilizando un saldo a favor de un pago anterior.',
+      // === MODIFICADO: Estilo del Tooltip ===
+      decoration: BoxDecoration(
+        color: saldoFavorColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+      waitDuration: const Duration(milliseconds: 300),
       child: Container(
         margin: const EdgeInsets.only(bottom: 6),
         decoration: BoxDecoration(
@@ -2719,10 +2499,13 @@ class ReporteContableWidget extends StatelessWidget {
     if (tooltipMessage != null) {
       return Tooltip(
         message: tooltipMessage,
+        // === MODIFICADO: Estilo del Tooltip ===
         decoration: BoxDecoration(
-          color: const Color(0xFFE53888),
-          borderRadius: BorderRadius.circular(12),
+          color: saldoFavorColor, // Verde para saldo a favor
+          borderRadius: BorderRadius.circular(8),
         ),
+        textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+        waitDuration: const Duration(milliseconds: 300),
         child: MouseRegion(cursor: SystemMouseCursors.help, child: content),
       );
     }
@@ -2796,10 +2579,13 @@ class ReporteContableWidget extends StatelessWidget {
       return Tooltip(
         message:
             'Depósito completo: ${currencyFormat.format(depositoCompleto!)}',
+        // === MODIFICADO: Estilo del Tooltip (ahora es consistente) ===
         decoration: BoxDecoration(
           color: const Color(0xFFE53888),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
         ),
+        textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+        waitDuration: const Duration(milliseconds: 300),
         child: MouseRegion(
           cursor: SystemMouseCursors.help,
           child: detailWidget,

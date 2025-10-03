@@ -27,6 +27,7 @@ class AppColors {
   static const _grey50 = Color(0xFFFAFAFA);
   static const _grey70 = Color(0xFFF7F8FA);
   static const _grey100 = Color(0xFFF5F5F5);
+  static const _grey150 = Color(0xFFF0F0F0);
   static const _grey200 = Color(0xFFEEEEEE);
   static const _grey300 = Color(0xFFE0E0E0);
   static const _grey400 = Color(0xFFBDBDBD);
@@ -55,13 +56,13 @@ class AppColors {
   static const Color _darkCard = Color(0xFF1E293B);
   static const Color _darkMediumCard = Color(0xFF142034);
 
-  static const Color _darkBlueBlack = Color(0xFF0D1015);
+  static const Color _darkBlueBlack = Color(0xFF121621);
 
   // Colores de marca (basados en #7FF9CB)
-  static const Color primary = Color(0xFF5162F6); // 
+  static const Color primary = Color(0xFF5162F6); //
   static const Color primaryLight = Color(0xFF7B8AF8); // Versión más clara
   static const Color primaryDark = Color(0xFF3D4ED4); // Versión más oscura
-  static const Color secondary = Color(0xFF14B8A6); // 
+  static const Color secondary = Color(0xFF14B8A6); //
   static const Color accent = Color(
     0xFFF43F5E,
   ); // Rose (como color de acento/error)
@@ -87,20 +88,69 @@ class AppColors {
   // Color de fondo principal del Home
   static const Color homeBackground = Color(0xFFF7F8FA);
 
+  Color get brandPrimaryTheme => _isDarkMode ? primary : primaryLight.withOpacity(0.1);
+    Color get brandPrimaryThemeText => _isDarkMode ? _white : primary;
+
+  // Colores base para el tooltip
+  static const Color _lightTooltipBackground = Color(0xFF718EB6);
+  static const Color _lightTooltipTextPrimary = Color(0xFFF1F5F9);
+  static const Color _lightTooltipTextSecondary = Color(0xFFF1F5F9);
+
+  static const Color _darkTooltipBackground = Color(0xFF334155);
+  static const Color _darkTooltipTextPrimary = Color(0xFFF1F5F9);
+  static const Color _darkTooltipTextSecondary = Color(0xFF94A3B8);
+
+  static const Color tooltipLightBackground = Color(0xFFB3D1FB);
+
+  // Getters dinámicos que cambian con el tema
+  Color get tooltipBackground =>
+      _isDarkMode ? _darkTooltipBackground : const Color(0xFF5A7AA8);
+  Color get tooltipTextPrimary =>
+      _isDarkMode ? _darkTooltipTextPrimary : _lightTooltipTextPrimary;
+  Color get tooltipTextSecondary =>
+      _isDarkMode ? _darkTooltipTextSecondary : _lightTooltipTextSecondary;
+
+  Color get tooltipBorder =>
+      _isDarkMode ? Colors.transparent : _darkTooltipTextSecondary;
+
+  // Dark mode (ya tienes)
+  final Color colorRecaudadoDark = Colors.green;
+  final Color colorIdealDark = Colors.blueAccent.withOpacity(0.7);
+
+  // Light mode (variante)
+  final Color colorRecaudadoLight = const Color(
+    0xFF3FDE37,
+  ); // verde más profundo y visible sobre blanco
+  final Color colorIdealLight =
+      Colors.lightBlueAccent; // azul más suave y brillante
+
+  Color get colorRecaudado =>
+      _isDarkMode ? colorRecaudadoDark : colorRecaudadoDark;
+  Color get colorIdeal => _isDarkMode ? colorIdealDark : colorIdealDark;
+
+  Color get colorRecaudadoText =>
+      _isDarkMode ? colorRecaudadoDark : colorRecaudadoLight;
+
+  Color get colorIdealText => _isDarkMode ? colorIdealDark : colorIdealLight;
+
   // Métodos para obtener los colores según el modo
   //Color get backgroundPrimary => _isDarkMode ? _grey900 : _lightBackground;
-  Color get backgroundPrimary => _isDarkMode ? _darkBlueBlack : _lightBackground;
+  Color get backgroundPrimary =>
+      _isDarkMode ? _darkBlueBlack : _lightBackground;
 
   Color get backgroundHeader => _isDarkMode ? brandPrimary : _darkBackground;
 
   Color get backgroundCard => _isDarkMode ? _darkSurface : _white;
 
-    Color get disabledCard => _isDarkMode ? const Color(0xFF1D2024) : Colors.blueGrey.shade50;
-
+  Color get disabledCard =>
+      _isDarkMode ? const Color(0xFF1D2024) : Colors.blueGrey.shade50;
 
   Color get backgroundCardDark => _isDarkMode ? _darkBackground : _white;
 
-  Color get backgroundCardDarkRedondeo => isDarkMode? _darkBackground : _grey100;
+  Color get backgroundCardDark2 => _isDarkMode ? _darkBackground : _grey150;
+
+  Color get backgroundCardDarkRedondeo =>
+      isDarkMode ? _darkBackground : _grey100;
 
   Color get backgroundSecondary =>
       _isDarkMode ? _darkBackgroundSecondary : _lightBackgroundSecondary;
@@ -118,7 +168,12 @@ class AppColors {
 
   Color get divider2 => _isDarkMode ? _lightDivider : _darkDivider;
 
+  Color get divider3 => _isDarkMode ? _darkTextSecondary : _lightDivider;
+
   Color get card => _isDarkMode ? _darkCard : _lightCard;
+
+  Color get buttonCreditAction =>
+      _isDarkMode ? const Color(0xFF5C6777) : _lightText;
 
   Color get selectedMenu =>
       _isDarkMode
@@ -131,8 +186,7 @@ class AppColors {
 
   Color get blackWhite => _isDarkMode ? Colors.white : Colors.black;
 
-    Color get blacBlack => _isDarkMode ? Colors.black : Colors.black;
-
+  Color get blacBlack => _isDarkMode ? Colors.black : Colors.black;
 
   Color get error => accent;
 
@@ -167,9 +221,7 @@ class AppColors {
   Color get inputFill =>
       _isDarkMode ? _grey700 : lightgreyblue; // fondo del input
   Color get inputBorder =>
-      _isDarkMode
-          ? _grey700
-          : _grey800; // borde en dark y sin borde en light
+      _isDarkMode ? _grey700 : _grey800; // borde en dark y sin borde en light
   Color get inputText =>
       _isDarkMode ? _white : const Color(0xFF111827); // texto principal
   Color get inputHint =>
@@ -287,24 +339,25 @@ class AppColors {
   );
 
   //Card pequeña
-  Color get smallCard => _isDarkMode ?  Colors.blue.withOpacity(0.1) : Colors.blue.withOpacity(0.1);
+  Color get smallCard =>
+      _isDarkMode ? Colors.blue.withOpacity(0.1) : Colors.blue.withOpacity(0.1);
   Color get smallCardBorder => _isDarkMode ? const Color(0xFF161E2B) : _grey200;
 
   //Card Moratorios creditos
-  Color get moratoriosCard => _isDarkMode ? const Color(0xFF32090F) : Color(0xFFFFEBEE);
-  Color get moratoriosCardBorder => _isDarkMode ? const Color(0xFF491019) : Color(0xFFF44336);
+  Color get moratoriosCard =>
+      _isDarkMode ? const Color(0xFF32090F) : Color(0xFFFFEBEE);
+  Color get moratoriosCardBorder =>
+      _isDarkMode ? const Color(0xFF491019) : Color(0xFFF44336);
 
   //BORDE
-  Color get bordeButton => isDarkMode ? Colors.grey.withOpacity(0.3) : Colors.grey.withOpacity(0.3);
+  Color get bordeButton =>
+      isDarkMode ? Colors.grey.withOpacity(0.3) : Colors.grey.withOpacity(0.3);
 
   //SIDEMENU
-  Color get backgroundSideMenu => _isDarkMode ? _darkMediumCard : _lightBackground;
+  Color get backgroundSideMenu =>
+      _isDarkMode ? _darkMediumCard : _lightBackground;
 
- //SIDEMENU
-  Color get backgroundDialog => _isDarkMode ? _darkMediumCard : _lightBackground;
-
-
-
+  //SIDEMENU
+  Color get backgroundDialog =>
+      _isDarkMode ? _darkMediumCard : _lightBackground;
 }
-
-

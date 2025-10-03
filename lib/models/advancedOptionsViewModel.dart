@@ -21,6 +21,13 @@ enum OpcionVista { menuPrincipal, moratorios, renovacion, saldoFavor }
 /// manteniendo el widget de la UI limpio y declarativo.
 /// Hereda de ChangeNotifier para notificar a los widgets cuando los datos cambian.
 class AdvancedOptionsViewModel extends ChangeNotifier {
+
+   // <<< AÑADIR: ESTADO PARA LA FECHA DEL MORATORIO EDITABLE >>>
+  /// Almacena la fecha seleccionada por el usuario para el pago del moratorio.
+  /// Se inicializa con la fecha existente si ya hay un pago, o null si no.
+  DateTime? fechaMoratorioSeleccionada;
+  // <<< FIN DE AÑADIR >>>
+
   // ---------------------------------------------------------------------------
   // --- DEPENDENCIAS INYECTADAS (el cerebro necesita estas herramientas) ---
   // ---------------------------------------------------------------------------
@@ -71,6 +78,11 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
   /// Controller para el campo de texto donde se ingresa el monto manual.
   late TextEditingController moratorioEditableController;
   // <<< FIN DE AÑADIR >>>
+
+    // <<< INICIO: CONTROLLER PARA LA NUEVA VISTA >>>
+  /// Controller para el campo de texto del pago de ajuste.
+  late final TextEditingController ajusteController;
+  // <<< FIN: CONTROLLER PARA LA NUEVA VISTA >>>
 
   // ---------------------------------------------------------------------------
   // --- GETTERS PÚBLICOS (forma segura para que la UI lea el estado) ---
@@ -151,6 +163,12 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
     // <<< FIN DE AÑADIR >>>
 
 
+    // <<< INICIO: INICIALIZAR EL NUEVO CONTROLLER >>>
+    // 2. Inicializa el controller en el constructor.
+    ajusteController = TextEditingController();
+    // <<< FIN: INICIALIZAR EL NUEVO CONTROLLER >>>
+
+
        // ===================================================================
     // --- INICIO DEL CÓDIGO AÑADIDO ---
     // ===================================================================
@@ -165,7 +183,88 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
     // --- FIN DEL CÓDIGO AÑADIDO ---
     // ===================================================================
 
+      // <<< AÑADIR: INICIALIZACIÓN DE LA FECHA DEL MORATORIO >>>
+    _inicializarFechaMoratorio();
+    // <<< FIN DE AÑADIR >>>
+
   }
+
+    
+  // <<< AÑADIR: MÉTODO PRIVADO PARA INICIALIZAR LA FECHA >>>
+  /// Revisa si ya existe un pago de moratorio guardado y, de ser así,
+  /// establece la `fechaMoratorioSeleccionada` con ese valor para que la UI
+  /// lo muestre al cargar.
+ /// Si el moratorio ya fue pagado, busca en la lista de abonos (`_pago.abonos`)
+  /// la transacción específica marcada con `moratorio: "Si"` y extrae
+  /// su `fechaDeposito`. Si no existe, la fecha queda como `null` para que
+  /// la UI pueda proponer la fecha actual para un nuevo pago.
+  void _inicializarFechaMoratorio() {
+    try {
+      // Usamos firstWhere para encontrar el primer abono que sea un pago de moratorio.
+      final abonoMoratorio = _pago.abonos.firstWhere(
+        (abono) => abono['moratorio'] == 'Si',
+        // Si no se encuentra, orElse previene un error. Devolvemos un mapa vacío.
+        orElse: () => <String, dynamic>{},
+      );
+
+      // Si encontramos el abono (el mapa no está vacío)...
+      if (abonoMoratorio.isNotEmpty) {
+        // ... extraemos la fecha del depósito como un String.
+        final fechaGuardadaString = abonoMoratorio['fechaDeposito'] as String?;
+        if (fechaGuardadaString != null) {
+          // La convertimos a DateTime y la asignamos a nuestro estado.
+          fechaMoratorioSeleccionada = DateTime.tryParse(fechaGuardadaString);
+        }
+      }
+    } catch (e) {
+      // En caso de cualquier error inesperado, simplemente no asignamos la fecha.
+      print('Error al inicializar fecha de moratorio: $e');
+      fechaMoratorioSeleccionada = null;
+    }
+  }
+  // <<< FIN DEL CÓDIGO A REEMPLAZAR >>>
+
+
+
+
+    // <<< AÑADIR: MÉTODO PARA MOSTRAR EL DATEPICKER DEL MORATORIO >>>
+  /// Muestra el selector de fecha para el moratorio editable.
+  /// Es muy similar a la función que proporcionaste de ejemplo.
+  Future<void> seleccionarFechaMoratorio(BuildContext context) async {
+    // La fecha inicial será la ya seleccionada, o la de hoy si es la primera vez.
+    final DateTime fechaInicial = fechaMoratorioSeleccionada ?? DateTime.now();
+
+    final DateTime? fechaSeleccionada = await showDatePicker(
+      context: context,
+      initialDate: fechaInicial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      helpText: 'Fecha del pago moratorio',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: const Color(0xFF4F46E5), // Indigo
+              onPrimary: Colors.white,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF4F46E5)),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    // Si el usuario elige una fecha, actualizamos nuestro estado y notificamos a la UI.
+    if (fechaSeleccionada != null) {
+      fechaMoratorioSeleccionada = fechaSeleccionada;
+      notifyListeners(); // ¡Muy importante para que la UI se redibuje con la nueva fecha!
+    }
+  }
+  // <<< FIN DE AÑADIR >>>
+
 
   
 
@@ -316,40 +415,39 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
   // Reemplaza esta función completa
 /// Guarda el monto del moratorio ingresado manualmente.
 /// Llama al servicio `guardarMoratorioEditable`.
-Future<bool> guardarMoratorioManual() async {
-  // 1. Obtener y validar el monto del controller
-  final montoTexto = moratorioEditableController.text.replaceAll(',', '');
-  final double monto = double.tryParse(montoTexto) ?? 0.0;
+  // <<< MODIFICAR: `guardarMoratorioManual` PARA USAR LA NUEVA FECHA >>>
+  /// Guarda el monto del moratorio ingresado manualmente.
+  Future<bool> guardarMoratorioManual() async {
+    final montoTexto = moratorioEditableController.text.replaceAll(',', '');
+    final double monto = double.tryParse(montoTexto) ?? 0.0;
 
-  // No hacemos nada si el monto es inválido
-  if (monto <= 0) {
-    return false;
+    if (monto <= 0) {
+      return false;
+    }
+
+    _setSaving(true);
+
+    // Usa la fecha seleccionada por el usuario, o la fecha actual como respaldo.
+    final DateTime fechaParaGuardar = fechaMoratorioSeleccionada ?? DateTime.now();
+    final String fechaFormateada = DateFormat('yyyy-MM-dd').format(fechaParaGuardar);
+
+    final response = await _pagoService.guardarMoratorioEditable(
+      idFechasPagos: _pago.idfechaspagos!,
+      fechaPago: fechaFormateada, // <--- ¡AQUÍ USAMOS LA FECHA SELECCIONADA!
+      montoMoratorio: monto,
+      montoAPagar: _pago.capitalMasInteres,
+    );
+
+    if (response.success) {
+      moratorioEditableController.clear();
+      onDataChanged(); // Esto recargará los datos y el ViewModel se reinicializará
+    }
+
+    _setSaving(false);
+    return response.success;
   }
+  // <<< FIN DE MODIFICAR >>>
 
-  _setSaving(true);
-
-  // 2. Formatear la fecha a YYYY-MM-DD como lo pide la API
-  final String fechaFormateada = DateFormat('yyyy-MM-dd').format(DateTime.now());
-
-  // <<< CAMBIO CLAVE AQUÍ >>>
-  // Ahora, `montoaPagar` se llena con el valor correcto de la ficha de esa semana.
-  final response = await _pagoService.guardarMoratorioEditable(
-    idFechasPagos: _pago.idfechaspagos!,
-    fechaPago: fechaFormateada,
-    montoMoratorio: monto,
-    montoAPagar: _pago.capitalMasInteres, // Pasamos el monto de la ficha
-  );
-  // <<< FIN DEL CAMBIO >>>
-
-  if (response.success) {
-    // Si fue exitoso, limpiamos el controller y recargamos datos
-    moratorioEditableController.clear();
-    onDataChanged();
-  }
-
-  _setSaving(false);
-  return response.success;
-}
   // <<< FIN DE AÑADIR >>>
   
   /// Elimina todas las renovaciones guardadas para esta semana.
@@ -483,6 +581,12 @@ Future<bool> aplicarSaldoFavor(double montoAAplicar) async {
     // <<< AÑADIR >>>
     moratorioEditableController.dispose();
     // <<< FIN DE AÑADIR >>>
+
+    // <<< INICIO: LIMPIAR EL NUEVO CONTROLLER >>>
+    // 3. Asegúrate de limpiar el controller para evitar fugas de memoria.
+    ajusteController.dispose();
+    // <<< FIN: LIMPIAR EL NUEVO CONTROLLER >>>
+
     super.dispose();
   }
 

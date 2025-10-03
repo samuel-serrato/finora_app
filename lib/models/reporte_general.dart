@@ -3,47 +3,56 @@
 import 'package:intl/intl.dart';
 import '../utils/app_logger.dart';
 
-
-// --- CLASE NUEVA: Para representar cada depósito individual ---
+// --- CLASE MODIFICADA: Deposito ---
+// Se añaden los nuevos campos para el saldo global.
 class Deposito {
   final double monto;
   final String fecha;
   final String garantia;
-  final double favorUtilizado; // <-- CAMBIO 1: Añadimos el nuevo campo
+  final double favorUtilizado;
   final double saldofavor;
   final double saldoUtilizado;
   final double saldoDisponible;
   final String utilizadoPago;
+  // --- CAMBIO 1: AÑADIR NUEVOS CAMPOS ---
+  final String esSaldoGlobal;
+  final double saldoGlobal;
 
   Deposito({
     required this.monto,
     required this.fecha,
     required this.garantia,
-    required this.favorUtilizado, // <-- CAMBIO 2: Añadimos al constructor
+    required this.favorUtilizado,
     required this.saldofavor,
     required this.saldoUtilizado,
     required this.saldoDisponible,
     required this.utilizadoPago,
+    // --- CAMBIO 2: AÑADIR AL CONSTRUCTOR ---
+    required this.esSaldoGlobal,
+    required this.saldoGlobal,
   });
 
   factory Deposito.fromJson(Map<String, dynamic> json) {
     return Deposito(
-      // El campo 'deposito' en el JSON es un número
       monto: (json['deposito'] as num?)?.toDouble() ?? 0.0,
       fecha: json['fechaDeposito']?.toString() ?? 'Sin fecha',
       garantia: json['garantia']?.toString() ?? 'No',
       favorUtilizado: (json['favorUtilizado'] as num?)?.toDouble() ?? 0.0,
-      // --- LEER LOS NUEVOS VALORES DEL JSON ---
       saldofavor: (json['saldofavor'] as num?)?.toDouble() ?? 0.0,
       saldoUtilizado: (json['saldoUtilizado'] as num?)?.toDouble() ?? 0.0,
       saldoDisponible: (json['saldoDisponible'] as num?)?.toDouble() ?? 0.0,
       utilizadoPago: json['utilizadoPago']?.toString() ?? 'No',
+      // --- CAMBIO 3: LEER LOS NUEVOS VALORES DEL JSON ---
+      esSaldoGlobal: json['esSaldoGlobal']?.toString() ?? 'No',
+      saldoGlobal: (json['saldoGlobal'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }
 
-// --- CLASE MODIFICADA: ReporteGeneral ---
-// Ahora contiene una lista de depósitos
+// --- El resto de las clases (ReporteGeneral, ReporteGeneralData) no necesitan cambios ---
+// Ya que el cambio se propaga automáticamente a través de la factoría Deposito.fromJson.
+
+// ... (El resto del archivo permanece igual)
 class ReporteGeneral {
   final int numero;
   final String tipoPago;
@@ -145,8 +154,6 @@ class ReporteGeneral {
   }
 }
 
-// --- La clase ReporteGeneralData no necesita cambios ---
-// ... (El resto de la clase ReporteGeneralData y la función _formatearFechaSemana se quedan igual)
 class ReporteGeneralData {
   final String fechaSemana;
   final String fechaActual;
@@ -182,18 +189,12 @@ class ReporteGeneralData {
     double parseValor(String value) =>
         double.parse(value.replaceAll(RegExp(r'[^0-9.]'), ''));
 
-    // --- CORRECCIÓN IMPORTANTE ---
-    // El servidor ya agrupa los datos, por lo que 'listaGrupos' contiene objetos
-    // ReporteGeneral únicos para cada ficha. No necesitamos procesar una lista plana.
     var rawListaGrupos = json['listaGrupos'] as List? ?? [];
     List<ReporteGeneral> reportesProcesados = [];
     if (rawListaGrupos.isNotEmpty && rawListaGrupos.first['pagoficha'] is Map) {
-      // Si el JSON es como el ejemplo (anidado), mapeamos directamente
       reportesProcesados =
           rawListaGrupos.map((item) => ReporteGeneral.fromJson(item)).toList();
     } else {
-      // (Opcional) Aquí podrías poner una lógica de fallback si el servidor
-      // a veces envía un formato antiguo. Por ahora, asumimos el nuevo.
       AppLogger.log("Formato de listaGrupos no reconocido o vacío.");
     }
 

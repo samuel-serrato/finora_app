@@ -46,17 +46,17 @@
         // ¡CAMBIO CLAVE! Registramos el SW que genera Flutter automáticamente.
         navigator.serviceWorker.register('flutter_service_worker.js')
           .then(function (registration) {
-            console.log('Service Worker de Flutter registrado correctamente.');
+            //console.log('Service Worker de Flutter registrado correctamente.');
 
             // Esta lógica se mantiene: detectamos cuando el navegador encuentra una nueva versión.
             registration.addEventListener('updatefound', () => {
               newWorker = registration.installing;
-              console.log('Se encontró una nueva versión del Service Worker, instalando...');
+              //console.log('Se encontró una nueva versión del Service Worker, instalando...');
 
               newWorker.addEventListener('statechange', () => {
                 // Si el nuevo SW está instalado y listo para tomar el control...
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  console.log('Nueva versión lista para activar. Notificando a Flutter...');
+                  //console.log('Nueva versión lista para activar. Notificando a Flutter...');
 
                   // ¡LA CONEXIÓN CLAVE! Llamamos a la función que Dart expondrá.
                   if (window.onNewVersionReady) {

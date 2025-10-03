@@ -11,7 +11,6 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../utils/app_logger.dart';
 
-
 class nGrupoForm extends StatefulWidget {
   final VoidCallback? onGrupoAgregado;
 
@@ -23,20 +22,19 @@ class nGrupoForm extends StatefulWidget {
 
 class _nGrupoFormState extends State<nGrupoForm>
     with SingleTickerProviderStateMixin {
-  //region Controladores y Variables de Estado (Sin cambios)
+  //region Controladores y Variables de Estado
   final TextEditingController nombreGrupoController = TextEditingController();
   final TextEditingController detallesController = TextEditingController();
   final TextEditingController _typeAheadController = TextEditingController();
 
   String? selectedTipoGrupo;
-  Usuario? _selectedAsesor;
+  // --- CAMBIO 1: AJUSTE DE LA VARIABLE DE ESTADO ---
+  // Ahora es de tipo Usuario? para mayor claridad y seguridad de tipos.
+  Usuario? _selectedAsesor; // <-- CAMBIO
   bool esAdicional = false;
 
   final List<Map<String, dynamic>> _selectedMiembros = [];
   final Map<String, String> _rolesMiembros = {};
-
-  // --- AÑADE ESTA LÍNEA ---
-  // Mapa para guardar los adeudos de los miembros seleccionados.
   final Map<String, double> _adeudosMiembros = {};
 
   List<Usuario> _listaAsesores = [];
@@ -53,7 +51,6 @@ class _nGrupoFormState extends State<nGrupoForm>
   final GlobalKey<FormState> _miembrosFormKey = GlobalKey<FormState>();
   //endregion
 
-  // --- REFACTORIZADO: Usamos GrupoService ---
   final GrupoService _grupoService = GrupoService();
   final ApiService _apiService = ApiService();
 
@@ -88,7 +85,9 @@ class _nGrupoFormState extends State<nGrupoForm>
   Future<void> _obtenerAsesores() async {
     setState(() => _isLoadingAsesores = true);
 
-    final response = await _grupoService.getAsesores();
+    final response = await _grupoService.getAsesores(
+      showErrorDialog: false
+      );
 
     if (mounted) {
       if (response.success && response.data != null) {
@@ -96,45 +95,32 @@ class _nGrupoFormState extends State<nGrupoForm>
           _listaAsesores = response.data!;
         });
       }
-      // ApiService ya muestra el diálogo de error si es necesario.
       setState(() => _isLoadingAsesores = false);
     }
   }
 
   /// Busca clientes para el TypeAheadField usando el servicio.
   Future<List<Map<String, dynamic>>> _buscarClientes(String query) async {
-    // 1. Limpiamos la cadena de búsqueda de espacios y la guardamos.
     final trimmedQuery = query.trim();
-
-    // 2. AQUÍ ESTÁ LA LÓGICA: Si la cadena limpia tiene menos de 2 caracteres,
-    // devolvemos una lista vacía para no hacer la llamada a la API.
     if (trimmedQuery.length < 2) {
       return [];
     }
-
-    // 3. Realizamos la búsqueda usando la cadena ya limpia ('trimmedQuery').
     final response = await _grupoService.buscarClientes(trimmedQuery);
-
-    // 4. Tu lógica para manejar la respuesta ya es correcta.
     if (response.success && response.data != null) {
       return response.data!;
     }
-
-    return []; // Si hay error o no hay datos, devolvemos una lista vacía.
+    return [];
   }
 
   /// Orquesta la creación del grupo y sus miembros en UNA SOLA PETICIÓN.
   Future<void> _agregarGrupo() async {
-    // Validaciones iniciales
     if (!_validarFormularioActual()) {
-      // CORREGIDO: Combinando título y mensaje en un solo string
       _apiService.showErrorDialog(
         "Datos Faltantes. Asegúrate de haber completado toda la información del grupo.",
       );
       return;
     }
     if (_selectedMiembros.isEmpty) {
-      // CORREGIDO: Combinando título y mensaje en un solo string
       _apiService.showErrorDialog(
         "Miembros Faltantes. Debes agregar al menos un miembro al grupo para poder guardarlo.",
       );
@@ -144,13 +130,17 @@ class _nGrupoFormState extends State<nGrupoForm>
     setState(() => _isLoading = true);
 
     try {
-      // 1. Construir el cuerpo de la petición UNIFICADO.
+      // --- CAMBIO 2: LÓGICA DE ENVÍO SIMPLIFICADA ---
+      // Como el validador asegura que _selectedAsesor no es nulo, podemos acceder a su ID directamente.
+      // La opción "No asignado" ya no existe.
+      final String idAsesorPayload = _selectedAsesor!.idusuarios; // <-- CAMBIO
+
       final Map<String, dynamic> requestData = {
         'nombreGrupo': nombreGrupoController.text,
         'detalles': detallesController.text,
         'tipoGrupo': selectedTipoGrupo,
         'isAdicional': esAdicional ? 'Sí' : 'No',
-        'idusuarios': _selectedAsesor?.idusuarios,
+        'idusuarios': idAsesorPayload, // <-- CAMBIO
         'clientes':
             _selectedMiembros
                 .map(
@@ -163,10 +153,8 @@ class _nGrupoFormState extends State<nGrupoForm>
                 .toList(),
       };
 
-      // 2. Llamar al NUEVO método del servicio que hace todo en un paso.
       final response = await _grupoService.crearGrupoConMiembros(requestData);
 
-      // 3. Manejar la respuesta.
       if (mounted) {
         if (response.success) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -178,11 +166,9 @@ class _nGrupoFormState extends State<nGrupoForm>
           widget.onGrupoAgregado?.call();
           Navigator.of(context).pop();
         }
-        // ApiService ya maneja y muestra los diálogos de error.
       }
     } catch (e, stackTrace) {
       AppLogger.log("🔥 Error catastrófico en _agregarGrupo: $e\n$stackTrace");
-      // CORREGIDO: Combinando título y mensaje en un solo string
       _apiService.showErrorDialog(
         "Ocurrió un error crítico en la aplicación. Detalles: ${e.toString()}",
       );
@@ -192,16 +178,17 @@ class _nGrupoFormState extends State<nGrupoForm>
       }
     }
   }
+  //endregion
 
   @override
   Widget build(BuildContext context) {
+    // ... (El resto del método build y la UI no necesitan cambios, los dejo por completitud)
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final colors = themeProvider.colors;
 
-    // 1. Reemplazamos Scaffold por Card para darle el aspecto de BottomSheet
     return Card(
-      margin: EdgeInsets.zero, // El margen se controla desde el lanzador
-      clipBehavior: Clip.antiAlias, // Para respetar los bordes redondeados
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
       ),
@@ -211,12 +198,10 @@ class _nGrupoFormState extends State<nGrupoForm>
               ? const Center(child: CircularProgressIndicator())
               : Column(
                 children: [
-                  // 2. Añadimos el nuevo encabezado del diálogo
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                     child: Column(
                       children: [
-                        // Pequeña barra para indicar que se puede arrastrar
                         Container(
                           width: 40,
                           height: 4,
@@ -226,9 +211,8 @@ class _nGrupoFormState extends State<nGrupoForm>
                           ),
                         ),
                         const SizedBox(height: 16),
-                        // Título que reemplaza al AppBar
                         Text(
-                          'Agregar Grupo', // Título del diálogo
+                          'Agregar Grupo',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 22,
@@ -237,8 +221,6 @@ class _nGrupoFormState extends State<nGrupoForm>
                       ],
                     ),
                   ),
-
-                  // 3. Tus widgets originales (TabBar y TabBarView) se mantienen
                   Container(
                     margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     height: 48,
@@ -336,9 +318,8 @@ class _nGrupoFormState extends State<nGrupoForm>
     );
   }
 
-  // Dentro de la clase _nGrupoFormState
-
-  // Función para el color de fondo de la píldora (la que tú proporcionaste)
+  // El resto de los métodos (_paginaMiembros, helpers de UI, etc.) no necesitan cambios.
+  // Los incluyo para que el código esté completo.
   Color _getStatusColor(String? estado) {
     switch (estado) {
       case 'En Credito':
@@ -352,21 +333,20 @@ class _nGrupoFormState extends State<nGrupoForm>
     }
   }
 
-  // Función para el color del texto y el borde (el mismo color base, pero sólido)
   Color _getStatusTextColor(String? estado) {
     switch (estado) {
       case 'En Credito':
-        return const Color(0xFFA31D1D); // Rojo oscuro
+        return const Color(0xFFA31D1D);
       case 'En Grupo':
-        return const Color(0xFF3674B5); // Azul
+        return const Color(0xFF3674B5);
       case 'Disponible':
-        return const Color(0xFF059212); // Verde
+        return const Color(0xFF059212);
       default:
         return Colors.grey;
     }
   }
 
-    String _formatearNumero(double numero) {
+  String _formatearNumero(double numero) {
     final formatter = NumberFormat("#,##0.00", "es_MX");
     return formatter.format(numero);
   }
@@ -445,10 +425,6 @@ class _nGrupoFormState extends State<nGrupoForm>
                         ),
                       ],
                     ),
-                    subtitle: Text(
-                      'Tel: ${suggestion['telefono']}',
-                      style: TextStyle(color: colors.textSecondary),
-                    ),
                   );
                 },
                 onSelected: (suggestion) async {
@@ -467,9 +443,6 @@ class _nGrupoFormState extends State<nGrupoForm>
                     return;
                   }
 
-                  // --- INICIO DE LA LÓGICA DE VERIFICACIÓN DE ADEUDO ---
-
-                  // 1. Mostrar diálogo de carga
                   showDialog(
                     context: context,
                     barrierDismissible: false,
@@ -489,32 +462,26 @@ class _nGrupoFormState extends State<nGrupoForm>
                         ),
                   );
 
-                  // 2. Llamar al servicio
                   final response = await _grupoService.verificarAdeudoCliente(
                     suggestion['idclientes'],
                   );
 
                   if (!mounted) return;
-                  Navigator.of(context).pop(); // Cerrar diálogo de carga
+                  Navigator.of(context).pop();
 
                   final double? montoAdeudo =
                       response.success ? response.data : null;
 
-                  // Función helper para agregar al miembro y evitar duplicar código
-                  // --- INICIO DE LA MODIFICACIÓN ---
-                  // Función helper para agregar al miembro Y SU ADEUDO
                   void agregarMiembro(double? adeudo) {
                     setState(() {
                       _selectedMiembros.add(suggestion);
                       _rolesMiembros[suggestion['idclientes']] = roles.first;
-                      // Si hay un adeudo, lo guardamos en nuestro mapa de estado
                       if (adeudo != null && adeudo > 0) {
                         _adeudosMiembros[suggestion['idclientes']] = adeudo;
                       }
                     });
                   }
 
-                  // 3. Si hay adeudo, mostrar diálogo de confirmación
                   if (montoAdeudo != null && montoAdeudo > 0) {
                     final confirmar = await showDialog<bool>(
                       context: context,
@@ -552,10 +519,8 @@ class _nGrupoFormState extends State<nGrupoForm>
                       agregarMiembro(montoAdeudo);
                     }
                   } else {
-                    // 4. Si no hay adeudo, agregarlo directamente
                     agregarMiembro(null);
                   }
-                  // --- FIN DE LA LÓGICA DE VERIFICACIÓN ---
                 },
                 loadingBuilder:
                     (context) => const Center(
@@ -612,279 +577,249 @@ class _nGrupoFormState extends State<nGrupoForm>
                             final miembro = _selectedMiembros[index];
                             final idCliente = miembro['idclientes'];
                             final estado = miembro['estado'] as String?;
-
-                            // --- LÓGICA AÑADIDA: Leemos el adeudo de nuestro mapa ---
                             final double? montoAdeudo =
                                 _adeudosMiembros[idCliente];
 
                             return Card(
-                          color: colors.backgroundCard,
-                          margin: const EdgeInsets.symmetric(vertical: 6),
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            // --- INICIO DE LA CORRECCIÓN ESTRUCTURAL ---
-                            // Usamos una sola Row plana para evitar conflictos.
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                // --- Parte Izquierda (Avatar) ---
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: colors.brandPrimary,
-                                    borderRadius: BorderRadius.circular(22),
-                                  ),
-                                  child: Center(
-                                    child: Text('${index + 1}',
-                                      style: TextStyle(
-                                        color: colors.whiteWhite,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
+                              color: colors.backgroundCard,
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: colors.brandPrimary,
+                                        borderRadius: BorderRadius.circular(22),
                                       ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-
-                                // --- Parte Central (Expandida) ---
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '${miembro['nombres']} ${miembro['apellidoP']} ${miembro['apellidoM'] ?? ''}',
-                                        style: TextStyle(
-                                          color: colors.textPrimary,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14,
+                                      child: Center(
+                                        child: Text(
+                                          '${index + 1}',
+                                          style: TextStyle(
+                                            color: colors.whiteWhite,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
                                         ),
-                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      const SizedBox(height: 6),
-                                                  Row(
-                                                    children: [
-                                                      // Dropdown de rol en lugar del teléfono
-                                                      /*   Icon(
-                                      Icons.assignment_ind_rounded,
-                                      size: 14,
-                                      color: colors.brandPrimary,
                                     ),
-                                    const SizedBox(width: 4), */
-                                                      PopupMenuButton<String>(
-                                                        offset: const Offset(
-                                                          0,
-                                                          40,
-                                                        ),
-                                                        color:
-                                                            colors
-                                                                .backgroundCard,
-                                                        onSelected: (nuevoRol) {
-                                                          setState(
-                                                            () =>
-                                                                _rolesMiembros[idCliente] =
-                                                                    nuevoRol,
-                                                          );
-                                                        },
-                                                        itemBuilder:
-                                                            (context) =>
-                                                                roles
-                                                                    .map(
-                                                                      (
-                                                                        rol,
-                                                                      ) => PopupMenuItem(
-                                                                        value:
-                                                                            rol,
-                                                                        child: Row(
-                                                                          mainAxisSize:
-                                                                              MainAxisSize.min,
-                                                                          children: [
-                                                                            if (_rolesMiembros[idCliente] ==
-                                                                                rol)
-                                                                              Icon(
-                                                                                Icons.check_circle_rounded,
-                                                                                size:
-                                                                                    14,
-                                                                                color:
-                                                                                    colors.brandPrimary,
-                                                                              )
-                                                                            else
-                                                                              const SizedBox(
-                                                                                width:
-                                                                                    14,
-                                                                              ),
-                                                                            const SizedBox(
-                                                                              width:
-                                                                                  6,
-                                                                            ),
-                                                                            Text(
-                                                                              rol,
-                                                                              style: TextStyle(
-                                                                                color:
-                                                                                    _rolesMiembros[idCliente] ==
-                                                                                            rol
-                                                                                        ? colors.brandPrimary
-                                                                                        : colors.textPrimary,
-                                                                                fontWeight:
-                                                                                    _rolesMiembros[idCliente] ==
-                                                                                            rol
-                                                                                        ? FontWeight.w600
-                                                                                        : FontWeight.normal,
-                                                                                fontSize:
-                                                                                    12,
-                                                                              ),
-                                                                            ),
-                                                                          ],
-                                                                        ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '${miembro['nombres']} ${miembro['apellidoP']} ${miembro['apellidoM'] ?? ''}',
+                                            style: TextStyle(
+                                              color: colors.textPrimary,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Row(
+                                            children: [
+                                              PopupMenuButton<String>(
+                                                offset: const Offset(0, 40),
+                                                color: colors.backgroundCard,
+                                                onSelected: (nuevoRol) {
+                                                  setState(
+                                                    () =>
+                                                        _rolesMiembros[idCliente] =
+                                                            nuevoRol,
+                                                  );
+                                                },
+                                                itemBuilder:
+                                                    (context) =>
+                                                        roles
+                                                            .map(
+                                                              (
+                                                                rol,
+                                                              ) => PopupMenuItem(
+                                                                value: rol,
+                                                                child: Row(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    if (_rolesMiembros[idCliente] ==
+                                                                        rol)
+                                                                      Icon(
+                                                                        Icons
+                                                                            .check_circle_rounded,
+                                                                        size:
+                                                                            14,
+                                                                        color:
+                                                                            colors.brandPrimary,
+                                                                      )
+                                                                    else
+                                                                      const SizedBox(
+                                                                        width:
+                                                                            14,
                                                                       ),
-                                                                    )
-                                                                    .toList(),
-                                                        child: Container(
-                                                          padding:
-                                                              const EdgeInsets.symmetric(
-                                                                horizontal: 8,
-                                                                vertical: 4,
-                                                              ),
-                                                          decoration: BoxDecoration(
-                                                            color: colors
-                                                                .brandPrimary
-                                                                .withOpacity(
-                                                                  0.05,
-                                                                ),
-                                                            border: Border.all(
-                                                              color: colors
-                                                                  .brandPrimary
-                                                                  .withOpacity(
-                                                                    0.3,
-                                                                  ),
-                                                              width: 1,
-                                                            ),
-                                                            borderRadius:
-                                                                BorderRadius.circular(
-                                                                  6,
-                                                                ),
-                                                          ),
-                                                          child: Row(
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              Text(
-                                                                _rolesMiembros[idCliente] ??
-                                                                    'Seleccionar',
-                                                                style: TextStyle(
-                                                                  color:
-                                                                      colors
-                                                                          .brandPrimary,
-                                                                  fontSize: 11,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
+                                                                    const SizedBox(
+                                                                      width: 6,
+                                                                    ),
+                                                                    Text(
+                                                                      rol,
+                                                                      style: TextStyle(
+                                                                        color:
+                                                                            _rolesMiembros[idCliente] ==
+                                                                                    rol
+                                                                                ? colors.brandPrimary
+                                                                                : colors.textPrimary,
+                                                                        fontWeight:
+                                                                            _rolesMiembros[idCliente] ==
+                                                                                    rol
+                                                                                ? FontWeight.w600
+                                                                                : FontWeight.normal,
+                                                                        fontSize:
+                                                                            12,
+                                                                      ),
+                                                                    ),
+                                                                  ],
                                                                 ),
                                                               ),
-                                                              const SizedBox(
-                                                                width: 4,
-                                                              ),
-                                                              Icon(
-                                                                Icons
-                                                                    .keyboard_arrow_down_rounded,
-                                                                color:
-                                                                    colors
-                                                                        .brandPrimary,
-                                                                size: 14,
-                                                              ),
-                                                            ],
-                                                          ),
+                                                            )
+                                                            .toList(),
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: colors.brandPrimary
+                                                        .withOpacity(0.05),
+                                                    border: Border.all(
+                                                      color: colors.brandPrimary
+                                                          .withOpacity(0.3),
+                                                      width: 1,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          6,
+                                                        ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        _rolesMiembros[idCliente] ??
+                                                            'Seleccionar',
+                                                        style: TextStyle(
+                                                          color:
+                                                              colors
+                                                                  .brandPrimary,
+                                                          fontSize: 11,
+                                                          fontWeight:
+                                                              FontWeight.w600,
                                                         ),
                                                       ),
-                                                      const SizedBox(width: 6),
-
-                                                      if (estado != null) ...[
-                                                        const SizedBox(
-                                                          width: 8,
-                                                        ),
-                                                        Container(
-                                                          padding:
-                                                              const EdgeInsets.symmetric(
-                                                                horizontal: 8,
-                                                                vertical: 6,
-                                                              ),
-                                                          decoration: BoxDecoration(
-                                                            color:
-                                                                _getStatusColor(
-                                                                  estado,
-                                                                ),
-                                                            borderRadius:
-                                                                BorderRadius.circular(
-                                                                  10,
-                                                                ),
-                                                          ),
-                                                          child: Text(
-                                                            estado,
-                                                            style: TextStyle(
-                                                              color:
-                                                                  _getStatusTextColor(
-                                                                    estado,
-                                                                  ),
-                                                              fontSize: 11,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ],
+                                                      const SizedBox(width: 4),
+                                                      Icon(
+                                                        Icons
+                                                            .keyboard_arrow_down_rounded,
+                                                        color:
+                                                            colors.brandPrimary,
+                                                        size: 14,
+                                                      ),
                                                     ],
                                                   ),
-                                                ],
+                                                ),
                                               ),
-                                            ),
-
-                                            // --- INICIO DE LA MODIFICACIÓN VISUAL ---
-                                            // Si encontramos un adeudo en nuestro mapa, mostramos el ícono.
-                                             // --- Parte Derecha (Iconos) ---
-                                if (montoAdeudo != null)
-                                  Tooltip(
-                                    message: 'Adeudo: \$${_formatearNumero(montoAdeudo)}',
-                                    child: const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
-                                  ),
-                                if (montoAdeudo != null)
-                                  const SizedBox(width: 8),
-
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: IconButton(
-                                    icon: Icon(Icons.delete_outline_rounded, color: Colors.red[400], size: 20),
-                                    onPressed: () {
-                                      setState(() {
-                                        _selectedMiembros.removeAt(index);
-                                        _rolesMiembros.remove(idCliente);
-                                        _adeudosMiembros.remove(idCliente);
-                                      });
-                                    },
-                                  ),
+                                              const SizedBox(width: 6),
+                                              if (estado != null) ...[
+                                                const SizedBox(width: 8),
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 6,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: _getStatusColor(
+                                                      estado,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          10,
+                                                        ),
+                                                  ),
+                                                  child: Text(
+                                                    estado,
+                                                    style: TextStyle(
+                                                      color:
+                                                          _getStatusTextColor(
+                                                            estado,
+                                                          ),
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (montoAdeudo != null)
+                                      Tooltip(
+                                        message:
+                                            'Adeudo: \$${_formatearNumero(montoAdeudo)}',
+                                        child: const Icon(
+                                          Icons.warning_amber_rounded,
+                                          color: Colors.orange,
+                                          size: 20,
+                                        ),
+                                      ),
+                                    if (montoAdeudo != null)
+                                      const SizedBox(width: 8),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: IconButton(
+                                        icon: Icon(
+                                          Icons.delete_outline_rounded,
+                                          color: Colors.red[400],
+                                          size: 20,
+                                        ),
+                                        onPressed: () {
+                                          setState(() {
+                                            _selectedMiembros.removeAt(index);
+                                            _rolesMiembros.remove(idCliente);
+                                            _adeudosMiembros.remove(idCliente);
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            // --- FIN DE LA CORRECCIÓN ESTRUCTURAL ---
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
+                              ),
+                            );
+                          },
+                        ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
   //endregion
 
   //region Widgets de UI (Reutilizados y adaptados)
@@ -1097,6 +1032,7 @@ class _nGrupoFormState extends State<nGrupoForm>
     );
   }
 
+  // --- CAMBIO 3: WIDGET DEL DROPDOWN SIMPLIFICADO ---
   Widget _buildAsesorDropdown() {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final colors = themeProvider.colors;
@@ -1122,16 +1058,20 @@ class _nGrupoFormState extends State<nGrupoForm>
           ),
         ],
       ),
-      child: DropdownButtonFormField<Usuario>(
-        value: _selectedAsesor,
+      // El tipo ahora es Usuario? para que coincida con nuestra variable de estado.
+      child: DropdownButtonFormField<Usuario?>(
+        // <-- CAMBIO
+        value: _selectedAsesor, // <-- CAMBIO
         hint: Text(
           "Seleccionar Asesor",
           style: TextStyle(color: colors.textSecondary),
         ),
+        // ¡La lista de items ahora solo contiene los asesores reales!
         items:
-            _listaAsesores
+            _listaAsesores // <-- CAMBIO
                 .map(
-                  (asesor) => DropdownMenuItem(
+                  (asesor) => DropdownMenuItem<Usuario?>(
+                    // <-- CAMBIO
                     value: asesor,
                     child: Text(
                       asesor.nombreCompleto,
@@ -1140,8 +1080,11 @@ class _nGrupoFormState extends State<nGrupoForm>
                   ),
                 )
                 .toList(),
-        onChanged: (v) => setState(() => _selectedAsesor = v),
-        validator: (v) => v == null ? 'Requerido' : null,
+        onChanged: (v) => setState(() => _selectedAsesor = v), // <-- CAMBIO
+        // El validador ahora es más importante que nunca.
+        validator:
+            (v) =>
+                v == null ? 'Debes seleccionar un asesor' : null, // <-- CAMBIO
         decoration: InputDecoration(
           prefixIcon: Icon(Icons.person_pin, color: colors.textSecondary),
           border: OutlineInputBorder(
@@ -1156,6 +1099,8 @@ class _nGrupoFormState extends State<nGrupoForm>
           ),
         ),
         dropdownColor: colors.backgroundCard,
+        // ELIMINADO: Ya no necesitamos el `selectedItemBuilder` porque no hay un
+        // caso especial para "No asignado". El comportamiento por defecto es perfecto.
       ),
     );
   }

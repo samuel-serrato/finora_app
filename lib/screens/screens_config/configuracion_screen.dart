@@ -8,6 +8,8 @@ import 'package:finora_app/models/cuenta_bancaria.dart';
 import 'package:finora_app/providers/logo_provider.dart';
 import 'package:finora_app/providers/user_data_provider.dart';
 import 'package:finora_app/screens/screens_config/configracion_credito.dart';
+import 'package:finora_app/utils/date_formatters.dart';
+import 'package:finora_app/utils/formatters.dart';
 import 'package:finora_app/widgets/cambiar_contrase%C3%B1a.dart';
 import 'package:flutter/material.dart';
 import 'package:finora_app/providers/theme_provider.dart';
@@ -180,7 +182,8 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
               _buildUserSection(context),
               const SizedBox(height: 24),
               // --- AQUÍ VA LA NUEVA SECCIÓN ---
-              _buildPlanInfoSection(context), // <--- ¡AÑADE ESTA LÍNEA!
+              //_buildPlanInfoSection(context), // <--- ¡AÑADE ESTA LÍNEA!
+              _buildPlanSection(context), // <--- ¡AÑADE ESTA LÍNEA!
               const SizedBox(height: 24),
 
               // ---------------------------------
@@ -425,136 +428,139 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
 
   // (Copia y reemplaza tu versión actual con esta)
   Widget _buildLogoUploader(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.isDarkMode;
-    final userData = Provider.of<UserDataProvider>(context);
+  final themeProvider = Provider.of<ThemeProvider>(context);
+  final isDarkMode = themeProvider.isDarkMode;
+  final userData = Provider.of<UserDataProvider>(context);
+  bool isAdmin = userData.tipoUsuario == 'Admin';
 
-    bool isAdmin = userData.tipoUsuario == 'Admin';
+  final colorLogo = userData.imagenes
+      .where((img) => img.tipoImagen == 'logoColor')
+      .firstOrNull;
+  final whiteLogo = userData.imagenes
+      .where((img) => img.tipoImagen == 'logoBlanco')
+      .firstOrNull;
 
-    // Depuración: Imprimir todas las imágenes para verificar
-    // (Esto lo puedes dejar o quitar, es solo para ayudarte a depurar)
-    AppLogger.log("Número de imágenes: ${userData.imagenes.length}");
-    userData.imagenes.forEach((img) {
-      AppLogger.log(
-        "Tipo de imagen: ${img.tipoImagen}, Ruta: ${img.rutaImagen}",
-      );
-    });
+  // --- INICIO DE LA LÓGICA RESPONSIVA ---
+  final screenWidth = MediaQuery.of(context).size.width;
+  // Definimos un punto de quiebre. Si la pantalla es más ancha que 768px, usamos un Row.
+  const double breakpoint = 768.0; 
 
-    final colorLogo =
-        userData.imagenes
-            .where((img) => img.tipoImagen == 'logoColor')
-            .firstOrNull;
-    final whiteLogo =
-        userData.imagenes
-            .where((img) => img.tipoImagen == 'logoBlanco')
-            .firstOrNull;
+  // Creamos los dos widgets de subida para no repetirlos
+  final colorLogoUploader = _buildSingleLogoUploader(
+    context: context,
+    title: "Logo a color (modo claro)",
+    isDarkMode: isDarkMode,
+    isAdmin: isAdmin,
+    tempLogoBytes: _tempColorLogoBytes,
+    savedLogo: colorLogo,
+    logoType: "logoColor",
+    backgroundColor: isDarkMode ? Colors.grey[800]! : Colors.grey[200]!,
+  );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  final whiteLogoUploader = _buildSingleLogoUploader(
+    context: context,
+    title: "Logo blanco (modo oscuro)",
+    isDarkMode: isDarkMode,
+    isAdmin: isAdmin,
+    tempLogoBytes: _tempWhiteLogoBytes,
+    savedLogo: whiteLogo,
+    logoType: "logoBlanco",
+    backgroundColor: Colors.grey[800]!,
+  );
+
+  // Widget que contendrá los uploaders, será un Row o un Column según el ancho
+  Widget logoUploadersLayout;
+
+  if (screenWidth > breakpoint) {
+    // LAYOUT PARA DESKTOP (pantalla ancha)
+    logoUploadersLayout = Row(
+      crossAxisAlignment: CrossAxisAlignment.start, // Alinea los elementos arriba
       children: [
-        SizedBox(height: 16),
-        // Adaptación a layout de columna para mejor visualización en móvil
-        Column(
+        Expanded(child: colorLogoUploader), // Expanded para que compartan el espacio
+        SizedBox(width: 24), // Separador horizontal
+        Expanded(child: whiteLogoUploader),
+      ],
+    );
+  } else {
+    // LAYOUT PARA MÓVIL (pantalla estrecha)
+    logoUploadersLayout = Column(
+      children: [
+        colorLogoUploader,
+        SizedBox(height: 24), // Separador vertical
+        whiteLogoUploader,
+      ],
+    );
+  }
+  // --- FIN DE LA LÓGICA RESPONSIVA ---
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SizedBox(height: 16),
+      
+      // Aquí usamos nuestro widget responsivo
+      logoUploadersLayout,
+
+      // El resto de tu código para botones y textos sigue igual
+      if ((_tempColorLogoBytes != null || _tempWhiteLogoBytes != null) && isAdmin) ...[
+        Divider(height: 48), // Un poco más de espacio
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Color Logo (Light Mode) - Llamada corregida
-            _buildSingleLogoUploader(
-              context: context,
-              title: "Logo a color (modo claro)",
-              isDarkMode: isDarkMode,
-              isAdmin: isAdmin,
-              tempLogoBytes: _tempColorLogoBytes, // <-- Corregido
-              savedLogo: colorLogo,
-              logoType: "logoColor",
-              backgroundColor:
-                  isDarkMode ? Colors.grey[800]! : Colors.grey[200]!,
-            ),
-
-            SizedBox(height: 24), // Separador vertical
-            // White Logo (Dark Mode) - Llamada corregida
-            _buildSingleLogoUploader(
-              context: context,
-              title: "Logo blanco (modo oscuro)",
-              isDarkMode: isDarkMode,
-              isAdmin: isAdmin,
-              tempLogoBytes: _tempWhiteLogoBytes, // <-- Corregido
-              savedLogo: whiteLogo,
-              logoType: "logoBlanco",
-              backgroundColor: Colors.grey[800]!,
-            ),
-          ],
-        ),
-
-        // Botones para guardar ambos logos si hay cambios pendientes - Condición corregida
-        if ((_tempColorLogoBytes != null || _tempWhiteLogoBytes != null) &&
-            isAdmin) ...[
-          Divider(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (_isSaving)
-                CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
-                )
-              else
-                ElevatedButton.icon(
-                  onPressed: _saveLogoChanges,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  icon: Icon(Icons.save, size: 16, color: Colors.white),
-                  label: Text(
-                    'Guardar cambios',
-                    style: TextStyle(fontSize: 14),
-                  ),
-                ),
-              SizedBox(width: 12),
+            if (_isSaving)
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+              )
+            else
               ElevatedButton.icon(
-                onPressed: _cancelLogoChanges,
+                onPressed: _saveLogoChanges,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
+                  backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                icon: Icon(Icons.cancel, size: 16, color: Colors.white),
-                label: Text('Cancelar', style: TextStyle(fontSize: 14)),
+                icon: Icon(Icons.save, size: 16, color: Colors.white),
+                label: Text('Guardar cambios', style: TextStyle(fontSize: 14)),
               ),
-            ],
-          ),
-        ],
-
-        SizedBox(height: 16),
-        Center(
-          child: Text(
-            "Formatos permitidos: PNG",
-            style: TextStyle(
-              fontSize: 12,
-              color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+            SizedBox(width: 12),
+            ElevatedButton.icon(
+              onPressed: _cancelLogoChanges,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              icon: Icon(Icons.cancel, size: 16, color: Colors.white),
+              label: Text('Cancelar', style: TextStyle(fontSize: 14)),
             ),
-          ),
+          ],
         ),
-        SizedBox(height: 16),
-        Center(
-          child: Text(
-            "Estas imágenes se utilizarán como logos de la financiera en la aplicación según el modo de visualización",
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-            ),
-          ),
-        ),
-        SizedBox(height: 16),
       ],
-    );
-  }
+      SizedBox(height: 24),
+      Center(
+        child: Text(
+          "Formatos permitidos: PNG",
+          style: TextStyle(fontSize: 12, color: isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+        ),
+      ),
+      SizedBox(height: 8),
+      Center(
+        child: Text(
+          "Estas imágenes se utilizarán como logos de la financiera en la aplicación según el modo de visualización",
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 12, color: isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+        ),
+      ),
+      SizedBox(height: 16),
+    ],
+  );
+}
 
   // Widget auxiliar para no repetir código en el uploader de logos
   // DESPUÉS (MÉTODO CORREGIDO)
@@ -800,133 +806,123 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   }
  */
   Widget _buildSection(
-    BuildContext context, {
-    required String title,
-    required List<Widget> items,
-    bool isExpandable = false,
-    bool enabled = true,
-    EdgeInsetsGeometry?
-    tilePadding, // Nuevo parámetro para controlar el padding del tile
-    double?
-    titleIconSize, // Nuevo parámetro para el tamaño del icono en el título
-    double?
-    titleIconContainerSize, // Nuevo parámetro para el tamaño del contenedor del icono
-    TextStyle?
-    sectionTitleTextStyle, // Nuevo para el estilo del texto del título de la sección
-  }) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final colors = themeProvider.colors;
-    final isDarkMode = themeProvider.isDarkMode;
-    final userData = Provider.of<UserDataProvider>(context);
+  BuildContext context, {
+  required String title,
+  required List<Widget> items,
+  bool isExpandable = false,
+  bool enabled = true,
+  EdgeInsetsGeometry?
+  tilePadding,
+  double?
+  titleIconSize,
+  double?
+  titleIconContainerSize,
+  TextStyle?
+  sectionTitleTextStyle,
+}) {
+  final themeProvider = Provider.of<ThemeProvider>(context);
+  final colors = themeProvider.colors;
+  final isDarkMode = themeProvider.isDarkMode;
 
-    // Valores por defecto si no se proporcionan los nuevos parámetros
-    final effectiveTilePadding =
-        tilePadding ??
-        EdgeInsets.symmetric(
-          horizontal: 16.0,
-          vertical: 0.0,
-        ); // Reducir vertical
-    final effectiveTitleIconSize =
-        titleIconSize ?? 16.0; // Ligeramente más pequeño
-    final effectiveTitleIconContainerSize =
-        titleIconContainerSize ?? 28.0; // Ligeramente más pequeño
-    final effectiveSectionTitleTextStyle =
-        sectionTitleTextStyle ??
-        TextStyle(
-          color: colors.textPrimary,
-          fontSize: 16, // Podrías querer unificar este tamaño
-        );
+  final effectiveTilePadding =
+      tilePadding ??
+      const EdgeInsets.symmetric(
+        horizontal: 16.0,
+        vertical: 0.0,
+      );
+  final effectiveTitleIconSize =
+      titleIconSize ?? 16.0;
+  final effectiveTitleIconContainerSize =
+      titleIconContainerSize ?? 28.0;
+  final effectiveSectionTitleTextStyle =
+      sectionTitleTextStyle ??
+      TextStyle(
+        color: colors.textPrimary,
+        fontSize: 16,
+      );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        /* Padding(
-          padding: const EdgeInsets.only(
-              left: 8.0, bottom: 8.0, top: 4.0), // Añadí un top padding pequeño
-          child: Text(
-            title.toUpperCase(),
-            style: TextStyle(
-              color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ), */
-        Container(
-          decoration: BoxDecoration(
-            color: colors.backgroundCard,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colors.divider, width: 1),
-          ),
-          child:
-              isExpandable
-                  ? IgnorePointer(
-                    ignoring: !enabled,
-                    child: Opacity(
-                      opacity: enabled ? 1.0 : 0.6,
-                      child: ExpansionTile(
-                        onExpansionChanged: enabled ? (value) {} : null,
-                        // Aquí aplicamos los nuevos parámetros y valores reducidos
-                        tilePadding:
-                            effectiveTilePadding, // Usar el padding efectivo
-                        title: Row(
-                          children: [
-                            Container(
-                              width:
-                                  effectiveTitleIconContainerSize, // Usar tamaño de contenedor efectivo
-                              height:
-                                  effectiveTitleIconContainerSize, // Usar tamaño de contenedor efectivo
-                              decoration: BoxDecoration(
-                                color: _getIconColor(title).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                _getSectionIcon(title),
-                                color: _getIconColor(title),
-                                size:
-                                    effectiveTitleIconSize, // Usar tamaño de icono efectivo
-                              ),
-                            ),
-                            SizedBox(
-                              width: 12,
-                            ), // Reducir un poco si es necesario
-                            Text(
-                              title,
-                              style:
-                                  effectiveSectionTitleTextStyle, // Usar estilo de texto efectivo
-                            ),
-                          ],
-                        ),
-                        children: enabled ? items : [_buildDisabledMessage()],
-                        trailing: Icon(
-                          // El trailing también afecta la altura si es muy grande
-                          Icons.arrow_drop_down,
-                          size:
-                              20, // Puedes ajustar el tamaño del trailing icon
-                          color:
-                              enabled
-                                  ? (isDarkMode
-                                      ? Colors.grey[400]
-                                      : Colors.grey[600])
-                                  : Colors.grey,
-                        ),
+  final ShapeBorder roundedShape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(12),
+    side: BorderSide(color: colors.divider, width: 1),
+  );
+
+  return Theme(
+    // Modificamos este Theme para que haga todo el trabajo
+    data: Theme.of(context).copyWith(
+      dividerColor: Colors.transparent,
+      // =========== INICIO DE LA SOLUCIÓN ===========
+      splashColor: Colors.transparent,    // Hace la "onda" transparente
+      highlightColor: Colors.transparent, // Quita el sombreado al presionar
+      // =========== FIN DE LA SOLUCIÓN ===========
+    ),
+    child: isExpandable
+        ? IgnorePointer(
+            ignoring: !enabled,
+            child: Opacity(
+              opacity: enabled ? 1.0 : 0.6,
+              child: ExpansionTile(
+                shape: roundedShape,
+                collapsedShape: roundedShape,
+                backgroundColor: colors.backgroundCard,
+                collapsedBackgroundColor: colors.backgroundCard,
+                onExpansionChanged: enabled ? (value) {} : null,
+                tilePadding: effectiveTilePadding,
+                title: Row(
+                  children: [
+                    Container(
+                      width: effectiveTitleIconContainerSize,
+                      height: effectiveTitleIconContainerSize,
+                      decoration: BoxDecoration(
+                        color: _getIconColor(title).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        _getSectionIcon(title),
+                        color: _getIconColor(title),
+                        size: effectiveTitleIconSize,
                       ),
                     ),
-                  )
-                  : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children:
-                        items, // Para secciones no expandibles, el padding se maneja en _buildConfigItem
-                  ),
-        ),
-      ],
-    );
-  }
+                    const SizedBox(width: 12),
+                    Text(
+                      title,
+                      style: effectiveSectionTitleTextStyle,
+                    ),
+                  ],
+                ),
+                children: enabled ? items : [_buildDisabledMessage()],
+                trailing: Icon(
+                  Icons.arrow_drop_down,
+                  size: 20,
+                  color: enabled
+                      ? (isDarkMode
+                          ? Colors.grey[400]
+                          : Colors.grey[600])
+                      : Colors.grey,
+                ),
+              ),
+            ),
+          )
+        : Container(
+            decoration: BoxDecoration(
+              color: colors.backgroundCard,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colors.divider, width: 1),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: items,
+              ),
+            ),
+          ),
+  );
+}
 
   IconData _getSectionIcon(String title) {
     switch (title) {
+      case 'Mi Plan Actual':
+        return Icons.workspace_premium_outlined;
       case 'Zoom':
         return Icons.zoom_in;
       case 'Cuentas bancarias':
@@ -940,6 +936,8 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
 
   Color _getIconColor(String title) {
     switch (title) {
+      case 'Mi Plan Actual':
+        return Colors.amber;
       case 'Zoom':
         return Colors.blue;
       case 'Cuentas bancarias':
@@ -1818,328 +1816,525 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     }
   }
 
-  // --- NUEVA SECCIÓN DESPLEGABLE PARA LA INFORMACIÓN DEL PLAN ---
-  Widget _buildPlanInfoSection(BuildContext context) {
-  final userData = Provider.of<UserDataProvider>(context);
-  final colors = Provider.of<ThemeProvider>(context).colors;
+  Widget _buildPlanSection(BuildContext context) {
+    final userData = Provider.of<UserDataProvider>(context, listen: false);
+    final licencia = userData.licenciaActiva;
 
-  // --- ¡IMPORTANTE! ---
-  // Estos son datos de ejemplo. Debes obtenerlos desde tu UserDataProvider.
-  final String? planUsuario = 'Plan Profesional';
-  final double? planCosto = 299.90;
-  final String? planFrecuencia = "Mensual";
-  final DateTime? planFechaProximoPago = DateTime.now().add(
-    const Duration(days: 15),
-  );
-  final DateTime? planFechaTermino = DateTime.now().add(
-    const Duration(days: 380),
-  );
+    // Si no hay licencia, no mostramos nada.
+    if (licencia == null) {
+      return const SizedBox.shrink();
+    }
 
-  // Formateadores para la fecha y la moneda
-  final currencyFormatter = NumberFormat.currency(
-    locale: 'es_MX',
-    symbol: '\$',
-  );
-  final dateFormatter = DateFormat('dd \'de\' MMMM \'de\' yyyy', 'es_MX');
-
-  // No mostrar la sección si el usuario no tiene un plan de pago
-  if (planUsuario == null ||
-      planUsuario.isEmpty ||
-      planUsuario.toLowerCase() == 'gratuito') {
-    return const SizedBox.shrink();
+    // Usamos el widget reutilizable _buildSection que ya tenías.
+    return _buildSection(
+      context,
+      title: 'Mi Plan Actual',
+      isExpandable: true,
+      items: [_buildPlanDetailsContent(context)],
+    );
   }
 
-  return _buildSection(
-    context,
-    title: 'Mi Suscripción',
-    isExpandable: true,
-    items: [
-      Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-        decoration: BoxDecoration(
-          color: colors.backgroundCard,
-          borderRadius: BorderRadius.circular(16),
-        /*   border: Border.all(
-            color: colors.backgroundButton.withOpacity(0.2),
-            width: 1,
-          ), */
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header del Plan con badge
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.workspace_premium,
-                      color: Colors.amber.shade700,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          planUsuario,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: colors.textPrimary ?? Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'ACTIVO',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.green.shade700,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              
-              const SizedBox(height: 24),
-              
-              // Información de costos en tarjetas
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildInfoCard(
-                      context,
-                      icon: Icons.monetization_on_outlined,
-                      iconColor: Colors.green,
-                      title: 'Costo',
-                      value: planCosto != null && planFrecuencia != null
-                          ? '${currencyFormatter.format(planCosto)}'
-                          : 'No disponible',
-                      subtitle: planFrecuencia ?? '',
-                      colors: colors,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildInfoCard(
-                      context,
-                      icon: Icons.schedule_outlined,
-                      iconColor: Colors.blue,
-                      title: 'Próximo Pago',
-                      value: planFechaProximoPago != null
-                          ? _getShortDate(planFechaProximoPago)
-                          : 'No disponible',
-                      subtitle: planFechaProximoPago != null
-                          ? _getDaysUntil(planFechaProximoPago)
-                          : '',
-                      colors: colors,
-                    ),
-                  ),
-                ],
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // Información de vigencia
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colors.backgroundSecondary?.withOpacity(0.3) ?? 
-                         Colors.grey.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.orange.withOpacity(0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.event_available_outlined,
-                      color: Colors.orange.shade700,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Válido hasta',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: colors.textSecondary ?? Colors.grey.shade600,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            planFechaTermino != null
-                                ? dateFormatter.format(planFechaTermino)
-                                : 'No disponible',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: colors.textPrimary ?? Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(height: 24),
-              
-              // Botón de administrar
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    // TODO: Navegar a la pantalla de gestión de planes
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Navegando a la gestión de planes...'),
-                        backgroundColor: colors.backgroundButton,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.settings_outlined, size: 18),
-                  label: const Text(
-                    'Administrar Suscripción',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: colors.backgroundButton,
-                    foregroundColor: colors.whiteWhite,
-                    elevation: 2,
-                    shadowColor: colors.backgroundButton?.withOpacity(0.3),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+// --- ¡NUEVO WIDGET! Para la barra de progreso lateral ---
+Widget _buildSideProgressBar(BuildContext context) {
+  final themeProvider = Provider.of<ThemeProvider>(context);
+  final colors = themeProvider.colors;
+  final licencia = Provider.of<UserDataProvider>(context, listen: false).licenciaActiva!;
+
+  // --- Lógica de cálculo (la misma de antes) ---
+  final hoy = DateTime.now();
+  final fechaInicio = licencia.fechaInicio;
+  final fechaFin = licencia.fechaFin;
+
+  final totalDaysInCycle = fechaFin.difference(fechaInicio).inDays;
+  final elapsedDays = hoy.difference(fechaInicio).inDays;
+  final double progress = totalDaysInCycle > 0
+      ? (elapsedDays / totalDaysInCycle).clamp(0.0, 1.0)
+      : 1.0;
+  final remainingDays = fechaFin.difference(hoy).inDays;
+  final remainingDaysText = _getRemainingDaysText(remainingDays);
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start, // Alinea el contenido de la columna a la izquierda
+    mainAxisSize: MainAxisSize.min, // Hace que la columna ocupe solo el espacio necesario
+    children: [
+      // Fila con el texto de los días restantes
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Ya no necesitamos la etiqueta "Progreso del ciclo", es más implícito
+          Text(
+            remainingDaysText,
+            style: TextStyle(
+              color: colors.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
           ),
+        ],
+      ),
+      const SizedBox(height: 4),
+
+      // La barra de progreso visual
+      LinearProgressIndicator(
+        value: progress,
+        minHeight: 6,
+        backgroundColor: colors.divider.withOpacity(0.5),
+        valueColor: AlwaysStoppedAnimation<Color>(const Color(0xFF5162F6)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+    ],
+  );
+}
+
+// --- NO OLVIDES MANTENER ESTE HELPER ---
+String _getRemainingDaysText(int days) {
+  if (days < 0) {
+    return 'Vencido';
+  }
+  switch (days) {
+    case 0:
+      return 'Vence hoy';
+    case 1:
+      return 'Queda 1 día';
+    default:
+      return 'Quedan $days días';
+  }
+}
+
+  // =======================================================================
+  // ============ NUEVA VERSIÓN - SECCIÓN DE PLAN Y LICENCIA (v3) ============
+  // =======================================================================
+
+  // Pega esta función actualizada en tu _ConfiguracionScreenState
+
+  
+// --- WIDGET PRINCIPAL COMPLETAMENTE REFACTORIZADO ---
+Widget _buildPlanDetailsContent(BuildContext context) {
+  final themeProvider = Provider.of<ThemeProvider>(context);
+  final colors = themeProvider.colors;
+  final userData = Provider.of<UserDataProvider>(context, listen: false);
+  final licencia = userData.licenciaActiva!;
+
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0).copyWith(top: 0),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // --- SECCIÓN SUPERIOR (SIN CAMBIOS) ---
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text("Plan ${licencia.nombre}", style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+            _buildStatusBadge(licencia.estadoLicencia, themeProvider.isDarkMode),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // --- ¡CAMBIO AQUÍ! ---
+        // Ahora usamos un Row para poner el precio al lado de la barra de progreso.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end, // Alinea la base del precio con la barra
+          children: [
+            // Lado izquierdo: El Precio (sin cambios en su contenido)
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: formatCurrency(licencia.totalUnitario),
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: colors.textPrimary),
+                  ),
+                  TextSpan(
+                    text: _getBillingCycleText(licencia.duracionMesesPlan),
+                    style: TextStyle(fontSize: 16, color: colors.textSecondary, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 24), // Espacio de separación
+
+            // Lado derecho: La Barra de Progreso (envuelta en Expanded)
+            Expanded(
+              child: _buildSideProgressBar(context),
+            ),
+          ],
+        ),
+        // Ya no necesitamos la llamada separada a la barra de progreso aquí.
+
+        const SizedBox(height: 16),
+        Divider(color: colors.divider),
+        const SizedBox(height: 16),
+
+        // --- El resto del widget continúa sin cambios ---
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const double desktopBreakpoint = 900.0;
+            
+            if (constraints.maxWidth > desktopBreakpoint) {
+              return _buildDesktopCardsLayout(context);
+            } else {
+              return _buildMobileColumnLayout(context);
+            }
+          },
+        ),
+        
+       /*  const SizedBox(height: 24),
+
+        Center(
+          child: ElevatedButton.icon(
+              onPressed: () {},
+              icon: Icon(Icons.manage_accounts_outlined, size: 20),
+              label: Text('Administrar Suscripción'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colors.backgroundButton,
+                foregroundColor: colors.whiteWhite,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                textStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ), */
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+
+
+// --- NUEVOS WIDGETS DE LAYOUT ---
+
+/// Construye la vista de 3 tarjetas horizontales para DESKTOP.
+/// Construye la vista de 3 tarjetas horizontales para DESKTOP.
+Widget _buildDesktopCardsLayout(BuildContext context) {
+  return IntrinsicHeight( // Hace que todas las tarjetas en el Row tengan la misma altura
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          flex: 1,
+          child: _buildInfoCard(
+            context,
+            title: 'Vigencia',
+            icon: Icons.date_range_outlined,
+            child: _buildDatesCardContent(context),
+          ),
+        ),
+        const SizedBox(width: 20),
+        Expanded(
+          flex: 1,
+          child: _buildInfoCard(
+            context,
+            title: 'Detalles de Pago',
+            icon: Icons.payment_outlined,
+            child: _buildPaymentCardContent(context),
+          ),
+        ),
+        const SizedBox(width: 20),
+        Expanded(
+          flex: 1,
+          child: _buildInfoCard(
+            context,
+            title: 'Características Incluidas',
+            icon: Icons.checklist_rtl_outlined,
+            // --- ¡CAMBIO! Llamada actualizada sin el parámetro isDesktop ---
+            child: _buildFeaturesCardContent(context),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Construye la vista de columna única para MÓVIL.
+/// Construye la vista de columna única para MÓVIL.
+Widget _buildMobileColumnLayout(BuildContext context) {
+  final colors = Provider.of<ThemeProvider>(context).colors;
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _buildDatesCardContent(context),
+      _buildPaymentCardContent(context),
+      const SizedBox(height: 16),
+      Divider(color: colors.divider),
+      const SizedBox(height: 20), // Un poco más de espacio
+
+      // --- ¡NUEVO! Título fijo para la sección de características en móvil ---
+      Row(
+        children: [
+          Icon(Icons.checklist_rtl_outlined, color: colors.textSecondary, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            'Características Incluidas',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colors.textPrimary),
+          ),
+        ],
+      ),
+      const SizedBox(height: 16), // Espacio entre el título y la lista
+
+      // --- La lista de características ahora se muestra directamente ---
+      _buildFeaturesCardContent(context),
+    ],
+  );
+}
+
+// --- NUEVO WIDGET DE TARJETA REUTILIZABLE ---
+
+Widget _buildInfoCard(BuildContext context, {required String title, required IconData icon, required Widget child}) {
+  final themeProvider = Provider.of<ThemeProvider>(context);
+  final colors = themeProvider.colors;
+
+  return Container(
+    decoration: BoxDecoration(
+      color: colors.backgroundCardDark,
+      borderRadius: BorderRadius.circular(16.0),
+      border: Border.all(color: colors.divider),
+    ),
+    padding: const EdgeInsets.all(20.0),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: colors.textSecondary, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colors.textPrimary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Divider(color: colors.divider.withOpacity(0.5)),
+        const SizedBox(height: 12),
+        child,
+      ],
+    ),
+  );
+}
+
+// --- WIDGETS DE CONTENIDO PARA CADA TARJETA ---
+
+/// Contenido para la tarjeta de Fechas.
+Widget _buildDatesCardContent(BuildContext context) {
+  final userData = Provider.of<UserDataProvider>(context, listen: false);
+  final licencia = userData.licenciaActiva!;
+
+  return Column(
+    children: [
+      _buildInfoRow(context,
+        icon: Icons.play_circle_outline,
+        label: 'Fecha de inicio',
+        value: Text(DateFormatters.formatearDateTime(licencia.fechaInicio, tipo: 'corta'),
+          style: TextStyle(color: Provider.of<ThemeProvider>(context).colors.textPrimary, fontWeight: FontWeight.w500, fontSize: 13),
+        ),
+      ),
+      _buildInfoRow(context,
+        icon: Icons.pause_circle_outline,
+        label: 'Vigente hasta',
+        value: Text(DateFormatters.formatearDateTime(licencia.fechaFin, tipo: 'corta'),
+          style: TextStyle(color: Provider.of<ThemeProvider>(context).colors.textPrimary, fontWeight: FontWeight.w500, fontSize: 13),
+        ),
+      ),
+      _buildInfoRow(context,
+        icon: Icons.hourglass_bottom_outlined,
+        label: 'Meses Contratados',
+        value: Text(licencia.duracionMeses.toString(),
+          style: TextStyle(color: Provider.of<ThemeProvider>(context).colors.textPrimary, fontWeight: FontWeight.w500, fontSize: 13),
         ),
       ),
     ],
   );
 }
 
-// Widget helper para las tarjetas de información
-Widget _buildInfoCard(
-  BuildContext context, {
-  required IconData icon,
-  required Color iconColor,
-  required String title,
-  required String value,
-  required String subtitle,
-  required dynamic colors,
-}) {
-  return Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: colors.backgroundSecondary?.withOpacity(0.3) ?? 
-             Colors.white.withOpacity(0.7),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(
-        color: iconColor.withOpacity(0.2),
-        width: 1,
+/// Contenido para la tarjeta de Pagos.
+Widget _buildPaymentCardContent(BuildContext context) {
+  final userData = Provider.of<UserDataProvider>(context, listen: false);
+  final licencia = userData.licenciaActiva!;
+
+  return Column(
+    children: [
+      _buildInfoRow(context,
+        icon: Icons.credit_card_outlined,
+        label: 'Pagado con',
+        value: Text(licencia.metodoPago.capitalize(),
+          style: TextStyle(color: Provider.of<ThemeProvider>(context).colors.textPrimary, fontWeight: FontWeight.w500, fontSize: 13),
+        ),
       ),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(
-              icon,
-              color: iconColor,
-              size: 18,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: colors.textSecondary ?? Colors.grey.shade600,
-              ),
-            ),
-          ],
+      _buildInfoRow(context,
+        icon: Icons.receipt_long_outlined,
+        label: 'Pagado Total',
+        value: Text(formatCurrency(licencia.precioTotal),
+          style: TextStyle(color: Provider.of<ThemeProvider>(context).colors.textPrimary, fontWeight: FontWeight.w500, fontSize: 13),
         ),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: colors.textPrimary ?? Colors.black87,
+      ),
+      if (licencia.descuento > 0)
+        _buildInfoRow(context,
+          icon: Icons.sell_outlined,
+          label: 'Descuento aplicado',
+          value: Text('${formatCurrency(licencia.descuento)}',
+            style: TextStyle(color: Colors.green.shade400, fontWeight: FontWeight.bold, fontSize: 13),
           ),
         ),
-        if (subtitle.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: colors.textSecondary ?? Colors.grey.shade600,
-            ),
-          ),
-        ],
-      ],
-    ),
+    ],
   );
 }
 
-// Función helper para obtener fecha corta
-String _getShortDate(DateTime date) {
-  final formatter = DateFormat('dd MMM', 'es_MX');
-  return formatter.format(date);
+/// Contenido para la tarjeta de Características (antes era tu ExpansionTile).
+/// Contenido para la tarjeta/sección de Características (AHORA ES UNA LISTA FIJA).
+Widget _buildFeaturesCardContent(BuildContext context) {
+  final themeProvider = Provider.of<ThemeProvider>(context);
+  final colors = themeProvider.colors;
+  final userData = Provider.of<UserDataProvider>(context, listen: false);
+  final licencia = userData.licenciaActiva!;
+
+  // Simplemente devolvemos una columna con los items.
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start, // Asegura que el texto de "sin límites" se alinee a la izquierda
+    children: [
+      ...licencia.restricciones.map((restriccion) {
+        return _buildFeatureItem(context,
+          icon: _getIconForRestrictionType(restriccion.tipoARestringir),
+          text: '${restriccion.nombre}',
+        );
+      }).toList(),
+
+      // Condición para cuando no hay restricciones
+      if (licencia.restricciones.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0), // Un poco de espacio vertical
+          child: Text(
+            'Todas las características están incluidas sin límites.',
+            style: TextStyle(color: colors.textSecondary, fontStyle: FontStyle.italic),
+          ),
+        ),
+    ],
+  );
 }
 
-// Función helper para obtener días restantes
-String _getDaysUntil(DateTime date) {
-  final days = date.difference(DateTime.now()).inDays;
-  if (days == 0) return 'Hoy';
-  if (days == 1) return 'Mañana';
-  return 'En $days días';
+
+  // --- Widgets y funciones auxiliares para la nueva sección (v3) ---
+
+  // **¡NUEVO HELPER!** Más simple y flexible para las filas de información.
+  Widget _buildInfoRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required Widget value,
+  }) {
+    final colors = Provider.of<ThemeProvider>(context).colors;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, color: colors.textSecondary, size: 20),
+          SizedBox(width: 12),
+          Text(
+            label,
+            style: TextStyle(color: colors.textSecondary, fontSize: 14),
+          ),
+          Spacer(),
+          value, // El widget de valor se coloca directamente aquí
+        ],
+      ),
+    );
+  }
+
+  // **¡NUEVA FUNCIÓN!** La que me proporcionaste.
+  String _getBillingCycleText(int months) {
+    if (months == 1) return '/ Mes';
+    if (months > 1 && months < 12) return '/ $months Meses';
+    if (months >= 12) {
+      final years = months ~/ 12;
+      return years == 1 ? '/ Año' : '/ $years Años';
+    }
+    return '/ Mes'; // Fallback
+  }
+
+
+  Widget _buildStatusBadge(String status, bool isDarkMode) {
+    Color backgroundColor;
+    Color textColor = Colors.white;
+    String statusText = status;
+
+    switch (status.toLowerCase()) {
+      case 'activo':
+        backgroundColor = Colors.green.shade600;
+        break;
+      case 'inactivo':
+      case 'vencido':
+        backgroundColor = Colors.red.shade600;
+        break;
+      default:
+        backgroundColor = Colors.grey.shade500;
+        statusText = 'Desconocido';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        statusText.toUpperCase(),
+        style: TextStyle(
+          color: textColor,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureItem(
+    BuildContext context, {
+    required IconData icon,
+    required String text,
+  }) {
+    final colors = Provider.of<ThemeProvider>(context).colors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF5162F6), size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text.capitalize(),
+              style: TextStyle(color: colors.textPrimary, fontSize: 15),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getIconForRestrictionType(String tipo) {
+    switch (tipo.toLowerCase()) {
+      case 'creditos':
+        return Icons.credit_score_outlined;
+      case 'usuarios':
+        return Icons.group_outlined;
+      case 'documentos':
+        return Icons.folder_zip_outlined;
+      default:
+        return Icons.check_circle_outline;
+    }
+  }
 }
 
-  //</editor-fold>
+// Extensión para capitalizar la primera letra de un String
+extension StringExtension on String {
+  String capitalize() {
+    if (this.isEmpty) {
+      return "";
+    }
+    return "${this[0].toUpperCase()}${this.substring(1).toLowerCase()}";
+  }
 }

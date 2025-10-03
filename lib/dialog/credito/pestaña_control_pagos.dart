@@ -1,9 +1,14 @@
+import 'dart:convert';
+
 import 'package:finora_app/constants/colors.dart';
+import 'package:finora_app/models/calendario_response.dart';
 import 'package:finora_app/models/cliente_monto.dart';
 import 'package:finora_app/models/credito_totales.dart';
+import 'package:finora_app/models/saldo_global.dart';
 import 'package:finora_app/providers/theme_provider.dart';
 import 'package:finora_app/providers/user_data_provider.dart';
 import 'package:finora_app/widgets/AdvancedOptionsSheet.dart';
+import 'package:finora_app/widgets/global_options_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart'; // Import for firstWhereOrNull
@@ -52,7 +57,9 @@ class ControlPagosTab extends StatefulWidget {
 class _ControlPagosTabState extends State<ControlPagosTab>
     with TickerProviderStateMixin {
   final PagoService _pagoService = PagoService();
-  late Future<ApiResponse<List<Pago>>> _pagosFuture;
+  //late Future<ApiResponse<List<Pago>>> _pagosFuture;
+  // <<< CAMBIO 2: Actualiza el tipo y nombre del Future >>>
+  late Future<ApiResponse<CalendarioResponse>> _calendarioFuture;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   int _totalSemanasDelCredito = 0;
@@ -61,6 +68,9 @@ class _ControlPagosTabState extends State<ControlPagosTab>
   List<Pago> _pagosActuales = [];
   // <-- CAMBIO CLAVE (1/3): Añadimos una lista para guardar el estado original de los pagos.
   List<Pago> _pagosOriginales = [];
+
+   // <<< PASO 2: Declara la variable para guardar los saldos globales >>>
+  List<SaldoGlobal> _saldosGlobalesActuales = [];
 
   final Set<int> _semanasModificadas = {};
   final Map<int, DateTime> _fechasPagoSeleccionadas = {};
@@ -102,7 +112,8 @@ class _ControlPagosTabState extends State<ControlPagosTab>
         _montoParcialControllers.forEach((_, c) => c.clear());
         _nuevoAbonoControllers.forEach((_, c) => c.clear());
         _semanasModificadas.clear();
-        _pagosFuture = _pagoService.getCalendarioPagos(widget.idCredito);
+        // <<< CAMBIO 3: Asigna al nuevo Future >>>
+        _calendarioFuture = _pagoService.getCalendarioPagos(widget.idCredito);
         // dentro de la función _recargarPagos(), añade esta línea
         _fechasPagoSeleccionadas.clear();
       });
@@ -128,6 +139,9 @@ class _ControlPagosTabState extends State<ControlPagosTab>
   // =======================================================================
   // INICIO: LÓGICA PRINCIPAL DE CONSTRUCCIÓN DE UI (BUILD)
   // =======================================================================
+  // =======================================================================
+  // INICIO: LÓGICA PRINCIPAL DE CONSTRUCCIÓN DE UI (BUILD)
+  // =======================================================================
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -141,31 +155,43 @@ class _ControlPagosTabState extends State<ControlPagosTab>
           isDarkMode ? const Color(0xFF0A0A0A) : const Color(0xFFF8FAFC),
       body: Stack(
         children: [
-          FutureBuilder<ApiResponse<List<Pago>>>(
-            future: _pagosFuture,
+          // <<< CAMBIO 4: Adapta el FutureBuilder >>>
+          FutureBuilder<ApiResponse<CalendarioResponse>>(
+            future: _calendarioFuture, // Usa el nuevo future
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
                   child: CircularProgressIndicator(color: Color(0xFF4F46E5)),
                 );
               }
-              // ▼▼▼ REEMPLAZA TU LÓGICA DE ASIGNACIÓN CON ESTO ▼▼▼
-              if (_pagosOriginales.isEmpty && snapshot.data!.data!.isNotEmpty) {
-                // Creamos copias independientes ("clones") para evitar que la
-                // lista original se contamine con los cambios de la UI.
-                _pagosOriginales =
-                    snapshot.data!.data!.map((pago) => pago.clone()).toList();
-                _pagosActuales =
-                    snapshot.data!.data!.map((pago) => pago.clone()).toList();
-              } else if (_pagosActuales.isEmpty &&
-                  snapshot.data!.data!.isNotEmpty) {
-                // Esto es para las recargas, para que la UI se actualice pero
-                // sin sobreescribir la copia original de seguridad.
-                _pagosActuales =
-                    snapshot.data!.data!.map((pago) => pago.clone()).toList();
+
+              if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.success) {
+                  return Center(child: Text("Error al cargar: ${snapshot.error ?? snapshot.data?.error}"));
               }
-              // ▲▲▲ FIN DEL REEMPLAZO ▲▲▲
-              if (_pagosActuales.isEmpty) return _buildEmptyState();
+              
+               
+            // --- INICIO DE LA MODIFICACIÓN ---
+
+            // 1. Desempaca la respuesta completa una sola vez.
+            final responseData = snapshot.data!.data!;
+            
+            // 2. Extrae la lista de pagos.
+            final List<Pago> pagosDesdeApi = responseData.pagos;
+
+            // 3. <<< ¡AÑADE ESTA LÍNEA! >>>
+            //    Extrae la lista de saldos globales y guárdala en la variable de estado.
+            _saldosGlobalesActuales = responseData.saldosGlobales;
+            
+            // --- FIN DE LA MODIFICACIÓN ---
+
+              if (_pagosOriginales.isEmpty && pagosDesdeApi.isNotEmpty) {
+                _pagosOriginales = pagosDesdeApi.map((pago) => pago.clone()).toList();
+                _pagosActuales = pagosDesdeApi.map((pago) => pago.clone()).toList();
+              } else if (_pagosActuales.isEmpty && pagosDesdeApi.isNotEmpty) {
+                _pagosActuales = pagosDesdeApi.map((pago) => pago.clone()).toList();
+              }
+              
+              if (_pagosActuales.isEmpty) return _buildEmptyState(); // Asegúrate de tener este método
 
               if (_pagosActuales.isNotEmpty) {
                 _totalSemanasDelCredito = _pagosActuales
@@ -175,17 +201,11 @@ class _ControlPagosTabState extends State<ControlPagosTab>
 
               _animationController.forward();
 
-              // ==================================================
-              // INICIO DEL CAMBIO: LÓGICA RESPONSIVA
-              // ==================================================
               return LayoutBuilder(
                 builder: (context, constraints) {
-                  // Definimos un punto de quiebre. Si el ancho es mayor, usamos la vista de escritorio.
                   const double desktopBreakpoint = 900.0;
-                  final bool isDesktop =
-                      constraints.maxWidth > desktopBreakpoint;
+                  final bool isDesktop = constraints.maxWidth > desktopBreakpoint;
 
-                  // Añadimos el padding inferior para dejar espacio a la barra de totales
                   final contentPadding = EdgeInsets.fromLTRB(
                     isDesktop ? 20 : 16,
                     15,
@@ -194,15 +214,13 @@ class _ControlPagosTabState extends State<ControlPagosTab>
                   );
 
                   if (isDesktop) {
-                    // --- VISTA DE ESCRITORIO (TABLA) ---
-                    return _buildDesktopLayout(
+                    return _buildDesktopLayout( // Asegúrate de tener este método
                       _pagosActuales,
                       isDarkMode,
                       contentPadding,
                     );
                   } else {
-                    // --- VISTA MÓVIL (TARJETAS) ---
-                    return _buildMobileLayout(
+                    return _buildMobileLayout( // Asegúrate de tener este método
                       _pagosActuales,
                       isDarkMode,
                       contentPadding,
@@ -210,33 +228,35 @@ class _ControlPagosTabState extends State<ControlPagosTab>
                   }
                 },
               );
-              // ==================================================
-              // FIN DEL CAMBIO: LÓGICA RESPONSIVA
-              // ==================================================
             },
           ),
+          
           Positioned(
             bottom: bottomBarMargin,
             left: 16,
             right: 16,
-            child: FutureBuilder<ApiResponse<List<Pago>>>(
-              future: _pagosFuture,
+            // <<< CAMBIO 6: También adapta este FutureBuilder (si es necesario) >>>
+            child: FutureBuilder<ApiResponse<CalendarioResponse>>(
+              future: _calendarioFuture, // Usa el mismo future
               builder: (context, snapshot) {
                 if (!snapshot.hasData || !snapshot.data!.success) {
                   return const SizedBox.shrink();
                 }
 
-                final pagos = snapshot.data!.data!;
+                // Desempaca la lista de pagos aquí también
+                final pagos = snapshot.data!.data!.pagos;
+                // Asumo que tienes una clase CreditoTotales y un método _calcularTotales
                 final CreditoTotales totales = _calcularTotales(pagos);
 
+                // ... (El resto de tu UI para los totales y botones no cambia)
                 return Row(
                   children: [
                     Expanded(
-                      child: _buildTotalesFlotantes(totales, isDarkMode),
+                      child: _buildTotalesFlotantes(totales, isDarkMode), // Asegúrate de tener este método
                     ),
                     const SizedBox(width: 16),
                     FloatingActionButton(
-                      onPressed: _isSaving ? null : _guardarCambios,
+                      onPressed: _isSaving ? null : _guardarCambios, // Asegúrate de tener este método
                       backgroundColor:
                           _isSaving ? Colors.grey[600] : AppColors.primary,
                       foregroundColor: Colors.white,
@@ -253,6 +273,33 @@ class _ControlPagosTabState extends State<ControlPagosTab>
                                 ),
                               )
                               : const Icon(Icons.save_alt),
+                    ),
+                    const SizedBox(width: 16),
+                    SizedBox(
+                      height: 56.0,
+                      width: 40.0,
+                      child: ElevatedButton(
+                        onPressed:
+                            _isSaving
+                                ? null
+                                : () => _showGlobalOptionsMenu(context), // Asegúrate de tener este método
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16.0),
+                          ),
+                          padding: EdgeInsets.zero,
+                          backgroundColor:
+                              _isSaving
+                                  ? Colors.grey[600]
+                                  : colors.buttonCreditAction,
+                          foregroundColor: Colors.white,
+                          elevation: 6,
+                        ),
+                        child:
+                            _isSaving
+                                ? const SizedBox.shrink()
+                                : const Icon(Icons.tune),
+                      ),
                     ),
                   ],
                 );
@@ -289,6 +336,37 @@ class _ControlPagosTabState extends State<ControlPagosTab>
             ),
         ],
       ),
+    );
+  }
+
+  // En tu clase _ControlPagosTabState
+  // En tu clase _ControlPagosTabState
+  void _showGlobalOptionsMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (modalContext) {
+        return GlobalOptionsSheet(
+          idCredito: widget.idCredito,
+          pagoService: _pagoService,
+          onDataChanged: () {
+            _recargarPagos();
+            if (widget.onDataChanged != null) {
+              widget.onDataChanged!();
+            }
+          },
+          // ▼▼▼ CAMBIO: La firma de la función ahora incluye la fecha ▼▼▼
+          onSaveAbonoGlobal: (monto, fecha) async {
+            Navigator.pop(modalContext);
+            // Pasamos la fecha a nuestra función de lógica
+            await _guardarAbonoGlobal(monto, fecha);
+          },
+          // <<< ¡AQUÍ ESTÁ LA LÍNEA CLAVE! >>>
+        // Pasamos la lista de saldos que ya tenemos en el estado de este widget.
+        saldosGlobales: _saldosGlobalesActuales,
+        );
+      },
     );
   }
 
@@ -883,7 +961,7 @@ class _ControlPagosTabState extends State<ControlPagosTab>
         if (value == null) return;
         setState(() {
           pago.tipoPago = value;
-          pago.fechaPago = DateTime.now().toIso8601String();
+          //pago.fechaPago = DateTime.now().toIso8601String();
           _semanasModificadas.add(pago.semana);
         });
       },
@@ -1680,16 +1758,208 @@ class _ControlPagosTabState extends State<ControlPagosTab>
     return formatter.format(numero);
   }
 
-  // --- REEMPLAZA TU FUNCIÓN _guardarCambios CON ESTA VERSIÓN FINAL ---
+  // =======================================================================
+  // INICIO: LÓGICA PARA EL ABONO GLOBAL
+  // =======================================================================
 
-  // ▼▼▼ REEMPLAZA ESTA FUNCIÓN COMPLETA ▼▼▼
-  // Esta función ya está correcta, solo asegúrate de tener esta versión.
-  // ▼▼▼ REEMPLAZA ESTA FUNCIÓN COMPLETA ▼▼▼
-  // --- Pega esta función completa reemplazando tu _guardarCambios actual ---
+  /// Orquesta el proceso de guardar un abono global.
+  /// Llama a la lógica de distribución, se comunica con la API y gestiona el estado de la UI.
+  /// Orquesta el proceso de guardar un abono global.
+  /// VERSIÓN DE PRUEBA: No llama a la API, solo imprime el resultado en la consola.
 
-  // En: lib/dialog/credito/pestaña_control_pagos.dart (dentro de _ControlPagosTabState)
+  // =======================================================================
+  // INICIO: LÓGICA FINAL PARA EL ABONO GLOBAL (MODO REAL)
+  // =======================================================================
 
-  // --- Pega esta función completa ---
+  /// Orquesta el proceso de guardar un abono global.
+  /// Llama a la lógica de distribución, se comunica con la API y gestiona el estado de la UI.
+  Future<void> _guardarAbonoGlobal(
+    double montoGlobal,
+    DateTime fechaAbono,
+  ) async {
+    if (montoGlobal <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("El monto del abono debe ser mayor a cero."),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Activamos el overlay de carga en la pantalla principal
+    widget.onSaveStarted();
+
+    try {
+      // 1. Generar el payload con la nueva estructura requerida por el backend
+      final List<Map<String, dynamic>> payloadAbonos = _distribuirAbonoGlobal(
+        montoGlobal,
+        fechaAbono,
+      );
+
+      if (payloadAbonos.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "No se encontraron deudas pendientes para aplicar el abono.",
+            ),
+            backgroundColor: Colors.blue,
+          ),
+        );
+        // Salimos temprano, el bloque 'finally' se encargará del overlay
+        return;
+      }
+
+      AppLogger.log('\n✅ Payload de Abono Global FINAL, listo para enviar:');
+      AppLogger.log('Total de abonos a generar: ${payloadAbonos.length}');
+      AppLogger.log(payloadAbonos);
+
+      // 2. Llamar al servicio de la API (reutilizamos el método existente)
+      final ApiResponse<void> response = await _pagoService
+          .guardarPagosMultiples(
+            idCredito: widget.idCredito,
+            pagosModificados: payloadAbonos,
+          );
+
+      // Un pequeño delay para que el usuario perciba que algo sucedió
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // 3. Manejar la respuesta de la API
+      if (response.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('¡Abono global aplicado exitosamente!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        widget.onDataChanged();
+        _recargarPagos();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error del servidor: ${response.error ?? "Desconocido"}',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      AppLogger.log('Error en _guardarAbonoGlobal: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al procesar el abono global: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      // Desactivamos el overlay de carga sin importar el resultado
+      widget.onSaveFinished();
+    }
+  }
+
+  /// Contiene la lógica pura de negocio para distribuir un monto global.
+  /// Devuelve un payload con la estructura requerida por el backend (con la clave "global").
+  /// Contiene la lógica pura de negocio para distribuir un monto global.
+  /// Devuelve un payload con la estructura requerida por el backend (con la clave "global" en CADA objeto).
+  /// Contiene la lógica pura de negocio para distribuir un monto global,
+/// aplicando correctamente a capital y moratorios.
+/// Devuelve un payload con la estructura requerida por el backend.
+List<Map<String, dynamic>> _distribuirAbonoGlobal(
+  double montoGlobal,
+  DateTime fechaAbono,
+) {
+  double montoRestante = montoGlobal;
+  final List<Map<String, dynamic>> payloadFinal = [];
+
+  // 1. Obtenemos los pagos con deuda, ordenados por semana (el más antiguo primero)
+  final pagosConDeuda = _pagosActuales
+      .where((p) => (p.saldoEnContra) > 0.01 && p.semana > 0)
+      .toList();
+  pagosConDeuda.sort((a, b) => a.semana.compareTo(b.semana));
+
+  if (pagosConDeuda.isEmpty) {
+    return [];
+  }
+
+  // 2. Preparamos la información global que se adjuntará a cada abono
+  final List<Map<String, dynamic>> globalInfo = [
+    {"esGlobal": "Si", "saldoGlobal": montoGlobal},
+  ];
+
+  // 3. Iteramos sobre cada pago con deuda para distribuir el monto global
+  for (final pago in pagosConDeuda) {
+    if (montoRestante <= 0.01) break; // Si ya no hay dinero, paramos
+
+    // --- INICIO DE LA LÓGICA CORREGIDA ---
+    // ▼▼▼ CAMBIO CLAVE: Calculamos la deuda real de capital y moratorios para ESTA semana ▼▼▼
+
+    // A. Calculamos lo que ya se ha pagado previamente para esta semana
+    final double paidCapital = pago.abonos.fold(
+      0.0,
+      (sum, a) =>
+          sum + (double.tryParse(a['deposito']?.toString() ?? '0') ?? 0.0),
+    );
+    final double paidMoratorio = pago.abonos.fold(
+      0.0,
+      (sum, a) =>
+          sum + (double.tryParse(a['moratorio']?.toString() ?? '0') ?? 0.0),
+    );
+    
+    // B. Determinamos el monto pendiente real para capital y moratorios
+    final double capitalPendiente =
+        (pago.capitalMasInteres) - paidCapital;
+    final double moratorioPendiente =
+        (pago.moratorios?.moratorios ?? 0.0) - paidMoratorio;
+
+    final double deudaTotalDeLaSemana = capitalPendiente + moratorioPendiente;
+    
+    // C. Decidimos cuánto del monto global restante se aplicará a esta semana
+    final double montoAAplicar = (montoRestante < deudaTotalDeLaSemana)
+        ? montoRestante
+        : deudaTotalDeLaSemana;
+
+    // D. Distribuimos ese montoAAplicar, primero a capital y el remanente a moratorios
+    double aplicadoCapital = montoAAplicar.clamp(
+      0.0,
+      capitalPendiente.clamp(0.0, double.infinity),
+    );
+    double remanente = montoAAplicar - aplicadoCapital;
+    double aplicadoMoratorio = remanente.clamp(
+      0.0,
+      moratorioPendiente.clamp(0.0, double.infinity),
+    );
+    
+    // --- FIN DE LA LÓGICA CORREGIDA ---
+
+    final abonoIndividual = {
+      "idfechaspagos": pago.idfechaspagos,
+      "fechaPago": fechaAbono.toIso8601String().substring(0, 10),
+      "tipoPago": "En Abonos",
+      "montoaPagar": pago.capitalMasInteres,
+      // ▼▼▼ CAMBIO CLAVE: Usamos los valores calculados ▼▼▼
+      "deposito": aplicadoCapital,
+      "moratorio": aplicadoMoratorio,
+      "saldofavor": 0.0, // Se ajustará al final si sobra dinero
+      "global": globalInfo,
+    };
+
+    payloadFinal.add(abonoIndividual);
+    montoRestante -= montoAAplicar;
+  }
+
+  // 4. Si después de cubrir todas las deudas aún sobra dinero, se va a saldo a favor en el último pago
+  if (montoRestante > 0.01 && payloadFinal.isNotEmpty) {
+    payloadFinal.last['saldofavor'] =
+        (payloadFinal.last['saldofavor'] as double) + montoRestante;
+  }
+
+  return payloadFinal;
+}
+
+  // =======================================================================
+  // FIN: LÓGICA FINAL PARA EL ABONO GLOBAL
+  // =======================================================================
 
   // <-- CAMBIO CLAVE (3/3): REEMPLAZA TU _guardarCambios CON ESTA VERSIÓN
   Future<void> _guardarCambios() async {
@@ -2252,46 +2522,47 @@ class _ControlPagosTabState extends State<ControlPagosTab>
 
   // <-- CAMBIO: Añadimos una nueva función auxiliar para el icono
   /// Devuelve un icono representando el tipo de pago realizado.
-  Widget _buildPaymentTypeIcon(String? tipoPago) {
+  // En _ControlPagosTabState, busca esta función y añade el nuevo parámetro y el nuevo caso.
+  Widget _buildPaymentTypeIcon(String? tipoPago, {bool esGlobal = false}) {
+    // <-- PARÁMETRO NUEVO
     IconData iconData;
     String tooltipMessage;
     Color iconColor;
 
-    switch (tipoPago) {
-      case 'Completo':
-        // Opciones: Icons.check_circle, Icons.done_all, Icons.verified, Icons.task_alt
-        iconData = Icons.paid;
-        tooltipMessage = 'Pago Completo';
-        iconColor = Colors.teal;
-
-        break;
-
-      case 'En Abonos':
-        // Opciones: Icons.schedule, Icons.layers, Icons.timeline, Icons.view_list
-        iconData = Icons.layers;
-        tooltipMessage = 'Pagado en Abonos';
-        iconColor = Colors.blue;
-
-        break;
-
-      case 'Monto Parcial':
-        // Opciones: Icons.pie_chart_outline, Icons.donut_small, Icons.circle_outlined, Icons.radio_button_unchecked
-        iconData = Icons.pie_chart;
-        tooltipMessage = 'Pago Parcial';
-        iconColor = Colors.orange;
-
-        break;
-
-      case 'Garantía':
-        // Opciones: Icons.security, Icons.verified_user, Icons.lock, Icons.safety_check
-        iconData = Icons.security;
-        tooltipMessage = 'Pagado con Garantía';
-        iconColor = Colors.pink;
-
-        break;
-
-      default:
-        return const SizedBox.shrink();
+    // ▼▼▼ NUEVO BLOQUE DE CÓDIGO ▼▼▼
+    // PRIORIDAD MÁXIMA: Si es global, mostramos el ícono global.
+    if (esGlobal) {
+      iconData = Icons.all_inclusive;
+      tooltipMessage = 'Pagado con Abono Global';
+      iconColor = Colors.teal;
+    }
+    // ▲▲▲ FIN DEL NUEVO BLOQUE ▲▲▲
+    else {
+      switch (tipoPago) {
+        case 'Completo':
+          iconData = Icons.paid;
+          tooltipMessage = 'Pago Completo';
+          iconColor = Colors.teal;
+          break;
+        // ... (el resto de los casos no cambia)
+        case 'En Abonos':
+          iconData = Icons.layers;
+          tooltipMessage = 'Pagado en Abonos';
+          iconColor = Colors.blue;
+          break;
+        case 'Monto Parcial':
+          iconData = Icons.pie_chart;
+          tooltipMessage = 'Pago Parcial';
+          iconColor = Colors.orange;
+          break;
+        case 'Garantía':
+          iconData = Icons.security;
+          tooltipMessage = 'Pagado con Garantía';
+          iconColor = Colors.pink;
+          break;
+        default:
+          return const SizedBox.shrink();
+      }
     }
 
     return Container(
@@ -2395,12 +2666,21 @@ class _ControlPagosTabState extends State<ControlPagosTab>
                   _buildCompactStatusChip(estado, statusColor),
                   SizedBox(width: 4),
                   // Ícono de tipo de pago
+                  // Ícono de tipo de pago
                   if (isFinished)
                     if (pago.tipoPago == 'Completo' &&
                         _fuePagadoConGarantia(pago))
-                      _buildPaymentTypeIcon('Garantía')
+                      // ▼▼▼ CAMBIO AQUÍ: Usamos el nuevo getter ▼▼▼
+                      _buildPaymentTypeIcon(
+                        'Garantía',
+                        esGlobal: pago.esPagoGlobal,
+                      )
                     else
-                      _buildPaymentTypeIcon(pago.tipoPago),
+                      // ▼▼▼ CAMBIO AQUÍ: Usamos el nuevo getter ▼▼▼
+                      _buildPaymentTypeIcon(
+                        pago.tipoPago,
+                        esGlobal: pago.esPagoGlobal,
+                      ),
                 ],
               ),
             ],
@@ -2690,7 +2970,7 @@ class _ControlPagosTabState extends State<ControlPagosTab>
         if (value == null) return;
         setState(() {
           pago.tipoPago = value;
-          pago.fechaPago = DateTime.now().toIso8601String();
+          //pago.fechaPago = DateTime.now().toIso8601String();
           _semanasModificadas.add(pago.semana);
         });
       },
@@ -3940,7 +4220,7 @@ class _ControlPagosTabState extends State<ControlPagosTab>
               children: [
                 Icon(Icons.warning_amber_rounded, color: Colors.red[400]),
                 SizedBox(width: 10),
-                Text('Confirmar Eliminación'),
+                Text('Confirmar Eliminación', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               ],
             ),
             content: Text(
@@ -4050,6 +4330,44 @@ class _ControlPagosTabState extends State<ControlPagosTab>
     );
   }
 
+  // ▼▼▼ AÑADE ESTA NUEVA FUNCIÓN ▼▼▼
+  /// Devuelve un pequeño chip visual para indicar que un abono provino de un pago global.
+  // En _ControlPagosTabState (control_pagos_tab.dart)
+  // REEMPLAZA la función _buildGlobalChip con esta:
+
+  /// Devuelve un pequeño chip visual para indicar un pago global, incluyendo el monto total.
+  Widget _buildGlobalChip({double montoTotal = 0.0}) {
+    // <-- Acepta el monto
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.teal.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.all_inclusive, color: Colors.teal, size: 12),
+          SizedBox(width: 4),
+          // ▼▼▼ LÓGICA DEL TEXTO ACTUALIZADA ▼▼▼
+          Text(
+            montoTotal > 0
+                ? 'PAGO GLOBAL DE \$${formatearNumero(montoTotal)}'
+                : 'PAGO GLOBAL',
+            style: TextStyle(
+              color: Colors.teal,
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          // ▲▲▲ FIN DEL CAMBIO ▲▲▲
+        ],
+      ),
+    );
+  }
+
+  // En _ControlPagosTabState, reemplaza la función _buildAbonoTile
   Widget _buildAbonoTile(
     Map<String, dynamic> abono,
     bool isDarkMode,
@@ -4060,13 +4378,24 @@ class _ControlPagosTabState extends State<ControlPagosTab>
         double.tryParse(abono['deposito']?.toString() ?? '0') ?? 0.0;
     final String fecha = formatearFecha(abono['fechaDeposito']);
 
-    // Lógica robusta para detectar el tipo de abono
     final bool esGarantia =
         (abono['garantia']?.toString() ?? 'No').trim().toLowerCase() == 'si';
-
-    // <<< AÑADIR ESTA LÍNEA >>>
     final bool esMoratorio =
         (abono['moratorio']?.toString() ?? 'No').trim().toLowerCase() == 'si';
+
+    // ▼▼▼ LÍNEA NUEVA ▼▼▼
+    final bool esGlobal =
+        (abono['esPagoGlobal']?.toString() ?? 'No').trim().toLowerCase() ==
+        'si';
+
+    // ▼▼▼ LÍNEA NUEVA PARA OBTENER EL MONTO ▼▼▼
+    final double montoTotalGlobal =
+        esGlobal
+            ? (double.tryParse(
+                  abono['totalSaldoGlobal']?.toString() ?? '0.0',
+                ) ??
+                0.0)
+            : 0.0;
 
     final bool sePuedeEliminar =
         abono['idpagos'] != null && abono['idpagos'].toString().isNotEmpty;
@@ -4117,12 +4446,14 @@ class _ControlPagosTabState extends State<ControlPagosTab>
                 ),
                 // --- Lógica para mostrar los chips ---
                 if (esGarantia) _buildGarantiaChip(),
-
-                // <<< AÑADIR ESTA LÍNEA >>>
                 if (esMoratorio) _buildMoratorioChip(),
+                // ▼▼▼ LÍNEA NUEVA ▼▼▼
+                // ▼▼▼ CAMBIO AQUÍ: Pasamos el monto al chip ▼▼▼
+                if (esGlobal) _buildGlobalChip(montoTotal: montoTotalGlobal),
               ],
             ),
           ),
+          // ... (El resto de la función no cambia)
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [

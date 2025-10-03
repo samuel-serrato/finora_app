@@ -1,6 +1,8 @@
 // Archivo: lib/services/pago_service.dart
 
+import 'package:finora_app/models/calendario_response.dart';
 import 'package:finora_app/models/pago.dart'; // Asegúrate que la ruta a tu modelo Pago sea correcta
+import 'package:finora_app/models/saldo_global.dart';
 import 'package:finora_app/services/api_service.dart'; // Asegúrate que la ruta a tu ApiService sea correcta
 
 class PagoService {
@@ -10,7 +12,7 @@ class PagoService {
   ///
   /// El endpoint devuelve una lista de objetos de pago, que este método parsea
   /// a una lista de objetos [Pago].
-  Future<ApiResponse<List<Pago>>> getCalendarioPagos(String idCredito) async {
+ /*  Future<ApiResponse<List<Pago>>> getCalendarioPagos(String idCredito) async {
     return await _api.get<List<Pago>>(
       '/api/v1/creditos/calendario/$idCredito',
       parser: (data) {
@@ -20,7 +22,52 @@ class PagoService {
         throw Exception('Formato de respuesta inesperado para el calendario de pagos.');
       },
     );
+  } */
+
+  // =========================================================================
+  // <<< MÉTODO CORREGIDO PARA MANEJAR LA NUEVA ESTRUCTURA DE DATOS >>>
+  // =========================================================================
+  /// Obtiene el calendario de pagos y los saldos globales para un crédito.
+  ///
+  /// El endpoint ahora devuelve un array con dos arrays internos:
+  /// 1. La lista de saldos globales.
+  /// 2. La lista de detalles de pago.
+  /// Este método parsea ambos y los devuelve en un objeto `CalendarioResponse`.
+  Future<ApiResponse<CalendarioResponse>> getCalendarioPagos(String idCredito) async {
+    // El tipo de dato esperado ahora es CalendarioResponse
+    return await _api.get<CalendarioResponse>(
+      '/api/v1/creditos/calendario/$idCredito',
+      parser: (data) {
+        // 1. Validamos que la respuesta sea una lista con dos elementos.
+        if (data is List && data.length == 2) {
+          
+          // 2. Parseamos el primer elemento como la lista de Saldos Globales.
+          final List<dynamic> saldosGlobalesJson = data[0];
+          final List<SaldoGlobal> saldosGlobales = saldosGlobalesJson
+              .map((item) => SaldoGlobal.fromJson(item))
+              .toList();
+
+          // 3. Parseamos el segundo elemento como la lista de Pagos.
+          final List<dynamic> pagosJson = data[1];
+          final List<Pago> pagos = pagosJson
+              .map((item) => Pago.fromJson(item))
+              .toList();
+
+          // 4. Devolvemos el objeto contenedor con ambas listas.
+          return CalendarioResponse(
+            saldosGlobales: saldosGlobales,
+            pagos: pagos,
+          );
+        }
+        
+        // Si el formato no es el esperado, lanzamos una excepción clara.
+        throw Exception('Formato de respuesta inesperado. Se esperaba una lista con dos listas internas.');
+      },
+    );
   }
+  // =========================================================================
+  // <<< FIN DEL MÉTODO CORREGIDO >>>
+  // =========================================================================
 
   /// Elimina un abono específico de un pago.
   ///
@@ -242,6 +289,21 @@ Future<ApiResponse<void>> guardarMoratorioEditable({
   );
 }
   // <<< FIN DEL MÉTODO NUEVO (2/2) >>>
+
+
+  // ▼▼▼ AÑADE ESTE NUEVO MÉTODO AL FINAL DE LA CLASE ▼▼▼
+  /// Elimina un registro de saldo global (abono global) por su ID.
+  ///
+  /// Corresponde al endpoint: DELETE /api/v1/pagos/saldoglobal/:idfechaspagos
+  Future<ApiResponse<void>> eliminarSaldoGlobal({
+    required String idSaldoglobal,
+  }) async {
+    // Usamos el método delete de nuestro ApiService, apuntando al endpoint correcto.
+    return await _api.delete<void>(
+      '/api/v1/pagos/saldoglobal/$idSaldoglobal',
+    );
+  }
+  // ▲▲▲ FIN DEL MÉTODO AÑADIDO ▲▲▲
 
   
 }

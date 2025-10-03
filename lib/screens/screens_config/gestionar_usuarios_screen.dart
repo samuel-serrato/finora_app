@@ -670,7 +670,7 @@ Widget build(BuildContext context) {
 
             // --- Textos y animaciones (sin cambios) ---
             appBarTitle: 'Usuarios',
-            searchHintText: 'Buscar por nombre, usuario, email...',
+            searchHintText: 'Buscar por nombre, usuario...',
             addItemText: 'Agregar Usuario',
             loadingText: 'Cargando usuarios...',
             emptyStateTitle: 'No se encontraron usuarios',

@@ -55,6 +55,7 @@ dependencies:
   easy_sidemenu: ^0.7.1
   visibility_detector: ^0.4.0+2 # O la versión más reciente
   js: ^0.7.2
+  fl_chart: ^0.67.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

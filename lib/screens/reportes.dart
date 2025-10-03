@@ -17,6 +17,7 @@ import 'package:finora_app/models/reporte_general.dart';
 import 'package:finora_app/providers/theme_provider.dart';
 import 'package:finora_app/screens/reporteContable.dart';
 import 'package:finora_app/screens/reporteGeneral.dart';
+import 'package:finora_app/services/reportes_service.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -41,7 +42,10 @@ class ReportesScreenMobile extends StatefulWidget {
 
 // Se crea la clase de estado correspondiente.
 class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
-    // --- VARIABLES DE ESTADO (COMBINACIÓN DE DESKTOP Y MOBILE) ---
+  // --- INSTANCIA DEL NUEVO SERVICIO ---
+  final ReportesService _reportesService = ReportesService();
+
+  // --- VARIABLES DE ESTADO (COMBINACIÓN DE DESKTOP Y MOBILE) ---
   String? selectedReportType;
   DateTimeRange? selectedDateRange;
   bool isLoading = false;
@@ -69,17 +73,21 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
   }
 
   // <<< ADAPTACIÓN: Lógica de obtención de reportes de la versión de escritorio ---
+  // Reemplaza tu método obtenerReportes() completo por este:
   Future<void> obtenerReportes() async {
     if (selectedReportType == null || selectedDateRange == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona tipo de reporte y rango de fechas')),
+        const SnackBar(
+          content: Text('Selecciona tipo de reporte y rango de fechas'),
+        ),
       );
       return;
     }
 
+    // 1. Preparamos el estado de la UI para la carga
     setState(() {
       isLoading = true;
-      hasGenerated = false; // Se pondrá en true solo si hay éxito
+      hasGenerated = false;
       hasError = false;
       errorMessage = null;
       listaReportes = [];
@@ -88,71 +96,72 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
     });
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('tokenauth') ?? '';
-      final fechaInicio = DateFormat('yyyy-MM-dd').format(selectedDateRange!.start);
-      final fechaFin = DateFormat('yyyy-MM-dd').format(selectedDateRange!.end);
-      String tipoReporte = selectedReportType == 'Contable' ? 'contable' : 'general';
-      final url = Uri.parse('$baseUrl/api/v1/formato/reporte/$tipoReporte/datos?inicio=$fechaInicio&final=$fechaFin');
+      // 2. Usamos el servicio para obtener los datos
+      if (selectedReportType == 'Contable') {
+        final response = await _reportesService.obtenerReporteContable(
+          fechaInicio: selectedDateRange!.start,
+          fechaFin: selectedDateRange!.end,
+        );
 
-      final response = await http.get(
-        url,
-        headers: {'tokenauth': token, 'Content-Type': 'application/json'},
-      ).timeout(const Duration(seconds: 20));
+        if (!mounted) return;
 
-      if (!mounted) return;
-
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (selectedReportType == 'Contable') {
+        if (response.success && response.data != null) {
           setState(() {
-            listaReportesContable = [ReporteContableData.fromJson(data)];
+            // El API devuelve un solo objeto, pero la UI espera una lista
+            listaReportesContable = [response.data!];
+            hasGenerated = true;
           });
         } else {
-          setState(() {
-            reporteData = ReporteGeneralData.fromJson(data);
-            listaReportes = reporteData?.listaGrupos ?? [];
-          });
+          // Manejo de caso "No hay reportes", que es un éxito funcional
+          if (response.error == "No hay reportes de pagos") {
+            setState(() {
+              hasGenerated =
+                  true; // Se "generó" correctamente, pero sin resultados.
+            });
+          } else {
+            // Error real
+            setState(() {
+              hasError = true;
+              errorMessage = response.error ?? 'Ocurrió un error desconocido.';
+            });
+          }
         }
-        setState(() => hasGenerated = true); // Reporte generado con éxito
       } else {
-        final errorData = json.decode(response.body);
-        final String serverMessage = errorData["Error"]?["Message"] ?? "";
+        // Reporte General
+        final response = await _reportesService.obtenerReporteGeneral(
+          fechaInicio: selectedDateRange!.start,
+          fechaFin: selectedDateRange!.end,
+        );
 
-        if (serverMessage == "La sesión ha cambiado. Cerrando sesión...") {
-          // Manejar cierre de sesión...
-        } else if (response.statusCode == 401 || (response.statusCode == 404 && serverMessage == "jwt expired")) {
-          // Manejar sesión expirada...
+        if (!mounted) return;
 
-        // --- INICIO DE LA CORRECCIÓN ---
-        // Se añade un caso para manejar la respuesta "No hay reportes de pagos".
-        // Esto se considera una generación exitosa pero sin resultados, no un error.
-        } else if (response.statusCode == 400 && serverMessage == "No hay reportes de pagos") {
+        if (response.success && response.data != null) {
           setState(() {
-            hasGenerated = true; // El reporte se "generó", pero vino vacío.
+            reporteData = response.data;
+            listaReportes = response.data?.listaGrupos ?? [];
+            hasGenerated = true;
           });
-        // --- FIN DE LA CORRECCIÓN ---
-
         } else {
-          // Solo los errores realmente inesperados lanzarán una excepción.
-          throw Exception('Error ${response.statusCode}: ${response.body}');
+          // Manejo de caso "No hay reportes"
+          if (response.error == "No hay reportes de pagos") {
+            setState(() {
+              hasGenerated = true;
+            });
+          } else {
+            // Error real
+            setState(() {
+              hasError = true;
+              errorMessage = response.error ?? 'Ocurrió un error desconocido.';
+            });
+          }
         }
       }
-    } on SocketException {
-      setState(() {
-        hasError = true;
-        errorMessage = 'Error de conexión. Verifica tu internet.';
-      });
-    } on TimeoutException {
-      setState(() {
-        hasError = true;
-        errorMessage = 'El servidor tardó mucho en responder.';
-      });
     } catch (e) {
+      // Captura errores inesperados que no son de la API (ej. un error en el propio código)
+      if (!mounted) return;
       setState(() {
         hasError = true;
-        errorMessage = 'Ocurrió un error inesperado: ${e.toString()}';
+        errorMessage = 'Ocurrió un error inesperado en la app: ${e.toString()}';
       });
     } finally {
       if (mounted) {
@@ -163,97 +172,101 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
 
   // <<< ADAPTACIÓN: Lógica de exportación ADAPTADA para MÓVIL ---
   // <<< ADAPTACIÓN: Lógica de exportación CORREGIDA y MÁS ROBUSTA ---
-// Método exportarReporte() corregido para dispositivos móviles
-Future<void> exportarReporte() async {
-  final isDarkMode =
-      Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
+  // Método exportarReporte() corregido para dispositivos móviles
+  Future<void> exportarReporte() async {
+    final isDarkMode =
+        Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
 
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext context) {
-      return Dialog(
-        backgroundColor: isDarkMode ? Color(0xFF2A2D3E) : Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 50),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(
-                color: Color(0xFF5162F6),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Exportando reporte...',
-                style: TextStyle(
-                  color: isDarkMode ? Colors.white : Colors.black87,
-                  fontSize: 16,
-                ),
-              ),
-            ],
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: isDarkMode ? Color(0xFF2A2D3E) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
           ),
-        ),
-      );
-    },
-  );
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 50),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF5162F6)),
+                const SizedBox(height: 20),
+                Text(
+                  'Exportando reporte...',
+                  style: TextStyle(
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
 
-  try {
-    await Future.delayed(Duration(milliseconds: 500));
+    try {
+      await Future.delayed(Duration(milliseconds: 500));
 
-    // ...
-if (selectedReportType == 'Contable') {
-  // Exportar reporte contable
-  if (listaReportesContable.isEmpty) {
-    Navigator.pop(context); // Cierra diálogo de carga
-    mostrarDialogoError('No hay datos contables para exportar');
-    return;
-  }
+      // ...
+      if (selectedReportType == 'Contable') {
+        // Exportar reporte contable
+        if (listaReportesContable.isEmpty) {
+          Navigator.pop(context); // Cierra diálogo de carga
+          mostrarDialogoError('No hay datos contables para exportar');
+          return;
+        }
 
-  // --- INICIO DE LA CORRECCIÓN ---
-  
-  // 1. Crea una instancia del helper.
-  final pdfHelper = PDFExportHelperContable(
-      listaReportesContable.first, currencyFormat, selectedReportType, context);
+        // --- INICIO DE LA CORRECCIÓN ---
 
-  // 2. Llama al nuevo método público que hace todo.
-  await pdfHelper.exportToPdf();
+        // 1. Crea una instancia del helper.
+        final pdfHelper = PDFExportHelperContable(
+          listaReportesContable.first,
+          currencyFormat,
+          selectedReportType,
+          context,
+        );
 
-  // 3. Cierra el diálogo de carga.
-  Navigator.pop(context);
+        // 2. Llama al nuevo método público que hace todo.
+        await pdfHelper.exportToPdf();
 
-  // Ya no necesitas más código aquí, el helper se encarga de mostrar los SnackBars.
-
-  // --- FIN DE LA CORRECCIÓN ---
-} else {
-      // Exportar reporte general
-      if (reporteData == null || listaReportes.isEmpty) {
+        // 3. Cierra el diálogo de carga.
         Navigator.pop(context);
-        mostrarDialogoError('No hay datos del reporte general para exportar.');
-        return;
+
+        // Ya no necesitas más código aquí, el helper se encarga de mostrar los SnackBars.
+
+        // --- FIN DE LA CORRECCIÓN ---
+      } else {
+        // Exportar reporte general
+        if (reporteData == null || listaReportes.isEmpty) {
+          Navigator.pop(context);
+          mostrarDialogoError(
+            'No hay datos del reporte general para exportar.',
+          );
+          return;
+        }
+
+        Navigator.pop(context); // Cerrar diálogo de carga
+
+        // Llamar al método corregido del ExportHelperGeneral
+        await ExportHelperGeneral.exportToPdf(
+          context: context,
+          reporteData: reporteData,
+          listaReportes: listaReportes,
+          selectedDateRange: selectedDateRange,
+          selectedReportType: selectedReportType,
+          currencyFormat: currencyFormat,
+        );
       }
-
-      Navigator.pop(context); // Cerrar diálogo de carga
-
-      // Llamar al método corregido del ExportHelperGeneral
-      await ExportHelperGeneral.exportToPdf(
-        context: context,
-        reporteData: reporteData,
-        listaReportes: listaReportes,
-        selectedDateRange: selectedDateRange,
-        selectedReportType: selectedReportType,
-        currencyFormat: currencyFormat,
-      );
+    } catch (e) {
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      mostrarDialogoError('Error al exportar: ${e.toString()}');
     }
-  } catch (e) {
-    if (Navigator.canPop(context)) {
-      Navigator.pop(context);
-    }
-    mostrarDialogoError('Error al exportar: ${e.toString()}');
   }
-}
 
   // Función para mostrar el selector de rango de fechas.
   // Función para mostrar el selector de rango de fechas.
@@ -271,10 +284,12 @@ if (selectedReportType == 'Contable') {
       builder: (context, child) {
         return Theme(
           data: ThemeData(
-            brightness: themeProvider.isDarkMode ? Brightness.dark : Brightness.light,
+            brightness:
+                themeProvider.isDarkMode ? Brightness.dark : Brightness.light,
             colorScheme: ColorScheme.fromSeed(
               seedColor: colors.brandPrimary,
-              brightness: themeProvider.isDarkMode ? Brightness.dark : Brightness.light,
+              brightness:
+                  themeProvider.isDarkMode ? Brightness.dark : Brightness.light,
               primary: colors.brandPrimary,
               onPrimary: Colors.white,
               surface: colors.backgroundCard,
@@ -291,7 +306,8 @@ if (selectedReportType == 'Contable') {
     if (picked != null && picked != selectedDateRange) {
       setState(() {
         selectedDateRange = picked;
-        hasGenerated = false; // ¡IMPORTANTE! Resetea el estado para forzar nueva generación.
+        hasGenerated =
+            false; // ¡IMPORTANTE! Resetea el estado para forzar nueva generación.
       });
     }
   }
@@ -300,101 +316,97 @@ if (selectedReportType == 'Contable') {
     showDialog(
       barrierDismissible: false,
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Error'),
-        content: Text(mensaje),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              onClose?.call();
-            },
-            child: const Text('OK'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Error'),
+            content: Text(mensaje),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  onClose?.call();
+                },
+                child: const Text('OK'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
- @override
-Widget build(BuildContext context) {
-  final themeProvider = Provider.of<ThemeProvider>(context);
-  final colors = themeProvider.colors;
-  final bool sePuedeGenerar = selectedReportType != null && selectedDateRange != null;
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final colors = themeProvider.colors;
+    final bool sePuedeGenerar =
+        selectedReportType != null && selectedDateRange != null;
 
-  // <<< CAMBIO 2: Usa tu helper para determinar el layout
-  final bool isMobileLayout = context.isMobile; 
+    // <<< CAMBIO 2: Usa tu helper para determinar el layout
+    final bool isMobileLayout = context.isMobile;
 
-  return Scaffold(
-    backgroundColor: colors.backgroundPrimary,
-    appBar: AppBar(
-      surfaceTintColor: colors.backgroundPrimary,
-      elevation: 1.0,
-      shadowColor: Colors.black.withOpacity(0.1),
+    return Scaffold(
       backgroundColor: colors.backgroundPrimary,
-      
-      bottom: PreferredSize(
-        // Ajustamos la altura de la AppBar dinámicamente
-        // Le damos más altura en móvil para que quepa todo en la columna.
-        preferredSize: Size.fromHeight(isMobileLayout ? 110.0 : 50.0), 
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-          // <<< CAMBIO 3: La lógica ahora es un simple if/else
-          child: isMobileLayout
-              ? _buildMobileAppBarContent(colors, sePuedeGenerar)
-              : _buildDesktopAppBarContent(colors, sePuedeGenerar),
+      appBar: AppBar(
+        surfaceTintColor: colors.backgroundPrimary,
+        elevation: 1.0,
+        shadowColor: Colors.black.withOpacity(0.1),
+        backgroundColor: colors.backgroundPrimary,
+
+        bottom: PreferredSize(
+          // Ajustamos la altura de la AppBar dinámicamente
+          // Le damos más altura en móvil para que quepa todo en la columna.
+          preferredSize: Size.fromHeight(isMobileLayout ? 110.0 : 50.0),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            // <<< CAMBIO 3: La lógica ahora es un simple if/else
+            child:
+                isMobileLayout
+                    ? _buildMobileAppBarContent(colors, sePuedeGenerar)
+                    : _buildDesktopAppBarContent(colors, sePuedeGenerar),
+          ),
         ),
       ),
-    ),
-    body: _buildContenidoReporte(colors),
-  );
-}
+      body: _buildContenidoReporte(colors),
+    );
+  }
 
-// Contenido de la AppBar para el diseño móvil (en columna)
-Widget _buildMobileAppBarContent(dynamic colors, bool sePuedeGenerar) {
-  return Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        children: [
-          Expanded(flex: 1, child: _buildDropdownTipoReporte(colors)),
-          const SizedBox(width: 12),
-          Expanded(flex: 1, child: _buildDateRangePickerButton(colors)),
-        ],
-      ),
-      const SizedBox(height: 16),
-      _buildActionButtons(colors, sePuedeGenerar),
-    ],
-  );
-}
+  // Contenido de la AppBar para el diseño móvil (en columna)
+  Widget _buildMobileAppBarContent(dynamic colors, bool sePuedeGenerar) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(flex: 1, child: _buildDropdownTipoReporte(colors)),
+            const SizedBox(width: 12),
+            Expanded(flex: 1, child: _buildDateRangePickerButton(colors)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _buildActionButtons(colors, sePuedeGenerar),
+      ],
+    );
+  }
 
-// Contenido de la AppBar para el diseño de escritorio (en fila)
-Widget _buildDesktopAppBarContent(dynamic colors, bool sePuedeGenerar) {
-  return Row(
-    crossAxisAlignment: CrossAxisAlignment.end,
-    children: [
-      // Filtro de tipo de reporte
-      SizedBox(
-        width: 300,
-        child: _buildDropdownTipoReporte(colors),
-      ),
-      const SizedBox(width: 12),
-      // Filtro de fecha
-      SizedBox(
-        width: 300,
-        child: _buildDateRangePickerButton(colors),
-      ),
-      const Spacer(), // Empuja los botones de acción hacia la derecha
-      // Botones de acción
-      SizedBox(
-        width: 400,
-        child: _buildActionButtons(colors, sePuedeGenerar),
-      ),
-    ],
-  );
-}
-
+  // Contenido de la AppBar para el diseño de escritorio (en fila)
+  Widget _buildDesktopAppBarContent(dynamic colors, bool sePuedeGenerar) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        // Filtro de tipo de reporte
+        SizedBox(width: 300, child: _buildDropdownTipoReporte(colors)),
+        const SizedBox(width: 12),
+        // Filtro de fecha
+        SizedBox(width: 300, child: _buildDateRangePickerButton(colors)),
+        const Spacer(), // Empuja los botones de acción hacia la derecha
+        // Botones de acción
+        SizedBox(
+          width: 400,
+          child: _buildActionButtons(colors, sePuedeGenerar),
+        ),
+      ],
+    );
+  }
 
   // Widget para el Dropdown de selección de reporte.
   Widget _buildDropdownTipoReporte(dynamic colors) {
@@ -456,11 +468,11 @@ Widget _buildDesktopAppBarContent(dynamic colors, bool sePuedeGenerar) {
                     );
                   }).toList(),
               onChanged: (newValue) {
-                   setState(() {
-            selectedReportType = newValue;
-            hasGenerated = false;
-          });
-        },
+                setState(() {
+                  selectedReportType = newValue;
+                  hasGenerated = false;
+                });
+              },
               iconStyleData: IconStyleData(
                 icon: Padding(
                   padding: const EdgeInsets.only(right: 0),
@@ -501,7 +513,7 @@ Widget _buildDesktopAppBarContent(dynamic colors, bool sePuedeGenerar) {
   }
 
   // Widget para el botón de selección de fecha.
-   // Widget para el botón de selección de fecha.
+  // Widget para el botón de selección de fecha.
   Widget _buildDateRangePickerButton(dynamic colors) {
     String textoBoton;
     final bool hayFechasSeleccionadas = selectedDateRange != null;
@@ -547,7 +559,8 @@ Widget _buildDesktopAppBarContent(dynamic colors, bool sePuedeGenerar) {
             onPressed: () => _seleccionarRangoFechas(context),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              backgroundColor: Colors.transparent, // El color ya está en el Container
+              backgroundColor:
+                  Colors.transparent, // El color ya está en el Container
               foregroundColor: colors.textPrimary,
               side: BorderSide.none, // Sin borde, el shadow da el efecto
               shape: RoundedRectangleBorder(
@@ -573,10 +586,19 @@ Widget _buildDesktopAppBarContent(dynamic colors, bool sePuedeGenerar) {
                     textoBoton,
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: hayFechasSeleccionadas ? FontWeight.w500 : FontWeight.normal,
-                      color: hayFechasSeleccionadas ? colors.textPrimary : colors.textSecondary,
+                      fontWeight:
+                          hayFechasSeleccionadas
+                              ? FontWeight.w500
+                              : FontWeight.normal,
+                      color:
+                          hayFechasSeleccionadas
+                              ? colors.textPrimary
+                              : colors.textSecondary,
                     ),
-                    textAlign: hayFechasSeleccionadas ? TextAlign.center : TextAlign.start,
+                    textAlign:
+                        hayFechasSeleccionadas
+                            ? TextAlign.center
+                            : TextAlign.start,
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                   ),
@@ -590,44 +612,62 @@ Widget _buildDesktopAppBarContent(dynamic colors, bool sePuedeGenerar) {
   }
 
   // Widget que contiene los botones de "Generar" y "Exportar" en fila.
-   Widget _buildActionButtons(dynamic colors, bool sePuedeGenerar) {
+  Widget _buildActionButtons(dynamic colors, bool sePuedeGenerar) {
     return Center(
       child: Row(
         children: [
           Expanded(
             child: ElevatedButton.icon(
-              icon: isLoading
-                  ? Container(
-                      width: 24,
-                      height: 24,
-                      padding: const EdgeInsets.all(2.0),
-                      child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
-                    )
-                  : const Icon(Icons.settings_suggest_rounded, color: Colors.white),
+              icon:
+                  isLoading
+                      ? Container(
+                        width: 24,
+                        height: 24,
+                        padding: const EdgeInsets.all(2.0),
+                        child: const CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
+                      )
+                      : const Icon(
+                        Icons.settings_suggest_rounded,
+                        color: Colors.white,
+                      ),
               label: Text(isLoading ? 'Generando...' : 'Generar'),
-              onPressed: (sePuedeGenerar && !isLoading) ? obtenerReportes : null, // <<< ADAPTACIÓN
+              onPressed:
+                  (sePuedeGenerar && !isLoading)
+                      ? obtenerReportes
+                      : null, // <<< ADAPTACIÓN
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blueAccent,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 disabledBackgroundColor: Colors.grey.withOpacity(0.5),
                 disabledForegroundColor: Colors.white.withOpacity(0.7),
               ),
             ),
           ),
-          if (hasGenerated && !isLoading) ...[ // <<< ADAPTACIÓN
+          if (hasGenerated && !isLoading) ...[
+            // <<< ADAPTACIÓN
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton.icon(
-                icon: const Icon(Icons.download_for_offline_rounded, color: Colors.white),
+                icon: const Icon(
+                  Icons.download_for_offline_rounded,
+                  color: Colors.white,
+                ),
                 label: const Text('Exportar'),
                 onPressed: exportarReporte, // <<< ADAPTACIÓN
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.teal,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),
@@ -637,72 +677,78 @@ Widget _buildDesktopAppBarContent(dynamic colors, bool sePuedeGenerar) {
     );
   }
 
-
   // Widget que muestra el contenido principal (placeholder o resultado).
-   // <<< ADAPTACIÓN: Widget de contenido principal con toda la lógica de estados
+  // <<< ADAPTACIÓN: Widget de contenido principal con toda la lógica de estados
   Widget _buildContenidoReporte(dynamic colors) {
-  if (isLoading) {
-    // Muestra un indicador de carga centrado mientras se obtienen los datos.
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(50.0), 
-        child: CircularProgressIndicator()
-      )
-    );
-  }
-
-  if (hasError) {
-    // Muestra el mensaje de error.
-    return _buildMensajeConIcono(
-      icon: Icons.error_outline_rounded,
-      colorIcono: Colors.red,
-      titulo: 'Ocurrió un Error',
-      mensaje: errorMessage ?? 'No se pudo cargar el reporte. Inténtalo de nuevo.',
-      colors: colors,
-    );
-  }
-
-  if (hasGenerated) {
-    // Muestra el widget del reporte correspondiente.
-    if (selectedReportType == 'Contable' && listaReportesContable.isNotEmpty) {
-      // ASUMCIÓN: Tienes un widget `ReporteContableWidget` adaptado para móvil.
-      return ReporteContableWidget(
-        reporteData: listaReportesContable.first,
-        currencyFormat: currencyFormat,
-        horizontalScrollController: _horizontalScrollController, // ✅ Parámetro correcto
-        verticalScrollController: _verticalScrollController, // ✅ Parámetro correcto
-        //scrollController: _verticalScrollController,
+    if (isLoading) {
+      // Muestra un indicador de carga centrado mientras se obtienen los datos.
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(50.0),
+          child: CircularProgressIndicator(),
+        ),
       );
-    } else if (selectedReportType == 'General' && reporteData != null) {
-      // Widget ReporteGeneralMobileWidget corregido para móvil
-      return ReporteGeneralWidget(
-        listaReportes: listaReportes,
-        reporteData: reporteData,
-        currencyFormat: currencyFormat,
-        verticalScrollController: _verticalScrollController, // ✅ Parámetro correcto
-        horizontalScrollController: _horizontalScrollController, // ✅ Parámetro correcto
-      );
-    } else {
-      // Caso raro: generado pero sin datos.
+    }
+
+    if (hasError) {
+      // Muestra el mensaje de error.
       return _buildMensajeConIcono(
-        icon: Icons.search_off_rounded,
-        colorIcono: Colors.orange,
-        titulo: 'Sin Resultados',
-        mensaje: 'No se encontraron datos para los filtros seleccionados.',
+        icon: Icons.error_outline_rounded,
+        colorIcono: Colors.red,
+        titulo: 'Ocurrió un Error',
+        mensaje:
+            errorMessage ?? 'No se pudo cargar el reporte. Inténtalo de nuevo.',
         colors: colors,
       );
     }
-  }
 
-  // Estado inicial: mensaje para que el usuario seleccione filtros.
-  return _buildMensajeConIcono(
-    icon: Icons.description_outlined,
-    colorIcono: Colors.grey[400]!,
-    titulo: 'Listo para generar',
-    mensaje: 'Por favor, selecciona el tipo de reporte y el período de fechas para comenzar.',
-    colors: colors,
-  );
-}
+    if (hasGenerated) {
+      // Muestra el widget del reporte correspondiente.
+      if (selectedReportType == 'Contable' &&
+          listaReportesContable.isNotEmpty) {
+        // ASUMCIÓN: Tienes un widget `ReporteContableWidget` adaptado para móvil.
+        return ReporteContableWidget(
+          reporteData: listaReportesContable.first,
+          currencyFormat: currencyFormat,
+          horizontalScrollController:
+              _horizontalScrollController, // ✅ Parámetro correcto
+          verticalScrollController:
+              _verticalScrollController, // ✅ Parámetro correcto
+          //scrollController: _verticalScrollController,
+        );
+      } else if (selectedReportType == 'General' && reporteData != null) {
+        // Widget ReporteGeneralMobileWidget corregido para móvil
+        return ReporteGeneralWidget(
+          listaReportes: listaReportes,
+          reporteData: reporteData,
+          currencyFormat: currencyFormat,
+          verticalScrollController:
+              _verticalScrollController, // ✅ Parámetro correcto
+          horizontalScrollController:
+              _horizontalScrollController, // ✅ Parámetro correcto
+        );
+      } else {
+        // Caso raro: generado pero sin datos.
+        return _buildMensajeConIcono(
+          icon: Icons.search_off_rounded,
+          colorIcono: Colors.orange,
+          titulo: 'Sin Resultados',
+          mensaje: 'No se encontraron datos para los filtros seleccionados.',
+          colors: colors,
+        );
+      }
+    }
+
+    // Estado inicial: mensaje para que el usuario seleccione filtros.
+    return _buildMensajeConIcono(
+      icon: Icons.description_outlined,
+      colorIcono: Colors.grey[400]!,
+      titulo: 'Listo para generar',
+      mensaje:
+          'Por favor, selecciona el tipo de reporte y el período de fechas para comenzar.',
+      colors: colors,
+    );
+  }
 
   // Widget de ayuda para mostrar mensajes
   Widget _buildMensajeConIcono({
@@ -719,14 +765,22 @@ Widget _buildDesktopAppBarContent(dynamic colors, bool sePuedeGenerar) {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 120, height: 120,
-              decoration: BoxDecoration(color: colorIcono.withOpacity(0.1), shape: BoxShape.circle),
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: colorIcono.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
               child: Icon(icon, size: 60, color: colorIcono),
             ),
             const SizedBox(height: 24),
             Text(
               titulo,
-              style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 8),
             Text(

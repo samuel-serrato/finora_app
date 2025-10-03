@@ -2,6 +2,7 @@ import 'dart:async'; // Necesario para el Timer del Slider
 import 'dart:convert';
 import 'package:finora_app/ip.dart';
 import 'package:finora_app/models/image_data.dart';
+import 'package:finora_app/models/userData.dart';
 import 'package:finora_app/providers/user_data_provider.dart';
 import 'package:finora_app/services/api_service.dart';
 import 'package:flutter/gestures.dart'; // Necesario para TapGestureRecognizer en el footer
@@ -83,86 +84,89 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // --- Lógica de Login (sin cambios, del código mobile) ---
-  Future<void> _handleLogin() async {
-    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor completa todos los campos')),
+ Future<void> _handleLogin() async {
+  if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Por favor completa todos los campos')),
+    );
+    return;
+  }
+
+  setState(() => _isLoading = true);
+
+  try {
+    final response = await _apiService.login(
+      usuario: _usernameController.text,
+      password: _passwordController.text,
+    );
+
+    if (response.success && response.data != null) {
+      // --- INICIO DE LOS CAMBIOS ---
+
+      // 1. Obtén el objeto JSON completo del usuario de la respuesta.
+      // Ya no lo llamamos 'usuario', sino 'usuarioJson' para más claridad.
+      final usuarioJson = response.data!['usuario'][0];
+
+      // 2. Crea una única instancia de tu modelo `UsuarioCompleto` a partir del JSON.
+      // Aquí es donde toda la magia de los modelos sucede.
+      final userData = UserData.fromJson(usuarioJson);
+
+      // Obtén la instancia del provider (esto no cambia).
+      final userDataProvider = Provider.of<UserDataProvider>(
+        context,
+        listen: false,
       );
-      return;
-    }
 
-    setState(() => _isLoading = true);
+      // 3. Llama al NUEVO método `setUserData` pasando el objeto completo.
+      // ¡Mucho más limpio! Un solo argumento en lugar de siete.
+      await userDataProvider.setUserData(userData);
 
-    try {
-      final response = await _apiService.login(
-        usuario: _usernameController.text,
-        password: _passwordController.text,
-      );
+      // --- FIN DE LOS CAMBIOS ---
 
-      if (response.success && response.data != null) {
-        final userData = response.data!;
-        final usuario = userData['usuario'][0];
-
-        final prefs = await SharedPreferences.getInstance();
-        if (_rememberMe) {
-          await prefs.setString('rememberedUser', _usernameController.text);
-        } else {
-          await prefs.remove('rememberedUser');
-        }
-
-        List<ImageData> imagenes =
-            (usuario['imagenes'] as List)
-                .map((imgJson) => ImageData.fromJson(imgJson))
-                .toList();
-
-        final userDataProvider = Provider.of<UserDataProvider>(
-          context,
-          listen: false,
-        );
-
-        userDataProvider.saveUserDataOnLogin(
-          nombreNegocio: usuario['nombreNegocio'],
-          imagenes: imagenes,
-          nombreUsuario: usuario['nombreCompleto'],
-          tipoUsuario: usuario['tipoUsuario'],
-          idnegocio: usuario['idnegocio'].toString(),
-          idusuario: usuario['idusuarios'].toString(),
-          redondeo: (usuario['redondeo'] as num).toDouble(),
-        );
-
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          AppRoutes.navigation, // Usando constante de rutas
-          (route) => false,
-        );
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.green,
-            content: Text('Bienvenido ${usuario['nombreCompleto']}'),
-          ),
-        );
+      // La lógica de "Recuérdame" no cambia.
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberMe) {
+        await prefs.setString('rememberedUser', _usernameController.text);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response.error ?? 'Error de login'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        await prefs.remove('rememberedUser');
       }
-    } catch (e) {
+
+      // La navegación no cambia.
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.navigation, // Usando constante de rutas
+        (route) => false,
+      );
+
+      // El mensaje de bienvenida ahora usa el dato desde el objeto modelo.
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error inesperado: $e'),
+          backgroundColor: Colors.green,
+          content: Text('Bienvenido ${userData.nombreCompleto}'),
+        ),
+      );
+
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(response.error ?? 'Error de login'),
           backgroundColor: Colors.red,
         ),
       );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Error inesperado: $e'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
+}
 
   // --- MÉTODO build PRINCIPAL ---
   @override

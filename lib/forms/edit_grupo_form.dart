@@ -485,10 +485,10 @@ class _EditarGrupoFormState extends State<EditarGrupoForm>
                         ),
                       ],
                     ),
-                    subtitle: Text(
+                    /* subtitle: Text(
                       'Tel: ${suggestion['telefono']}',
                       style: TextStyle(color: colors.textSecondary),
-                    ),
+                    ), */
                   );
                 },
                 onSelected: (suggestion) {
