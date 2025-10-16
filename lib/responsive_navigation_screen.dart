@@ -774,7 +774,6 @@ class _ResponsiveNavigationScreenState
   }
 
   void _showGestionarUsuariosDialog() {
-    // ... tu código sin cambios ...
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,

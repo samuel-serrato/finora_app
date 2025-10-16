@@ -320,7 +320,7 @@ class _CalendarioPagosState extends State<CalendarioPagos> {
     }
   }
 
-  Widget _buildMonthlyView(bool isSmallScreen, bool isSmallScreen2, bool isSmallScreen3) {
+   Widget _buildMonthlyView(bool isSmallScreen, bool isSmallScreen2, bool isSmallScreen3) {
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: isSmallScreen ? 12 : 16,
@@ -348,91 +348,98 @@ class _CalendarioPagosState extends State<CalendarioPagos> {
                     .toList(),
           ),
           SizedBox(height: isSmallScreen ? 4 : 10),
+          // Expanded sigue definiendo el área disponible para el calendario
           Expanded(
-            child: GridView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                childAspectRatio: isSmallScreen2 ? 1.4 : 1.0,
-                crossAxisSpacing: isSmallScreen2 ? 2 : 10,
-                mainAxisSpacing: isSmallScreen2 ? 2 : 10,
-              ),
-              itemCount:
-                  _getDaysInMonth(currentMonth) +
-                  _getFirstDayOfMonth(currentMonth) -
-                  1,
-              itemBuilder: (context, index) {
-                final firstDay = _getFirstDayOfMonth(currentMonth);
-                if (index < firstDay - 1) {
-                  return Container();
-                }
-                final day = index - firstDay + 2;
-                final date = DateTime(
-                  currentMonth.year,
-                  currentMonth.month,
-                  day,
-                );
-                // <<< MODIFICADO >>> Usa los datos de la API en lugar de los de ejemplo
-                final pagos = _pagosDelMes[date] ?? [];
-                final isSelected = _isSameDay(date, selectedDate);
-                final isToday = _isSameDay(date, DateTime.now());
+            // <<< CAMBIO 1: Añadimos un SingleChildScrollView >>>
+            // Este widget es el que permitirá el scroll sin estirar el contenido.
+            child: SingleChildScrollView(
+              child: GridView.builder(
+                // <<< CAMBIO 2: Devolvemos estas dos propiedades >>>
+                // shrinkWrap le dice al GridView que sea tan alto como su contenido.
+                shrinkWrap: true,
+                // physics evita un conflicto de scroll entre el GridView y el SingleChildScrollView.
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  // <<< CAMBIO 3: Restauramos el aspect ratio original que te gustaba >>>
+                  childAspectRatio: isSmallScreen2 ? 1.4 : 1.0,
+                  crossAxisSpacing: isSmallScreen2 ? 2 : 10,
+                  mainAxisSpacing: isSmallScreen2 ? 2 : 10,
+                ),
+                itemCount:
+                    _getDaysInMonth(currentMonth) +
+                    _getFirstDayOfMonth(currentMonth) -
+                    1,
+                itemBuilder: (context, index) {
+                  final firstDay = _getFirstDayOfMonth(currentMonth);
+                  if (index < firstDay - 1) {
+                    return Container(); // Espacios vacíos al inicio del mes
+                  }
+                  final day = index - firstDay + 2;
+                  final date = DateTime(
+                    currentMonth.year,
+                    currentMonth.month,
+                    day,
+                  );
+                  final pagos = _pagosDelMes[date] ?? [];
+                  final isSelected = _isSameDay(date, selectedDate);
+                  final isToday = _isSameDay(date, DateTime.now());
 
-                return GestureDetector(
-                  onTap: () => setState(() => selectedDate = date),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      color:
-                          isSelected
-                              ? const Color(0xFF5162F6)
-                              : isToday
-                              ? const Color(0xFF5162F6).withOpacity(0.7)
-                              : null,
-                      border:
-                          (isSelected) // <-- Cambio clave aquí
-                              ? Border.all(color: Color(0xFF6BC950), width: 1.5)
-                              : null,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '$day',
-                          style: TextStyle(
-                            fontSize: isSmallScreen ? 11 : 14,
-                            color:
-                                (isToday || isSelected)
-                                    ? Colors.white
-                                    : (widget.isDarkMode
-                                        ? Colors.white
-                                        : Colors.black87),
-                            fontWeight:
-                                isToday ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
-
-                        if (pagos.isNotEmpty)
-                          Container(
-                            width: isSmallScreen ? 4 : 6,
-                            height: isSmallScreen ? 4 : 6,
-                            margin: const EdgeInsets.only(top: 2),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
+                  return GestureDetector(
+                    onTap: () => setState(() => selectedDate = date),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color:
+                            isSelected
+                                ? const Color(0xFF5162F6)
+                                : isToday
+                                ? const Color(0xFF5162F6).withOpacity(0.7)
+                                : null,
+                        border:
+                            (isSelected)
+                                ? Border.all(color: const Color(0xFF6BC950), width: 1.5)
+                                : null,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            '$day',
+                            style: TextStyle(
+                              fontSize: isSmallScreen ? 11 : 14,
                               color:
-                                  isSelected
+                                  (isToday || isSelected)
                                       ? Colors.white
-                                      : const Color(0xFF6BC950),
+                                      : (widget.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87),
+                              fontWeight:
+                                  isToday ? FontWeight.bold : FontWeight.normal,
                             ),
                           ),
-                      ],
+                          if (pagos.isNotEmpty)
+                            Container(
+                              width: isSmallScreen ? 4 : 6,
+                              height: isSmallScreen ? 4 : 6,
+                              margin: const EdgeInsets.only(top: 2),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color:
+                                    isSelected
+                                        ? Colors.white
+                                        : const Color(0xFF6BC950),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
           SizedBox(height: isSmallScreen ? 6 : 10),
-          // <<< CAMBIO 2: Llamamos a la barra de resumen generalizada >>>
           Padding(
             padding: const EdgeInsets.all(4.0),
             child: _buildSummaryBar(isSmallScreen, isSmallScreen3),
@@ -441,6 +448,7 @@ class _CalendarioPagosState extends State<CalendarioPagos> {
       ),
     );
   }
+
 
   // <<< CAMBIO 3: Widget de resumen renombrado y con lógica condicional >>>
    // <<< MODIFICADO: Widget de resumen con lógica de "A recibir" y "Pagado" >>>
@@ -523,7 +531,7 @@ class _CalendarioPagosState extends State<CalendarioPagos> {
     );
 
     return Container(
-      padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
+      padding: EdgeInsets.all(isSmallScreen ? 4 : 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         color: colors.backgroundCard,
@@ -618,7 +626,7 @@ class _CalendarioPagosState extends State<CalendarioPagos> {
         [];
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -630,7 +638,7 @@ class _CalendarioPagosState extends State<CalendarioPagos> {
               color: widget.isDarkMode ? Colors.white : Colors.black87,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Expanded(
             child:
                 pagosDelDia.isEmpty
@@ -746,7 +754,7 @@ class _CalendarioPagosState extends State<CalendarioPagos> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
       child: Column(
         children: [
           Padding(
@@ -761,7 +769,7 @@ class _CalendarioPagosState extends State<CalendarioPagos> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 4),
           Container(
             height: isSmallScreen ? 50 : 80,
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -822,7 +830,7 @@ class _CalendarioPagosState extends State<CalendarioPagos> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
             child: _buildSummaryBar(isSmallScreen, false),
           ),
         ],

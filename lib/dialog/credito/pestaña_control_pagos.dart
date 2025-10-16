@@ -151,8 +151,7 @@ class _ControlPagosTabState extends State<ControlPagosTab>
     const double requiredListPadding = bottomBarHeight + (bottomBarMargin * 2);
 
     return Scaffold(
-      backgroundColor:
-          isDarkMode ? const Color(0xFF0A0A0A) : const Color(0xFFF8FAFC),
+      backgroundColor: colors.backgroundPrimary,
       body: Stack(
         children: [
           // <<< CAMBIO 4: Adapta el FutureBuilder >>>

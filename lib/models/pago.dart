@@ -27,6 +27,7 @@ class Pago {
   // --- DATOS DE SALDO A FAVOR (LEÍDOS DIRECTAMENTE DEL SERVIDOR) ---
   final double saldoFavorOriginalGenerado;
   final double favorUtilizado;
+  final String? favorUtilizadoFecha; // <<< AÑADE ESTA LÍNEA
   final double saldoRestante;
   final bool fueUtilizadoPorServidor;
 
@@ -47,6 +48,7 @@ class Pago {
     required this.sumaDepositoMoratorisos,
     required this.saldoFavorOriginalGenerado,
     required this.favorUtilizado,
+    this.favorUtilizadoFecha, // <<< AÑADE ESTA LÍNEA (es opcional, por eso no lleva `required`)
     required this.saldoRestante,
     required this.fueUtilizadoPorServidor,
     // Campos opcionales
@@ -70,7 +72,7 @@ class Pago {
     String? idfechaspagos,
     Moratorios? moratorios,
     String? moratorioDesabilitado,
-        String? moratorioEditable, // <<< AÑADE ESTA LÍNEA
+    String? moratorioEditable, // <<< AÑADE ESTA LÍNEA
 
     List<Map<String, dynamic>>? abonos,
     List<RenovacionPendiente>? renovacionesPendientes,
@@ -81,6 +83,7 @@ class Pago {
     List<Map<String, dynamic>>? pagosMoratorios,
     double? saldoFavorOriginalGenerado,
     double? favorUtilizado,
+    String? favorUtilizadoFecha, // <<< AÑADE ESTA LÍNEA
     double? saldoRestante,
     bool? fueUtilizadoPorServidor,
     String? tipoPago,
@@ -94,7 +97,8 @@ class Pago {
         moratorios: moratorios ?? this.moratorios,
         moratorioDesabilitado:
             moratorioDesabilitado ?? this.moratorioDesabilitado,
-                  moratorioEditable: moratorioEditable ?? this.moratorioEditable, // <<< AÑADE ESTA LÍNEA
+        moratorioEditable:
+            moratorioEditable ?? this.moratorioEditable, // <<< AÑADE ESTA LÍNEA
 
         abonos: abonos ?? List<Map<String, dynamic>>.from(this.abonos),
         renovacionesPendientes:
@@ -111,6 +115,9 @@ class Pago {
         saldoFavorOriginalGenerado:
             saldoFavorOriginalGenerado ?? this.saldoFavorOriginalGenerado,
         favorUtilizado: favorUtilizado ?? this.favorUtilizado,
+        favorUtilizadoFecha:
+            favorUtilizadoFecha ??
+            this.favorUtilizadoFecha, // <<< AÑADE ESTA LÍNEA
         saldoRestante: saldoRestante ?? this.saldoRestante,
         fueUtilizadoPorServidor:
             fueUtilizadoPorServidor ?? this.fueUtilizadoPorServidor,
@@ -130,85 +137,96 @@ class Pago {
   // --- FACTORY FROMJSON ---
   // En: lib/models/pago.dart
 
-// Reemplaza tu factory Pago.fromJson completo con este:
-factory Pago.fromJson(Map<String, dynamic> json) {
-  // Función de ayuda interna para parsear números de forma segura.
-  double parseDouble(dynamic value) {
-    if (value == null) return 0.0;
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
-    return 0.0;
-  }
-
-  // Lógica para extraer datos del primer abono, si existe.
-  final List<dynamic>? pagosList = json['pagos'] as List?;
-  final String? idPagoPrincipal = (pagosList != null && pagosList.isNotEmpty)
-      ? pagosList[0]['idpagos']
-      : null;
-  final double? depositoPrincipal = (pagosList != null && pagosList.isNotEmpty)
-      ? parseDouble(pagosList[0]['deposito'])
-      : null;
-  
-  // Lógica de parseo para las renovaciones.
-  List<RenovacionPendiente> pendientes = [];
-  if (json['RenovacionPendientes'] != null && json['RenovacionPendientes'] is List) {
-    pendientes = (json['RenovacionPendientes'] as List)
-        .map((i) => RenovacionPendiente.fromJson(i))
-        .toList();
-  }
-
-  // <<< INICIO DE LA CORRECCIÓN CLAVE >>>
-  // Lógica para leer el valor de `moratorioEditable` desde la lista anidada.
-  String moratorioEditableValue = "No"; // Valor por defecto.
-  
-  // 1. Verificamos si 'pagosMoratorios' existe, es una lista y no está vacía.
-  if (json['pagosMoratorios'] != null && json['pagosMoratorios'] is List && (json['pagosMoratorios'] as List).isNotEmpty) {
-    // 2. Tomamos el primer objeto de la lista.
-    final moratorioData = (json['pagosMoratorios'] as List).first;
-    // 3. Verificamos que sea un mapa y leemos el valor, si no existe, se queda "No".
-    if (moratorioData is Map<String, dynamic>) {
-      moratorioEditableValue = moratorioData['moratorioEditable'] ?? "No";
+  // Reemplaza tu factory Pago.fromJson completo con este:
+  factory Pago.fromJson(Map<String, dynamic> json) {
+    // Función de ayuda interna para parsear números de forma segura.
+    double parseDouble(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) return double.tryParse(value) ?? 0.0;
+      return 0.0;
     }
+
+    // Lógica para extraer datos del primer abono, si existe.
+    final List<dynamic>? pagosList = json['pagos'] as List?;
+    final String? idPagoPrincipal =
+        (pagosList != null && pagosList.isNotEmpty)
+            ? pagosList[0]['idpagos']
+            : null;
+    final double? depositoPrincipal =
+        (pagosList != null && pagosList.isNotEmpty)
+            ? parseDouble(pagosList[0]['deposito'])
+            : null;
+
+    // Lógica de parseo para las renovaciones.
+    List<RenovacionPendiente> pendientes = [];
+    if (json['RenovacionPendientes'] != null &&
+        json['RenovacionPendientes'] is List) {
+      pendientes =
+          (json['RenovacionPendientes'] as List)
+              .map((i) => RenovacionPendiente.fromJson(i))
+              .toList();
+    }
+
+    // <<< INICIO DE LA CORRECCIÓN CLAVE >>>
+    // Lógica para leer el valor de `moratorioEditable` desde la lista anidada.
+    String moratorioEditableValue = "No"; // Valor por defecto.
+
+    // 1. Verificamos si 'pagosMoratorios' existe, es una lista y no está vacía.
+    if (json['pagosMoratorios'] != null &&
+        json['pagosMoratorios'] is List &&
+        (json['pagosMoratorios'] as List).isNotEmpty) {
+      // 2. Tomamos el primer objeto de la lista.
+      final moratorioData = (json['pagosMoratorios'] as List).first;
+      // 3. Verificamos que sea un mapa y leemos el valor, si no existe, se queda "No".
+      if (moratorioData is Map<String, dynamic>) {
+        moratorioEditableValue = moratorioData['moratorioEditable'] ?? "No";
+      }
+    }
+    // <<< FIN DE LA CORRECCIÓN CLAVE >>>
+
+    return Pago(
+      semana: json['semana'] ?? 0,
+      fechaPago: json['fechaPago'] ?? '',
+      capitalMasInteres: parseDouble(json['capitalMasInteres']),
+      estado: json['estado'] ?? '',
+      moratorioDesabilitado: json['moratorioDesabilitado'] ?? "No",
+
+      // Usamos el valor que acabamos de parsear de forma segura.
+      moratorioEditable: moratorioEditableValue,
+
+      idfechaspagos: json['idfechaspagos'],
+      abonos:
+          (json['pagos'] as List<dynamic>? ?? [])
+              .map((pago) => Map<String, dynamic>.from(pago))
+              .toList(),
+      renovacionesPendientes: pendientes,
+      sumaDepositoMoratorisos: parseDouble(json['sumaDepositoMoratorisos']),
+      moratorios:
+          json['moratorios'] is Map<String, dynamic>
+              ? Moratorios.fromJson(
+                Map<String, dynamic>.from(json['moratorios']),
+              )
+              : null,
+
+      // Mapeo de campos restaurados
+      idpagosdetalles: json['idpagosdetalles'],
+      idpagos: idPagoPrincipal ?? '',
+      deposito: depositoPrincipal,
+      pagosMoratorios:
+          (json['pagosMoratorios'] as List<dynamic>? ?? [])
+              .map((moratorio) => Map<String, dynamic>.from(moratorio))
+              .toList(),
+
+      // Mapeo directo de los campos de saldo a favor desde el JSON
+      saldoFavorOriginalGenerado: parseDouble(json['saldoFavor']),
+      favorUtilizado: parseDouble(json['favorUtilizado']),
+       favorUtilizadoFecha: json['favorUtilizadoFecha'], // <<< AÑADE ESTA LÍNEA
+      saldoRestante: parseDouble(json['saldoRestante']),
+      fueUtilizadoPorServidor: json['saldoFavorUtilizado'] == 'Si',
+    )..tipoPago = json['tipoPagos'] == 'sin asignar' ? null : json['tipoPagos'];
   }
-  // <<< FIN DE LA CORRECCIÓN CLAVE >>>
-
-  return Pago(
-    semana: json['semana'] ?? 0,
-    fechaPago: json['fechaPago'] ?? '',
-    capitalMasInteres: parseDouble(json['capitalMasInteres']),
-    estado: json['estado'] ?? '',
-    moratorioDesabilitado: json['moratorioDesabilitado'] ?? "No",
-    
-    // Usamos el valor que acabamos de parsear de forma segura.
-    moratorioEditable: moratorioEditableValue,
-    
-    idfechaspagos: json['idfechaspagos'],
-    abonos: (json['pagos'] as List<dynamic>? ?? [])
-        .map((pago) => Map<String, dynamic>.from(pago))
-        .toList(),
-    renovacionesPendientes: pendientes,
-    sumaDepositoMoratorisos: parseDouble(json['sumaDepositoMoratorisos']),
-    moratorios: json['moratorios'] is Map<String, dynamic>
-        ? Moratorios.fromJson(Map<String, dynamic>.from(json['moratorios']))
-        : null,
-    
-    // Mapeo de campos restaurados
-    idpagosdetalles: json['idpagosdetalles'],
-    idpagos: idPagoPrincipal ?? '',
-    deposito: depositoPrincipal,
-    pagosMoratorios: (json['pagosMoratorios'] as List<dynamic>? ?? [])
-        .map((moratorio) => Map<String, dynamic>.from(moratorio))
-        .toList(),
-
-    // Mapeo directo de los campos de saldo a favor desde el JSON
-    saldoFavorOriginalGenerado: parseDouble(json['saldoFavor']),
-    favorUtilizado: parseDouble(json['favorUtilizado']),
-    saldoRestante: parseDouble(json['saldoRestante']),
-    fueUtilizadoPorServidor: json['saldoFavorUtilizado'] == 'Si',
-    
-  )..tipoPago = json['tipoPagos'] == 'sin asignar' ? null : json['tipoPagos'];
-}
 
   // +++ AÑADE ESTE NUEVO GETTER AQUÍ +++
   double get moratoriosPagados {
@@ -249,45 +267,48 @@ factory Pago.fromJson(Map<String, dynamic> json) {
   }
 
   // ▼▼▼ AÑADE ESTE NUEVO GETTER ▼▼▼
-/// Devuelve true si alguno de los abonos de este pago fue marcado como global.
-bool get esPagoGlobal {
-  // Si no hay abonos, no puede ser global.
-  if (abonos.isEmpty) {
-    return false;
+  /// Devuelve true si alguno de los abonos de este pago fue marcado como global.
+  bool get esPagoGlobal {
+    // Si no hay abonos, no puede ser global.
+    if (abonos.isEmpty) {
+      return false;
+    }
+    // Buscamos si ALGÚN abono tiene la marca de "esPagoGlobal": "Si".
+    return abonos.any((abono) {
+      // Hacemos una comparación segura, por si el campo no viene o es nulo.
+      final esGlobal =
+          (abono['esPagoGlobal'] as String?)?.toLowerCase() == 'si';
+      return esGlobal;
+    });
   }
-  // Buscamos si ALGÚN abono tiene la marca de "esPagoGlobal": "Si".
-  return abonos.any((abono) {
-    // Hacemos una comparación segura, por si el campo no viene o es nulo.
-    final esGlobal = (abono['esPagoGlobal'] as String?)?.toLowerCase() == 'si';
-    return esGlobal;
-  });
-}
-// ▲▲▲ FIN DEL GETTER AÑADIDO ▲▲▲
+  // ▲▲▲ FIN DEL GETTER AÑADIDO ▲▲▲
 
-// ▼▼▼ AÑADE ESTE NUEVO GETTER ▼▼▼
-/// Busca el primer abono que sea global y devuelve el monto total de ese depósito global.
-/// Devuelve 0.0 si no se encuentra ningún pago global.
-double get montoTotalDelPagoGlobal {
-  if (!esPagoGlobal) {
+  // ▼▼▼ AÑADE ESTE NUEVO GETTER ▼▼▼
+  /// Busca el primer abono que sea global y devuelve el monto total de ese depósito global.
+  /// Devuelve 0.0 si no se encuentra ningún pago global.
+  double get montoTotalDelPagoGlobal {
+    if (!esPagoGlobal) {
+      return 0.0;
+    }
+    // Buscamos el primer abono que esté marcado como global.
+    final abonoGlobal = abonos.firstWhere(
+      (abono) => (abono['esPagoGlobal'] as String?)?.toLowerCase() == 'si',
+      orElse:
+          () => {}, // Devuelve un mapa vacío si no lo encuentra (por seguridad)
+    );
+
+    // Si encontramos el abono, parseamos el monto de 'totalSaldoGlobal'.
+    if (abonoGlobal.isNotEmpty) {
+      final monto = abonoGlobal['totalSaldoGlobal'];
+      if (monto is num) {
+        return monto.toDouble();
+      }
+      if (monto is String) {
+        return double.tryParse(monto) ?? 0.0;
+      }
+    }
     return 0.0;
   }
-  // Buscamos el primer abono que esté marcado como global.
-  final abonoGlobal = abonos.firstWhere(
-    (abono) => (abono['esPagoGlobal'] as String?)?.toLowerCase() == 'si',
-    orElse: () => {}, // Devuelve un mapa vacío si no lo encuentra (por seguridad)
-  );
 
-  // Si encontramos el abono, parseamos el monto de 'totalSaldoGlobal'.
-  if (abonoGlobal.isNotEmpty) {
-    final monto = abonoGlobal['totalSaldoGlobal'];
-    if (monto is num) {
-      return monto.toDouble();
-    }
-    if (monto is String) {
-      return double.tryParse(monto) ?? 0.0;
-    }
-  }
-  return 0.0;
-}
-// ▲▲▲ FIN DEL GETTER AÑADIDO ▲▲▲
+  // ▲▲▲ FIN DEL GETTER AÑADIDO ▲▲▲
 }

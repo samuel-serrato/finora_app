@@ -133,8 +133,8 @@ class _HomeScreenState extends State<HomeScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                welcomeCard(),
-                const SizedBox(height: 14),
+               /*  welcomeCard(),
+                const SizedBox(height: 14), */
                 _buildSummaryHeader(),
                 const SizedBox(height: 0),
                 statCardsList(isSmallScreen: true, crossAxisCount: 2),
@@ -270,8 +270,8 @@ class _HomeScreenState extends State<HomeScreen>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // 1. Saludo de bienvenida (tamaño fijo)
-        welcomeCard(),
-        const SizedBox(height: 12),
+     /*    welcomeCard(), */
+     /*    const SizedBox(height: 12), */
 
         // 2. Tarjetas de resumen (tamaño fijo)
         statCardsList(isSmallScreen: false, crossAxisCount: 5),
@@ -336,13 +336,13 @@ class _HomeScreenState extends State<HomeScreen>
 
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
+      /* decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         gradient: colors.homeWelcomeGradient,
-      ),
+      ), */
       padding: EdgeInsets.symmetric(
-        vertical: isSmallScreen ? 8 : 18,
-        horizontal: isSmallScreen ? 16 : 18,
+        vertical: isSmallScreen ? 0 : 18,
+        horizontal: isSmallScreen ? 4 : 18,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -353,23 +353,23 @@ class _HomeScreenState extends State<HomeScreen>
                 child: Text(
                   "Hola, ${widget.username}!",
                   style: TextStyle(
-                    fontSize: isSmallScreen ? 18 : 22,
-                    fontWeight: FontWeight.bold,
-                    color: colors.whiteWhite,
+                    fontSize: isSmallScreen ? 20 : 22,
+                    fontWeight: FontWeight.w600,
+                    color: colors.blackWhite,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          /* const SizedBox(height: 4),
           Text(
             DateFormat('EEEE, d MMMM yyyy', 'es').format(DateTime.now()),
             style: TextStyle(
               fontSize: isSmallScreen ? 11 : 14,
               color: colors.whiteWhite.withOpacity(0.7),
             ),
-          ),
+          ), */
         ],
       ),
     );

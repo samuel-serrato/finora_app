@@ -236,6 +236,7 @@ class AppColors {
   //BOTONES
   Color get backgroundButton => isDarkMode ? primaryDark : primary;
   Color get textButton => isDarkMode ? _darkBackground : _white;
+  Color get textButton2 => isDarkMode ? _white : primary;
   Color get iconButton => isDarkMode ? _darkBackground : _white;
   Color get iconButton2 => isDarkMode ? _darkBackground : _white;
 

@@ -100,7 +100,7 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
               children: [
                 Icon(Icons.warning_amber_rounded, color: Colors.red[400]),
                 SizedBox(width: 10),
-                Text('Confirmar Eliminación'),
+                Text('Confirmar Eliminación', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),),
               ],
             ),
             content: Text(
@@ -1377,110 +1377,121 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
   }
 
   Widget _buildVistaSaldoFavor(
-    BuildContext context,
-    AdvancedOptionsViewModel viewModel,
-  ) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final isDarkMode = themeProvider.isDarkMode;
+  BuildContext context,
+  AdvancedOptionsViewModel viewModel,
+) {
+  final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+  final isDarkMode = themeProvider.isDarkMode;
 
-    // --- 1. DEFINICIÓN DE VARIABLES DE ESTADO ---
-    final double montoAPagar = widget.pago.saldoEnContra ?? 0.0;
-    final double favorYaUtilizado = widget.pago.favorUtilizado ?? 0.0;
-    final bool pagoFinalizado = widget.pago.estaFinalizado;
-    final double saldoTotalDisponible = viewModel.saldoFavorTotalAcumulado;
+  // --- 1. DEFINICIÓN DE VARIABLES DE ESTADO ---
+  final double montoAPagar = widget.pago.saldoEnContra; // No necesita '?? 0.0' si el getter ya lo maneja
+  final double favorYaUtilizado = widget.pago.favorUtilizado;
+  final bool pagoFinalizado = widget.pago.estaFinalizado;
+  final double saldoTotalDisponible = viewModel.saldoFavorTotalAcumulado;
 
-    // --- 2. LÓGICA DE VISUALIZACIÓN DE ESCENARIOS ---
-    final bool hayDeuda = montoAPagar > 0.01;
-    final bool haySaldoDisponible = saldoTotalDisponible > 0.01;
+  // --- 2. LÓGICA DE VISUALIZACIÓN DE ESCENARIOS ---
+  final bool hayDeuda = montoAPagar > 0.01;
+  final bool haySaldoDisponible = saldoTotalDisponible > 0.01;
+  final bool mostrarWidgetAplicarSaldo = !pagoFinalizado && hayDeuda && haySaldoDisponible;
 
-    // La condición clave para mostrar el widget de aplicar saldo
-    final bool mostrarWidgetAplicarSaldo =
-        !pagoFinalizado && hayDeuda && haySaldoDisponible;
+  // ==========================================================
+  // --- INICIO DEL CAMBIO CLAVE EN LA UI ---
+  // ==========================================================
 
-    // La condición para mostrar el mensaje de "Guarde un abono" (si la tuvieras)
-    // Nota: Basado en tu lógica anterior, esta ya no sería necesaria si el servidor
-    // acepta IDs nulos, pero la dejamos por si acaso.
-    // final bool mostrarAvisoGuardarAbono = !pagoFinalizado && !hayDeuda && haySaldoDisponible;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start, // Mejor alineación
-      children: [
-        // --- FILAS DE INFORMACIÓN (Header) ---
-        // (Esta parte no cambia)
-        _buildInfoRow(
-          icon: Icons.account_balance_wallet_outlined,
-          label: "Saldo Total Disponible",
-          value: "\$${formatearNumero(saldoTotalDisponible)}",
-          isDarkMode: isDarkMode,
-          valueColor: Colors.green,
-        ),
-        if (favorYaUtilizado > 0)
-          _buildInfoRow(
-            icon: Icons.check_circle_outline,
-            label: "Saldo a favor ya aplicado",
-            value: "\$${formatearNumero(favorYaUtilizado)}",
-            isDarkMode: isDarkMode,
-            valueColor: Colors.blue.shade300,
-          ),
-        if (montoAPagar > 0 && !pagoFinalizado)
-          _buildInfoRow(
-            icon: Icons.warning_amber_rounded,
-            label: "Deuda restante en este pago",
-            value: "\$${formatearNumero(montoAPagar)}",
-            isDarkMode: isDarkMode,
-            valueColor: Colors.orange,
-          ),
-        const Divider(height: 32),
-
-        // --- WIDGETS DE ESCENARIOS ---
-
-        // Escenario 1: El pago ya está liquidado (Máxima prioridad)
-        if (pagoFinalizado)
-          _buildInfoMessage(
-            text: "Este pago ya está liquidado.",
-            icon: Icons.verified_outlined,
-            color: Colors.green,
-            isDarkMode: isDarkMode,
-          ),
-
-        // Escenario 2 (UNIFICADO): Widget para aplicar saldo a favor
-        if (mostrarWidgetAplicarSaldo)
-          _buildAplicarParcialWidget(
-            // Siempre usamos este widget
-            context: context,
-            viewModel: viewModel,
-            // El monto máximo aplicable es el menor entre el saldo y la deuda
-            montoMaximo:
-                (saldoTotalDisponible < montoAPagar)
-                    ? saldoTotalDisponible
-                    : montoAPagar,
-            isDarkMode: isDarkMode,
-            controller: _saldoFavorController,
-          ),
-
-        // Escenario 3: No hay deuda, no hay nada que hacer con el saldo aquí.
-        if (!pagoFinalizado && !hayDeuda && haySaldoDisponible)
-          _buildInfoMessage(
-            text:
-                "Este pago no tiene deuda pendiente. El saldo a favor no se puede aplicar.",
-            icon: Icons.info_outline,
-            color: Colors.blue,
-            isDarkMode: isDarkMode,
-          ),
-
-        // Escenario 4: No hay saldo disponible
-        if (!pagoFinalizado && hayDeuda && !haySaldoDisponible)
-          _buildInfoMessage(
-            text:
-                "No tienes saldo a favor disponible para aplicar a esta deuda.",
-            icon: Icons.info_outline,
-            color: Colors.orange,
-            isDarkMode: isDarkMode,
-          ),
-      ],
-    );
+  // Variable para guardar la fecha formateada si existe.
+  String? fechaAplicacionFormateada;
+  if (widget.pago.favorUtilizadoFecha != null) {
+    try {
+      // Intentamos parsear la fecha que viene del servidor
+      final fechaParseada = DateTime.parse(widget.pago.favorUtilizadoFecha!);
+      // Le damos el formato que queremos mostrar
+      fechaAplicacionFormateada = formatearFecha(fechaParseada);
+    } catch (e) {
+      // Si la fecha viene en un formato incorrecto, no hacemos nada para evitar un error.
+      fechaAplicacionFormateada = null;
+    }
   }
+
+  // ==========================================================
+  // --- FIN DEL CAMBIO CLAVE EN LA UI ---
+  // ==========================================================
+
+  return Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // --- FILAS DE INFORMACIÓN (Header) ---
+      _buildInfoRow(
+        icon: Icons.account_balance_wallet_outlined,
+        label: "Saldo Total Disponible",
+        value: "\$${formatearNumero(saldoTotalDisponible)}",
+        isDarkMode: isDarkMode,
+        valueColor: Colors.green,
+      ),
+      if (favorYaUtilizado > 0)
+        _buildInfoRow(
+          icon: Icons.check_circle_outline,
+          label: "Saldo a favor ya aplicado",
+          value: "\$${formatearNumero(favorYaUtilizado)}",
+          isDarkMode: isDarkMode,
+          valueColor: Colors.blue.shade300,
+        ),
+      
+      // <<< AÑADIMOS LA NUEVA FILA DE INFORMACIÓN AQUÍ >>>
+      if (fechaAplicacionFormateada != null)
+        _buildInfoRow(
+          icon: Icons.calendar_today_outlined,
+          label: "Fecha de aplicación",
+          value: fechaAplicacionFormateada,
+          isDarkMode: isDarkMode,
+          valueColor: const Color(0xFF003E81),
+        ),
+
+      if (montoAPagar > 0 && !pagoFinalizado)
+        _buildInfoRow(
+          icon: Icons.warning_amber_rounded,
+          label: "Deuda restante en este pago",
+          value: "\$${formatearNumero(montoAPagar)}",
+          isDarkMode: isDarkMode,
+          valueColor: Colors.orange,
+        ),
+      const Divider(height: 32),
+
+      // --- WIDGETS DE ESCENARIOS (Esta parte no cambia) ---
+      if (pagoFinalizado)
+        _buildInfoMessage(
+          text: "Este pago ya está liquidado.",
+          icon: Icons.verified_outlined,
+          color: Colors.green,
+          isDarkMode: isDarkMode,
+        ),
+      if (mostrarWidgetAplicarSaldo)
+        _buildAplicarParcialWidget(
+          context: context,
+          viewModel: viewModel,
+          montoMaximo: (saldoTotalDisponible < montoAPagar)
+              ? saldoTotalDisponible
+              : montoAPagar,
+          isDarkMode: isDarkMode,
+          controller: _saldoFavorController,
+        ),
+      if (!pagoFinalizado && !hayDeuda && haySaldoDisponible)
+        _buildInfoMessage(
+          text: "Este pago no tiene deuda pendiente. El saldo a favor no se puede aplicar.",
+          icon: Icons.info_outline,
+          color: Colors.blue,
+          isDarkMode: isDarkMode,
+        ),
+      if (!pagoFinalizado && hayDeuda && !haySaldoDisponible)
+        _buildInfoMessage(
+          text: "No tienes saldo a favor disponible para aplicar a esta deuda.",
+          icon: Icons.info_outline,
+          color: Colors.orange,
+          isDarkMode: isDarkMode,
+        ),
+    ],
+  );
+}
 
   /// Helper para mostrar mensajes informativos con ícono y color.
   Widget _buildInfoMessage({
@@ -1520,125 +1531,180 @@ class _AdvancedOptionsSheetState extends State<AdvancedOptionsSheet> {
   }
 
   /// Widget para el escenario de "Aplicar monto parcial" del saldo a favor.
-  Widget _buildAplicarParcialWidget({
-    required BuildContext context,
-    required AdvancedOptionsViewModel viewModel,
-    required double montoMaximo,
-    required bool isDarkMode,
-    required TextEditingController controller,
-  }) {
-    // Inicializa el controller con el monto máximo la primera vez que se construye.
-    // Esto inteligentemente sugiere "cubrir completo" si es posible.
-    if (controller.text.isEmpty) {
-      controller.text = montoMaximo.toStringAsFixed(2);
-      // Mueve el cursor al final para facilitar la edición
-      controller.selection = TextSelection.fromPosition(
-        TextPosition(offset: controller.text.length),
-      );
-    }
+  /// Widget para el escenario de "Aplicar monto parcial" del saldo a favor.
+Widget _buildAplicarParcialWidget({
+  required BuildContext context,
+  required AdvancedOptionsViewModel viewModel,
+  required double montoMaximo,
+  required bool isDarkMode,
+  required TextEditingController controller,
+}) {
+  final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "Monto a Utilizar:",
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          enabled: !viewModel.isSaving,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            prefixText: '\$ ',
-            isDense: true,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            hintText: "Máx: \$${formatearNumero(montoMaximo)}",
-            helperText: "Puedes editar este monto.", // Pequeña ayuda al usuario
-          ),
-          // Valida que el monto ingresado no exceda el máximo aplicable.
-          onChanged: (value) {
-            final double montoIngresado = double.tryParse(value) ?? 0.0;
-            if (montoIngresado > montoMaximo) {
-              // Corrige automáticamente al valor máximo si se excede
-              controller.text = montoMaximo.toStringAsFixed(2);
-              controller.selection = TextSelection.fromPosition(
-                TextPosition(offset: controller.text.length),
-              );
-            }
-          },
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed:
-                viewModel.isSaving
-                    ? null
-                    : () async {
-                      // Obtiene el monto final del controlador de texto
-                      final double montoFinal =
-                          double.tryParse(controller.text) ?? 0.0;
-
-                      // Pequeña validación para no enviar ceros o valores negativos
-                      if (montoFinal <= 0) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("El monto debe ser mayor a cero."),
-                            backgroundColor: Colors.orange,
-                          ),
-                        );
-                        return; // No continuar
-                      }
-
-                      // Llama al ViewModel para ejecutar la lógica de negocio
-                      final success = await viewModel.aplicarSaldoFavor(
-                        montoFinal,
-                      );
-
-                      if (!mounted)
-                        return; // Buena práctica después de un await
-
-                      if (success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Monto aplicado con éxito."),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                        Navigator.pop(context);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Error al aplicar el monto."),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    },
-            icon:
-                viewModel.isSaving
-                    ? const SizedBox.shrink()
-                    : const Icon(Icons.download_done),
-            label:
-                viewModel.isSaving
-                    ? const CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    )
-                    : const Text(
-                      "Aplicar Monto de Saldo",
-                    ), // Texto más genérico
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-        ),
-      ],
+  // Inicializa el controller con el monto máximo si está vacío
+  if (controller.text.isEmpty) {
+    controller.text = montoMaximo.toStringAsFixed(2);
+    controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: controller.text.length),
     );
   }
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        "Monto a Utilizar:",
+        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      ),
+      const SizedBox(height: 12),
+
+      // ==========================================================
+      // --- INICIO DE LA SECCIÓN MODIFICADA (LA PARTE CLAVE) ---
+      // ==========================================================
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start, // Alinea los widgets por la parte de arriba
+        children: [
+          // Campo de Texto para el Monto
+          Expanded(
+            flex: 2, // Le damos más espacio al campo de texto (2/3 del total)
+            child: TextFormField(
+              controller: controller,
+              enabled: !viewModel.isSaving,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontSize: 14),
+              decoration: InputDecoration(
+                prefixText: '\$ ',
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                hintText: "Máx: \$${formatearNumero(montoMaximo)}",
+                filled: true,
+                fillColor: themeProvider.colors.backgroundCard,
+              ),
+              onChanged: (value) {
+                // Lógica para no exceder el monto máximo
+                final double montoIngresado =
+                    double.tryParse(value.replaceAll(',', '')) ?? 0.0;
+                if (montoIngresado > montoMaximo) {
+                  controller.text = montoMaximo.toStringAsFixed(2);
+                  controller.selection = TextSelection.fromPosition(
+                    TextPosition(offset: controller.text.length),
+                  );
+                }
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Botón para seleccionar la Fecha
+          Expanded(
+            flex: 1, // Le damos menos espacio al botón (1/3 del total)
+            child: TextButton.icon(
+              icon: const Icon(Icons.calendar_today, size: 16),
+              label: Text(
+                // ¡AQUÍ CONECTAMOS CON EL VIEWMODEL!
+                // Usamos la fecha que está en el estado del ViewModel.
+                formatearFecha(viewModel.fechaSaldoFavorSeleccionada),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13),
+              ),
+              // ¡Y AQUÍ TAMBIÉN!
+              // Al presionarlo, llamamos al método del ViewModel para mostrar el picker.
+              onPressed: viewModel.isSaving
+                  ? null
+                  : () => viewModel.seleccionarFechaSaldoFavor(context),
+              style: TextButton.styleFrom(
+                backgroundColor: themeProvider.colors.backgroundCard,
+                foregroundColor: themeProvider.colors.textButton2,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade300),
+                ),
+                minimumSize: const Size(0, 45), // Asegura que tenga una buena altura
+              ),
+            ),
+          ),
+        ],
+      ),
+      // ==========================================================
+      // --- FIN DE LA SECCIÓN MODIFICADA ---
+      // ==========================================================
+
+      const SizedBox(height: 24),
+      SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed:
+              viewModel.isSaving
+                  ? null
+                  : () async {
+                    // La lógica de guardado no necesita cambiar,
+                    // porque el ViewModel ya sabe qué fecha se seleccionó.
+                    final double montoFinal =
+                        double.tryParse(controller.text.replaceAll(',', '')) ?? 0.0;
+
+                    if (montoFinal <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("El monto debe ser mayor a cero."),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                      return;
+                    }
+
+                    final success = await viewModel.aplicarSaldoFavor(
+                      montoFinal,
+                    );
+
+                    if (!mounted) return;
+
+                    if (success) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Monto aplicado con éxito."),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      Navigator.pop(context);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Error al aplicar el monto."),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
+          icon:
+              viewModel.isSaving
+                  ? const SizedBox.shrink()
+                  : const Icon(Icons.download_done),
+          label:
+              viewModel.isSaving
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : const Text("Aplicar Monto de Saldo"),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+        ),
+      ),
+    ],
+  );
+}
 
   // ---------------------------------------------------------------------------
   // --- WIDGETS AUXILIARES (Helpers de UI) ---

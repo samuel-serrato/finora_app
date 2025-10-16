@@ -381,7 +381,8 @@ class _GlobalOptionsSheetState extends State<GlobalOptionsSheet> {
                         ),
                         onPressed: _isSaving ? null : _seleccionarFecha,
                         style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF4F46E5),
+                          foregroundColor: themeProvider.colors.textButton2,
+                          backgroundColor: themeProvider.colors.backgroundCard,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
                             vertical: 14,
@@ -390,7 +391,7 @@ class _GlobalOptionsSheetState extends State<GlobalOptionsSheet> {
                             borderRadius: BorderRadius.circular(12),
                             side: BorderSide(color: Colors.grey.shade300),
                           ),
-                          minimumSize: const Size(0, 48),
+                          minimumSize: const Size(0, 45),
                         ),
                       ),
                     ),

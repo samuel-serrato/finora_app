@@ -6,10 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/app_logger.dart';
 
-
 // --- IMPORTACIONES NECESARIAS ---
 // Asegúrate de reemplazar 'tu_proyecto' con el nombre real de tu paquete.
-
 
 /// Define las diferentes vistas/pantallas dentro del modal de opciones avanzadas.
 /// Usar un enum previene errores de tipeo y hace el código más legible.
@@ -21,11 +19,15 @@ enum OpcionVista { menuPrincipal, moratorios, renovacion, saldoFavor }
 /// manteniendo el widget de la UI limpio y declarativo.
 /// Hereda de ChangeNotifier para notificar a los widgets cuando los datos cambian.
 class AdvancedOptionsViewModel extends ChangeNotifier {
-
-   // <<< AÑADIR: ESTADO PARA LA FECHA DEL MORATORIO EDITABLE >>>
+  // <<< AÑADIR: ESTADO PARA LA FECHA DEL MORATORIO EDITABLE >>>
   /// Almacena la fecha seleccionada por el usuario para el pago del moratorio.
   /// Se inicializa con la fecha existente si ya hay un pago, o null si no.
   DateTime? fechaMoratorioSeleccionada;
+  // <<< INICIO: AÑADIR ESTADO PARA LA FECHA DEL SALDO A FAVOR >>>
+  /// Almacena la fecha seleccionada para el pago utilizando saldo a favor.
+  DateTime fechaSaldoFavorSeleccionada =
+      DateTime.now(); // Se inicializa con la fecha actual
+  // <<< FIN: AÑADIR ESTADO >>>
   // <<< FIN DE AÑADIR >>>
 
   // ---------------------------------------------------------------------------
@@ -68,10 +70,10 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
   /// Mapa de montos de renovación editados por el usuario.
   /// La clave es el ID del cliente, el valor es el monto.
   Map<String, double> _montosEditados = {};
-  
-   // <<< AÑADIR >>>
+
+  // <<< AÑADIR >>>
   // --- ESTADO PARA MORATORIO EDITABLE ---
-  
+
   /// Controla si el switch de "moratorio editable" está activado o no.
   late bool moratorioEditableHabilitado;
 
@@ -79,7 +81,7 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
   late TextEditingController moratorioEditableController;
   // <<< FIN DE AÑADIR >>>
 
-    // <<< INICIO: CONTROLLER PARA LA NUEVA VISTA >>>
+  // <<< INICIO: CONTROLLER PARA LA NUEVA VISTA >>>
   /// Controller para el campo de texto del pago de ajuste.
   late final TextEditingController ajusteController;
   // <<< FIN: CONTROLLER PARA LA NUEVA VISTA >>>
@@ -102,13 +104,22 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
     });
   }
 
-   // Modifica o crea un método de inicialización para calcular el total objetivo
-  void inicializarDatos(Pago pago, List<Pago> allPagos, List<ClienteMonto> clientesParaRenovar, double pagoCuotaTotal) {
+  // Modifica o crea un método de inicialización para calcular el total objetivo
+  void inicializarDatos(
+    Pago pago,
+    List<Pago> allPagos,
+    List<ClienteMonto> clientesParaRenovar,
+    double pagoCuotaTotal,
+  ) {
     // ... tu lógica de inicialización existente ...
 
     // --- LÓGICA COPIADA Y ADAPTADA DE TU CÓDIGO DESKTOP ---
-    final double totalOriginal = clientesParaRenovar.fold(0.0, (sum, cliente) => sum + cliente.capitalMasInteres);
-    double totalCalculado = totalOriginal; // Puedes usar tu función redondearDecimales
+    final double totalOriginal = clientesParaRenovar.fold(
+      0.0,
+      (sum, cliente) => sum + cliente.capitalMasInteres,
+    );
+    double totalCalculado =
+        totalOriginal; // Puedes usar tu función redondearDecimales
 
     // Aquí va la misma lógica que tenías para ver si se aplica un descuento
     // por garantía en la última semana.
@@ -122,18 +133,20 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
     // Notificar a los listeners que los datos están listos
     notifyListeners();
   }
-  
+
   /// GETTER DERIVADO: Verifica si ya existen renovaciones guardadas para este pago.
   bool get hayRenovacionesGuardadas => _pago.renovacionesPendientes.isNotEmpty;
 
-    // <<< AÑADIR ESTE NUEVO GETTER >>>
+  // <<< AÑADIR ESTE NUEVO GETTER >>>
   /// Verifica si ya existe al menos un abono guardado en el servidor para este pago.
   /// Esto es crucial para habilitar la adición de moratorios manuales.
   bool get tieneAbonosGuardados {
     // Buscamos en la lista de abonos si alguno tiene un 'idpagos' válido.
     // Esto significa que ya fue registrado en la base de datos.
-    return _pago.abonos.any((abono) =>
-        abono['idpagos'] != null && abono['idpagos'].toString().isNotEmpty);
+    return _pago.abonos.any(
+      (abono) =>
+          abono['idpagos'] != null && abono['idpagos'].toString().isNotEmpty,
+    );
   }
   // <<< FIN DEL GETTER >>>
 
@@ -148,10 +161,10 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
     required List<ClienteMonto> clientesParaRenovar,
     required this.saldoFavorTotalAcumulado,
     required this.onDataChanged,
-  })  : _pagoService = pagoService,
-        _idCredito = idCredito,
-        _pago = pago,
-        _clientesParaRenovar = clientesParaRenovar {
+  }) : _pagoService = pagoService,
+       _idCredito = idCredito,
+       _pago = pago,
+       _clientesParaRenovar = clientesParaRenovar {
     // Inicializa el estado con los valores del objeto 'pago'
     _estadoMoratorioSwitch = _pago.moratorioDesabilitado ?? "No";
     _inicializarEstadoRenovacion();
@@ -162,14 +175,12 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
     moratorioEditableController = TextEditingController();
     // <<< FIN DE AÑADIR >>>
 
-
     // <<< INICIO: INICIALIZAR EL NUEVO CONTROLLER >>>
     // 2. Inicializa el controller en el constructor.
     ajusteController = TextEditingController();
     // <<< FIN: INICIALIZAR EL NUEVO CONTROLLER >>>
 
-
-       // ===================================================================
+    // ===================================================================
     // --- INICIO DEL CÓDIGO AÑADIDO ---
     // ===================================================================
     // Aquí "agarramos" y calculamos el monto objetivo al crear el ViewModel.
@@ -183,18 +194,16 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
     // --- FIN DEL CÓDIGO AÑADIDO ---
     // ===================================================================
 
-      // <<< AÑADIR: INICIALIZACIÓN DE LA FECHA DEL MORATORIO >>>
+    // <<< AÑADIR: INICIALIZACIÓN DE LA FECHA DEL MORATORIO >>>
     _inicializarFechaMoratorio();
     // <<< FIN DE AÑADIR >>>
-
   }
 
-    
   // <<< AÑADIR: MÉTODO PRIVADO PARA INICIALIZAR LA FECHA >>>
   /// Revisa si ya existe un pago de moratorio guardado y, de ser así,
   /// establece la `fechaMoratorioSeleccionada` con ese valor para que la UI
   /// lo muestre al cargar.
- /// Si el moratorio ya fue pagado, busca en la lista de abonos (`_pago.abonos`)
+  /// Si el moratorio ya fue pagado, busca en la lista de abonos (`_pago.abonos`)
   /// la transacción específica marcada con `moratorio: "Si"` y extrae
   /// su `fechaDeposito`. Si no existe, la fecha queda como `null` para que
   /// la UI pueda proponer la fecha actual para un nuevo pago.
@@ -224,10 +233,7 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
   }
   // <<< FIN DEL CÓDIGO A REEMPLAZAR >>>
 
-
-
-
-    // <<< AÑADIR: MÉTODO PARA MOSTRAR EL DATEPICKER DEL MORATORIO >>>
+  // <<< AÑADIR: MÉTODO PARA MOSTRAR EL DATEPICKER DEL MORATORIO >>>
   /// Muestra el selector de fecha para el moratorio editable.
   /// Es muy similar a la función que proporcionaste de ejemplo.
   Future<void> seleccionarFechaMoratorio(BuildContext context) async {
@@ -249,7 +255,8 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
             ),
             textButtonTheme: TextButtonThemeData(
               style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF4F46E5)),
+                foregroundColor: const Color(0xFF4F46E5),
+              ),
             ),
           ),
           child: child!,
@@ -264,9 +271,6 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
     }
   }
   // <<< FIN DE AÑADIR >>>
-
-
-  
 
   /// Configura el estado inicial para la vista de renovación.
   /// Pre-selecciona clientes y carga los montos guardados previamente.
@@ -303,7 +307,7 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
     _vistaActual = nuevaVista;
     notifyListeners();
   }
-  
+
   /// Agrega o quita un cliente de la selección de renovación.
   void toggleClienteRenovacion(String clienteId, bool isSelected) {
     final newSet = Set<String>.from(_clientesSeleccionados);
@@ -353,12 +357,17 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
   /// Devuelve `true` si la operación fue exitosa.
   Future<bool> guardarRenovacion() async {
     _setSaving(true);
-    
-    final clientesAGuardar = _clientesParaRenovar
-        .where((cliente) =>
-            _clientesSeleccionados.contains(cliente.idclientes!) &&
-            !_pago.renovacionesPendientes.any((r) => r.idclientes == cliente.idclientes))
-        .toList();
+
+    final clientesAGuardar =
+        _clientesParaRenovar
+            .where(
+              (cliente) =>
+                  _clientesSeleccionados.contains(cliente.idclientes!) &&
+                  !_pago.renovacionesPendientes.any(
+                    (r) => r.idclientes == cliente.idclientes,
+                  ),
+            )
+            .toList();
 
     if (clientesAGuardar.isEmpty) {
       // Opcional: podrías manejar este caso para mostrar un mensaje.
@@ -366,15 +375,17 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
       return false; // No hay nada que guardar.
     }
 
-    final List<Map<String, dynamic>> payload = clientesAGuardar.map((cliente) {
-      final monto = _montosEditados[cliente.idclientes!] ?? cliente.capitalMasInteres;
-      return {
-        "iddetallegrupos": cliente.iddetallegrupos,
-        "idgrupos": cliente.idgrupos,
-        "idclientes": cliente.idclientes,
-        "descuento": monto,
-      };
-    }).toList();
+    final List<Map<String, dynamic>> payload =
+        clientesAGuardar.map((cliente) {
+          final monto =
+              _montosEditados[cliente.idclientes!] ?? cliente.capitalMasInteres;
+          return {
+            "iddetallegrupos": cliente.iddetallegrupos,
+            "idgrupos": cliente.idgrupos,
+            "idclientes": cliente.idclientes,
+            "descuento": monto,
+          };
+        }).toList();
 
     final response = await _pagoService.guardarSeleccionRenovacion(
       idFechasPago: _pago.idfechaspagos!,
@@ -384,14 +395,13 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
     if (response.success) {
       onDataChanged();
     }
-    
+
     _setSaving(false);
     return response.success;
   }
 
+  // <<< AÑADIR ESTOS DOS NUEVOS MÉTODOS >>>
 
-   // <<< AÑADIR ESTOS DOS NUEVOS MÉTODOS >>>
-  
   /// Actualiza el permiso para que el moratorio sea editable.
   /// Llama al servicio `actualizarPermisoMoratorioEditable`.
   Future<bool> actualizarPermisoMoratorioEditable(bool habilitar) async {
@@ -403,7 +413,8 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
     if (response.success) {
       // Actualizamos el estado local para que la UI reaccione inmediatamente
       moratorioEditableHabilitado = habilitar;
-      _pago.moratorioEditable = habilitar ? "Si" : "No"; // Actualiza el modelo local
+      _pago.moratorioEditable =
+          habilitar ? "Si" : "No"; // Actualiza el modelo local
       onDataChanged();
     }
     _setSaving(false);
@@ -413,8 +424,8 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
   /// Guarda el monto del moratorio ingresado manualmente.
   /// Llama al servicio `guardarMoratorioEditable`.
   // Reemplaza esta función completa
-/// Guarda el monto del moratorio ingresado manualmente.
-/// Llama al servicio `guardarMoratorioEditable`.
+  /// Guarda el monto del moratorio ingresado manualmente.
+  /// Llama al servicio `guardarMoratorioEditable`.
   // <<< MODIFICAR: `guardarMoratorioManual` PARA USAR LA NUEVA FECHA >>>
   /// Guarda el monto del moratorio ingresado manualmente.
   Future<bool> guardarMoratorioManual() async {
@@ -428,8 +439,11 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
     _setSaving(true);
 
     // Usa la fecha seleccionada por el usuario, o la fecha actual como respaldo.
-    final DateTime fechaParaGuardar = fechaMoratorioSeleccionada ?? DateTime.now();
-    final String fechaFormateada = DateFormat('yyyy-MM-dd').format(fechaParaGuardar);
+    final DateTime fechaParaGuardar =
+        fechaMoratorioSeleccionada ?? DateTime.now();
+    final String fechaFormateada = DateFormat(
+      'yyyy-MM-dd',
+    ).format(fechaParaGuardar);
 
     final response = await _pagoService.guardarMoratorioEditable(
       idFechasPagos: _pago.idfechaspagos!,
@@ -449,7 +463,7 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
   // <<< FIN DE MODIFICAR >>>
 
   // <<< FIN DE AÑADIR >>>
-  
+
   /// Elimina todas las renovaciones guardadas para esta semana.
   /// Devuelve `true` si la operación fue exitosa.
   Future<bool> eliminarRenovacion() async {
@@ -458,11 +472,11 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
     final response = await _pagoService.eliminarSeleccionRenovacion(
       idFechasPago: _pago.idfechaspagos!,
     );
-    
+
     if (response.success) {
       onDataChanged();
     }
-    
+
     _setDeleting(false);
     return response.success;
   }
@@ -471,72 +485,69 @@ class AdvancedOptionsViewModel extends ChangeNotifier {
   /// Devuelve `true` si la operación fue exitosa.
   // En AdvancedOptionsViewModel.dart
 
-/// Aplica un monto del saldo a favor acumulado a la deuda de este pago.
-/// Devuelve `true` si la operación fue exitosa.
-// En AdvancedOptionsViewModel.dart
+  /// Aplica un monto del saldo a favor acumulado a la deuda de este pago.
+  /// Devuelve `true` si la operación fue exitosa.
+  // En AdvancedOptionsViewModel.dart
 
+  
+// REEMPLAZA tu método aplicarSaldoFavor() existente con este:
 Future<bool> aplicarSaldoFavor(double montoAAplicar) async {
   _setSaving(true);
 
-  // IMPORTANTE: Ya no abortamos si los IDs son nulos.
-  // La lógica del servidor los espera así.
-
+  // Formatea la fecha seleccionada para enviarla a la API.
+  // Usa la variable de estado 'fechaSaldoFavorSeleccionada'.
+  final String fechaFormateada = DateFormat('yyyy-MM-dd').format(fechaSaldoFavorSeleccionada);
+  
   // ==========================================================
-  // <<< LOGS DE DEPURACIÓN (AHORA SÍ SE EJECUTARÁN) >>>
+  // <<< LOGS DE DEPURACIÓN (AHORA CON LA FECHA) >>>
   // ==========================================================
-  AppLogger.log("🚀 INTENTANDO APLICAR SALDO A FAVOR (Permitiendo IDs nulos) 🚀");
+  AppLogger.log("🚀 INTENTANDO APLICAR SALDO A FAVOR 🚀");
   AppLogger.log("  - Semana del Pago: ${_pago.semana}");
   AppLogger.log("  - Monto a Aplicar: $montoAAplicar");
+  AppLogger.log("  - FECHA DE PAGO SELECCIONADA: $fechaFormateada"); // <--- NUEVO LOG
   AppLogger.log("  - ID Crédito: $_idCredito");
-  AppLogger.log("  - ID Pagos Detalles: ${_pago.idpagosdetalles}"); // <-- Podría ser null
   AppLogger.log("  - ID Fechas Pago: ${_pago.idfechaspagos}");
-  AppLogger.log("  - ID Pagos (Principal): ${_pago.idpagos}"); // <-- Podría ser null
-  AppLogger.log("  - Monto a Depositar (cuota semanal): ${_pago.capitalMasInteres}");
   AppLogger.log("=================================================");
   
   try {
     // La llamada al servicio AHORA SÍ se ejecutará
     final response = await _pagoService.aplicarSaldoAFavor(
       idCredito: _idCredito,
-      // NOTA: Tu servicio debe aceptar valores nulos para estos parámetros.
-      // Si el método _pagoService.aplicarSaldoAFavor requiere strings no nulos (String!),
-      // tendrás que pasar un string vacío '' o ajustar la firma del método.
-      // Asumiremos que acepta nulos (String?).
       idPagosDetalles: _pago.idpagosdetalles, 
-      idFechasPago: _pago.idfechaspagos!, // Este probablemente sí sea requerido siempre
+      idFechasPago: _pago.idfechaspagos!,
       monto: montoAAplicar,
       idPagos: _pago.idpagos,
       montoADepositar: _pago.capitalMasInteres,
+      fechaPago: fechaFormateada, // <--- ¡AQUÍ ESTÁ LA MAGIA!
     );
 
-    // ==========================================================
-    // <<< ESTA ES LA RESPUESTA QUE NECESITAMOS VER AHORA >>>
-    // ==========================================================
-    AppLogger.log("✅ RESPUESTA DEL SERVICIO 'aplicarSaldoAFavor' ✅");
-    AppLogger.log("  - Éxito: ${response.success}");
-    if (!response.success && response.error != null) {
-      AppLogger.log("  - Mensaje de Error del Servidor: ${response.error}");
-    }
-    AppLogger.log("=================================================");
-      
-    if (response.success) {
-      onDataChanged();
-    }
+      // ==========================================================
+      // <<< ESTA ES LA RESPUESTA QUE NECESITAMOS VER AHORA >>>
+      // ==========================================================
+      AppLogger.log("✅ RESPUESTA DEL SERVICIO 'aplicarSaldoAFavor' ✅");
+      AppLogger.log("  - Éxito: ${response.success}");
+      if (!response.success && response.error != null) {
+        AppLogger.log("  - Mensaje de Error del Servidor: ${response.error}");
+      }
+      AppLogger.log("=================================================");
 
-    _setSaving(false);
-    return response.success;
-    
-  } catch (e, stackTrace) {
-    AppLogger.log("🚨 EXCEPCIÓN INESPERADA al llamar a aplicarSaldoAFavor 🚨");
-    AppLogger.log("  - Error: $e");
-    AppLogger.log("  - StackTrace: $stackTrace");
-    AppLogger.log("=================================================");
-    _setSaving(false);
-    return false;
+      if (response.success) {
+        onDataChanged();
+      }
+
+      _setSaving(false);
+      return response.success;
+    } catch (e, stackTrace) {
+      AppLogger.log(
+        "🚨 EXCEPCIÓN INESPERADA al llamar a aplicarSaldoAFavor 🚨",
+      );
+      AppLogger.log("  - Error: $e");
+      AppLogger.log("  - StackTrace: $stackTrace");
+      AppLogger.log("=================================================");
+      _setSaving(false);
+      return false;
+    }
   }
-}
-
-
 
   // +++ AÑADE ESTE NUEVO GETTER AQUÍ +++
   /// Verifica si el moratorio manual ya fue registrado y cubierto en su totalidad.
@@ -550,16 +561,52 @@ Future<bool> aplicarSaldoFavor(double montoAAplicar) async {
     final moratorioData = _pago.pagosMoratorios.first;
 
     // Extraemos los valores de forma segura.
-    final moratorioEditable = moratorioData['moratorioEditable'] as String? ?? 'No';
-    final sumaMoratorios = (moratorioData['sumaMoratorios'] as num?)?.toDouble() ?? 0.0;
-    final moratorioAPagar = (moratorioData['moratorioAPagar'] as num?)?.toDouble() ?? 0.0;
+    final moratorioEditable =
+        moratorioData['moratorioEditable'] as String? ?? 'No';
+    final sumaMoratorios =
+        (moratorioData['sumaMoratorios'] as num?)?.toDouble() ?? 0.0;
+    final moratorioAPagar =
+        (moratorioData['moratorioAPagar'] as num?)?.toDouble() ?? 0.0;
 
     // La condición es: es editable, el monto es mayor a cero y ya se pagó por completo.
     return moratorioEditable == 'Si' &&
-           sumaMoratorios > 0 &&
-           sumaMoratorios == moratorioAPagar;
+        sumaMoratorios > 0 &&
+        sumaMoratorios == moratorioAPagar;
   }
   // +++ FIN DEL CÓDIGO A AÑADIR +++
+
+  // <<< INICIO: AÑADIR MÉTODO PARA EL DATEPICKER DEL SALDO A FAVOR >>>
+  /// Muestra el selector de fecha para el pago con saldo a favor.
+  Future<void> seleccionarFechaSaldoFavor(BuildContext context) async {
+    final DateTime? fechaSeleccionada = await showDatePicker(
+      context: context,
+      initialDate:
+          fechaSaldoFavorSeleccionada, // Usa la variable de estado que creamos
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(
+        const Duration(days: 365),
+      ), // Limita la fecha a futuro
+      helpText: 'Fecha del Pago',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: const Color(0xFF4F46E5),
+              onPrimary: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    // Si el usuario elige una fecha, actualizamos nuestro estado y notificamos a la UI.
+    if (fechaSeleccionada != null) {
+      fechaSaldoFavorSeleccionada = fechaSeleccionada;
+      notifyListeners(); // ¡Muy importante para que la UI se redibuje con la nueva fecha!
+    }
+  }
+  // <<< FIN: AÑADIR MÉTODO >>>
 
   // ---------------------------------------------------------------------------
   // --- HELPERS PRIVADOS ---
@@ -575,7 +622,6 @@ Future<bool> aplicarSaldoFavor(double montoAAplicar) async {
     notifyListeners();
   }
 
-
   @override
   void dispose() {
     // <<< AÑADIR >>>
@@ -589,5 +635,4 @@ Future<bool> aplicarSaldoFavor(double montoAAplicar) async {
 
     super.dispose();
   }
-
 }
