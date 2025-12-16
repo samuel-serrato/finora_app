@@ -26,6 +26,11 @@ class ControlPagosTab extends StatefulWidget {
   // --- PARÁMETROS FINALES Y COMPLETOS ---
   final String idCredito;
   final double montoGarantia;
+    
+  // ▼▼▼▼▼▼ AGREGA ESTA VARIABLE ▼▼▼▼▼▼
+  final double montoDesembolsado; 
+  // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
   final List<ClienteMonto> clientesParaRenovar;
   final double pagoCuotaTotal;
   final VoidCallback onDataChanged; // Callback para notificar al padre
@@ -39,6 +44,10 @@ class ControlPagosTab extends StatefulWidget {
     Key? key,
     required this.idCredito,
     required this.montoGarantia,
+     // ▼▼▼▼▼▼ AGREGA ESTO AL CONSTRUCTOR ▼▼▼▼▼▼
+    required this.montoDesembolsado,
+    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
     required this.clientesParaRenovar,
     required this.pagoCuotaTotal,
     required this.onDataChanged,
@@ -1393,6 +1402,12 @@ class _ControlPagosTabState extends State<ControlPagosTab>
     CreditoTotales totales,
     bool isDarkMode,
   ) {
+
+    // ▼▼▼ CÁLCULO ▼▼▼
+    double inversionPendiente = widget.montoDesembolsado - totales.totalPagoActual;
+    if (inversionPendiente < 0) inversionPendiente = 0;
+    // ▲▲▲▲▲▲▲▲▲▲▲▲
+    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1434,6 +1449,11 @@ class _ControlPagosTabState extends State<ControlPagosTab>
                   '\$${formatearNumero(totales.totalMonto)}',
                   isDarkMode,
                 ),
+                _buildDetalleRow(
+                  'Desembolsado (capital invertido):',
+                  '\$${formatearNumero(widget.montoDesembolsado)}',
+                  isDarkMode,
+                ),
                 Divider(height: 24),
 
                 _buildDetalleRow(
@@ -1448,6 +1468,15 @@ class _ControlPagosTabState extends State<ControlPagosTab>
                   isDarkMode,
                   valueColor: isDarkMode ? Colors.grey[400] : Colors.grey[600],
                 ),
+
+                // ▼▼▼▼▼▼ AGREGAR DESPUÉS DE TOTAL INGRESADO ▼▼▼▼▼▼
+                _buildDetalleRow(
+                  'Capital por Recuperar:',
+                  '\$${formatearNumero(inversionPendiente)}',
+                  isDarkMode,
+                  valueColor: inversionPendiente > 0 ? Colors.orange : Colors.green,
+                ),
+                // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
                 Divider(height: 24),
 
@@ -1557,6 +1586,13 @@ class _ControlPagosTabState extends State<ControlPagosTab>
     final themeProvider = Provider.of<ThemeProvider>(context);
     final colors = themeProvider.colors;
 
+
+    // ▼▼▼▼▼▼ CÁLCULO DE LA INVERSIÓN PENDIENTE ▼▼▼▼▼▼
+    double inversionPendiente = widget.montoDesembolsado - totales.totalPagoActual;
+    // Si ya recuperamos todo (es negativo), mostramos 0
+    if (inversionPendiente < 0) inversionPendiente = 0;
+    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
     return GestureDetector(
       onTap: () {
         _mostrarDetallesCompletos(context, totales, isDarkMode);
@@ -1595,6 +1631,15 @@ class _ControlPagosTabState extends State<ControlPagosTab>
                 color: Colors.green.shade300,
               ),
               _buildDivisor(),
+               // ▼▼▼▼▼▼ AQUÍ AGREGAMOS EL NUEVO CAMPO ▼▼▼▼▼▼
+              _buildItemFlotante(
+                label: 'Capital Pendiente', // Nombre corto para la barra
+                valor: inversionPendiente,
+                // Usamos naranja para indicar que está pendiente, o gris si es 0
+                color: inversionPendiente > 0 ? Colors.orange.shade400 : Colors.grey,
+              ),
+              _buildDivisor(),
+              // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
               _buildItemFlotante(
                 label: 'A Favor',
                 valor: totales.totalSaldoFavor,

@@ -24,10 +24,10 @@ class HomeScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
+class HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   HomeData? homeData;
   bool isLoading = true;
@@ -40,6 +40,11 @@ class _HomeScreenState extends State<HomeScreen>
   // Variables para el control del menú móvil
   late TabController _tabController;
   int _selectedTabIndex = 0;
+
+  // --- ¡AÑADE ESTA LÍNEA! ---
+  Key _calendarioKey = UniqueKey(); // Key para el calendario
+    Key _graficaKey = UniqueKey();    // <<< 1. AÑADE UNA KEY PARA LA GRÁFICA >>>
+
 
   @override
   void initState() {
@@ -92,6 +97,19 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // --- ¡MODIFICA ESTA FUNCIÓN! ---
+  void refreshData() {
+    setState(() {
+      // Al refrescar, generamos nuevas keys para AMBOS widgets
+      _calendarioKey = UniqueKey();
+      _graficaKey = UniqueKey(); // <<< 2. ACTUALIZA LA KEY DE LA GRÁFICA AQUÍ TAMBIÉN >>>
+      
+      AppLogger.log('🔄 Generando nuevas keys para Calendario y Gráfica.');
+    });
+    // Ahora llama a tu función de carga de datos del Home
+    _fetchHomeData();
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -133,7 +151,7 @@ class _HomeScreenState extends State<HomeScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-               /*  welcomeCard(),
+                /*  welcomeCard(),
                 const SizedBox(height: 14), */
                 _buildSummaryHeader(),
                 const SizedBox(height: 0),
@@ -223,6 +241,7 @@ class _HomeScreenState extends State<HomeScreen>
   // Widget que muestra el contenido según el tab seleccionado
   // Widget que muestra el contenido según el tab seleccionado
   // Widget que muestra el contenido según el tab seleccionado
+  
   Widget _buildMobileTabContent(bool isDarkMode) {
     return Padding(
       padding: const EdgeInsets.only(top: 4.0, bottom: 8.0),
@@ -230,14 +249,11 @@ class _HomeScreenState extends State<HomeScreen>
         index: _selectedTabIndex,
         children: [
           // Tab 0: Calendario de Pagos
-          // Este widget ya está diseñado para ser flexible.
-          CalendarioPagos(isDarkMode: isDarkMode),
+          CalendarioPagos(key: _calendarioKey, isDarkMode: isDarkMode),
 
-          // Tab 0: Gráfica
-          // <<< ¡AQUÍ ESTÁ EL CAMBIO! >>>
-          // Simplemente quitamos el SizedBox que limitaba la altura.
-          // Ahora la gráfica se expandirá para llenar el espacio disponible.
-          GraficaPagosWidget(colors: colors),
+          // Tab 1: Gráfica
+          // <<< 3. APLICA LA KEY A LA GRÁFICA (VISTA MÓVIL) >>>
+          GraficaPagosWidget(key: _graficaKey, colors: colors),
         ],
       ),
     );
@@ -270,8 +286,8 @@ class _HomeScreenState extends State<HomeScreen>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // 1. Saludo de bienvenida (tamaño fijo)
-     /*    welcomeCard(), */
-     /*    const SizedBox(height: 12), */
+        /*    welcomeCard(), */
+        /*    const SizedBox(height: 12), */
 
         // 2. Tarjetas de resumen (tamaño fijo)
         statCardsList(isSmallScreen: false, crossAxisCount: 5),
@@ -285,7 +301,7 @@ class _HomeScreenState extends State<HomeScreen>
               // Gráfica de la izquierda (ocupa la mitad del espacio)
               // <<< CAMBIO AQUÍ >>>
               // Reemplazamos la gráfica estática por la nueva gráfica dinámica
-              Expanded(child: GraficaPagosWidget(colors: colors)),
+              Expanded(child: GraficaPagosWidget(key: _graficaKey, colors: colors)),
               /*  const SizedBox(width: 24),
               Expanded(
                 child: SalesPerformanceChart(colors: colors, isExpanded: true),
@@ -305,7 +321,9 @@ class _HomeScreenState extends State<HomeScreen>
     return Column(
       children: [
         // 1. Agenda de Pagos
-        Expanded(child: CalendarioPagos(isDarkMode: isDarkMode)),
+        Expanded(
+          child: CalendarioPagos(key: _calendarioKey, isDarkMode: isDarkMode),
+        ),
         // Si necesitas más widgets en esta columna, puedes agregarlos aquí.
       ],
     );
@@ -532,7 +550,10 @@ class _HomeScreenState extends State<HomeScreen>
             colors: [color.withOpacity(0.15), color.withOpacity(0.05)],
           ),
         ),
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: isSmallScreen ? 10 : 18),
+        padding: EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: isSmallScreen ? 10 : 18,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

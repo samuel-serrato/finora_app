@@ -1,16 +1,24 @@
 // lib/widgets/calendario_pagos.dart (o la ruta donde tengas tu widget)
 
 // <<< NUEVO >>> Importa los modelos y servicios que creamos
+import 'dart:convert';
+
 import 'package:finora_app/constants/colors.dart';
+import 'package:finora_app/ip.dart';
 import 'package:finora_app/models/agenda_item.dart';
 import 'package:finora_app/services/agenda_service.dart';
 
 // <<< MODIFICADO >>> Asegúrate que estas rutas son correctas para tu proyecto
 import 'package:finora_app/providers/theme_provider.dart';
+import 'package:finora_app/services/config_service.dart';
 import 'package:finora_app/utils/formatters.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../utils/app_logger.dart';
 
 class CalendarioPagos extends StatefulWidget {
   final bool isDarkMode;
@@ -33,22 +41,89 @@ class _CalendarioPagosState extends State<CalendarioPagos> {
   String? _errorMessage;
   // Se elimina la variable estática 'pagosEjemplo'
 
+   // --- AÑADE ESTAS DOS LÍNEAS ---
+  int _startOfWeekDay = DateTime.monday; // Valor por defecto: Lunes
+  bool _isLoadingDiaCorte = true;
+  // ------------------------------
+
   final AppColors colors = AppColors();
+
+  // --- AÑADE ESTA LÍNEA ---
+  final ConfigService _configService = ConfigService();
+  // --------------------------
 
   @override
   void initState() {
     super.initState();
+     // --- AÑADE LA LLAMADA A LA NUEVA FUNCIÓN ---
+    _fetchDiaCorteYDatos();
     // <<< NUEVO >>> Llamamos a la API para cargar los datos del mes actual al iniciar el widget
-    _fetchAgendaData();
+    //_fetchAgendaData();
+  }
+
+
+
+  // --- REEMPLAZA TU FUNCIÓN EXISTENTE CON ESTA ---
+
+  Future<void> _fetchDiaCorteYDatos() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _isLoadingDiaCorte = true;
+      _errorMessage = null;
+    });
+
+    // Llamamos a nuestro nuevo servicio
+    final response = await _configService.getDiaCorte();
+
+    if (response.success && response.data != null) {
+      // Si la llamada fue exitosa y obtuvimos un día
+      if (mounted) {
+        setState(() {
+          _startOfWeekDay = _parseDiaCorte(response.data!);
+        });
+      }
+    } else {
+      // Si falló o no vino el dato, el valor por defecto (_startOfWeekDay = DateTime.monday) se mantiene.
+      // El ApiService ya se encargó de loguear el error si lo hubo.
+    }
+
+    // El resto de la lógica no cambia
+    if (mounted) {
+      setState(() => _isLoadingDiaCorte = false);
+      // Una vez que tenemos el día de corte (o el defecto), cargamos la agenda.
+      _fetchAgendaData();
+    }
+  }
+
+  int _parseDiaCorte(String dia) {
+    switch (dia.toLowerCase()) {
+      case 'lunes':
+        return DateTime.monday;
+      case 'martes':
+        return DateTime.tuesday;
+      case 'miercoles':
+        return DateTime.wednesday;
+      case 'jueves':
+        return DateTime.thursday;
+      case 'viernes':
+        return DateTime.friday;
+      case 'sábado':
+        return DateTime.saturday;
+      case 'domingo':
+        return DateTime.sunday;
+      default:
+        return DateTime.monday; // Fallback seguro
+    }
   }
 
   // <<< NUEVO >>> Método para obtener los datos desde AgendaService y procesarlos
   Future<void> _fetchAgendaData() async {
     if (!mounted) return;
-    setState(() {
+    /* setState(() {
       _isLoading = true;
       _errorMessage = null;
-    });
+    }); */
 
     try {
       final List<AgendaItem> items = await _agendaService.getAgendaDelMes(
@@ -698,7 +773,22 @@ class _CalendarioPagosState extends State<CalendarioPagos> {
       final bool isSelected = _isSameDay(day, selectedDate);
 
       return GestureDetector(
-        onTap: () => setState(() => selectedDate = day),
+          onTap: () {
+          // Guardamos el mes anterior para comparar
+          final prevMonth = currentMonth.month;
+          
+          setState(() {
+            selectedDate = day;
+            
+            // <<< MEJORA RECOMENDADA >>>
+            // Si al tocar el día cambiamos de mes (ej. de Nov a Dic),
+            // actualizamos currentMonth y recargamos la API.
+            if (day.month != prevMonth) {
+              currentMonth = DateTime(day.year, day.month);
+              _fetchAgendaData(); // Recarga los pagos del nuevo mes
+            }
+          });
+        },
         child: Container(
           width: 45,
           margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -968,14 +1058,20 @@ class _CalendarioPagosState extends State<CalendarioPagos> {
 
 
   
-  String _getHeaderTitle() {
+ String _getHeaderTitle() {
     switch (currentView) {
       case CalendarView.daily:
         return DateFormat('MMMM yyyy', 'es_ES').format(selectedDate);
+      
       case CalendarView.weekly:
-        // <<< MODIFICADO >>> Usamos la misma función para la coherencia
-        final startOfWeek = _getStartOfWeek(selectedDate);
-        return DateFormat('MMMM yyyy', 'es_ES').format(startOfWeek);
+        // <<< CORRECCIÓN >>>
+        // Antes: final startOfWeek = _getStartOfWeek(selectedDate);
+        // Antes: return DateFormat('MMMM yyyy', 'es_ES').format(startOfWeek);
+        
+        // Ahora: Usamos selectedDate directamente. 
+        // Si tocas el 1 de dic, mostrará Diciembre. Si tocas el 27 de nov, mostrará Noviembre.
+        return DateFormat('MMMM yyyy', 'es_ES').format(selectedDate);
+        
       case CalendarView.monthly:
         return DateFormat('MMMM yyyy', 'es_ES').format(currentMonth);
     }
@@ -1072,13 +1168,13 @@ class _CalendarioPagosState extends State<CalendarioPagos> {
   }
 
     // <<< NUEVO >>> Función de ayuda para obtener el Martes de inicio de semana
-  DateTime _getStartOfWeek(DateTime date) {
-    // DateTime.weekday: Lunes=1, Martes=2, ..., Domingo=7
-    // Queremos que el Martes sea el día 0 de nuestra semana.
-    // Usamos aritmética modular para calcular cuántos días hay que restar.
-    int daysToSubtract = (date.weekday - DateTime.tuesday + 7) % 7;
-    return date.subtract(Duration(days: daysToSubtract));
-  }
+  // <<< MODIFICADO >>> Ahora es dinámica y usa el día de corte configurado
+DateTime _getStartOfWeek(DateTime date) {
+  // DateTime.weekday: Lunes=1, Martes=2, ..., Domingo=7
+  // _startOfWeekDay tiene el valor numérico del día que queremos que sea el inicio.
+  int daysToSubtract = (date.weekday - _startOfWeekDay + 7) % 7;
+  return date.subtract(Duration(days: daysToSubtract));
+}
 
 
   // Métodos de ayuda (sin cambios)

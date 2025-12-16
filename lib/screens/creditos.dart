@@ -639,7 +639,6 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
   // Este es el widget que construye la tarjeta en formato de fila.
   // REEMPLAZA tu método _buildTableRowCardContent con esta versión completa
   Widget _buildTableRowCardContent(Credito credito, dynamic colors) {
-    // Función para obtener el color del estado de pago (la mantienes igual)
     Color getEstadoPagoColor(String? estado) {
       switch (estado?.toLowerCase()) {
         case 'pagado':
@@ -655,24 +654,25 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
       }
     }
 
+    // Verificamos si tiene moratorios para decidir qué pintar, 
+    // pero el ESPACIO lo reservaremos siempre.
+    final bool tieneMoratorios = credito.estadoCredito?.moratorios != null &&
+        credito.estadoCredito!.moratorios > 0;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // --- COLUMNA 1: Identificación y Tags ---
+        // --- COLUMNA 1: Identificación (FLEX 3) ---
         Expanded(
-          flex: 3, // Ajusta el flex para dar espacio adecuado
+          flex: 3,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Tags de Tipo y Plazo
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 3,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     decoration: BoxDecoration(
                       color: Colors.blue.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
@@ -680,18 +680,14 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
                     child: Text(
                       credito.tipo,
                       style: const TextStyle(
-                        color: Colors.blue,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
+                          color: Colors.blue,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600),
                     ),
                   ),
                   const SizedBox(width: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 3,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     decoration: BoxDecoration(
                       color: Colors.purple.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
@@ -699,16 +695,14 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
                     child: Text(
                       credito.tipoPlazo,
                       style: const TextStyle(
-                        color: Colors.purple,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
+                          color: Colors.purple,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              // Nombre y Fecha
               Text(
                 credito.nombreGrupo,
                 maxLines: 1,
@@ -727,76 +721,84 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
             ],
           ),
         ),
-        const VerticalDivider(width: 20, indent: 16, endIndent: 16),
 
-        // --- COLUMNA 2: Métricas Financieras ---
+        const VerticalDivider(width: 30, indent: 16, endIndent: 16),
+
+        // --- COLUMNA 2: Métricas Financieras (FLEX 4) ---
+        // Reduje de 5 a 4 para darle espacio a la columna de Moratorios
         Expanded(
-          flex: 4, // Más espacio para los números
+          flex: 4,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildTableRowItem(
-                'Autorizado',
-                '\$${formatearNumero(credito.montoTotal ?? 0.0)}',
-                colors: colors,
-                valueColor: Colors.blue.shade600,
+              Expanded(
+                child: _buildTableRowItem(
+                  'Autorizado',
+                  '\$${formatearNumero(credito.montoTotal ?? 0.0)}',
+                  colors: colors,
+                  valueColor: Colors.blue.shade600,
+                ),
               ),
-              _buildTableRowItem(
-                'A Recuperar',
-                '\$${formatearNumero(credito.montoMasInteres ?? 0.0)}',
-                colors: colors,
-                valueColor: Colors.green.shade600,
+              Expanded(
+                child: _buildTableRowItem(
+                  'A Recuperar',
+                  '\$${formatearNumero(credito.montoMasInteres ?? 0.0)}',
+                  colors: colors,
+                  valueColor: Colors.green.shade600,
+                ),
               ),
-              _buildTableRowItem(
-                'Interés',
-                '${credito.ti_mensual?.toStringAsFixed(2) ?? 'N/A'}%',
-                icon: Icons.percent_rounded,
-                colors: colors,
-                valueColor: colors.textPrimary,
-                fontWeight: FontWeight.w600,
+              Expanded(
+                child: _buildTableRowItem(
+                  'Interés',
+                  '${credito.ti_mensual?.toStringAsFixed(2) ?? 'N/A'}%',
+                  icon: Icons.percent_rounded,
+                  colors: colors,
+                  valueColor: colors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
         ),
-        const VerticalDivider(width: 20, indent: 16, endIndent: 16),
 
-        // --- COLUMNA 3: Detalles de Pago ---
+        const VerticalDivider(width: 30, indent: 16, endIndent: 16),
+
+        // --- COLUMNA 3: Detalles de Pago (FLEX 3) ---
         Expanded(
           flex: 3,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildTableRowItem(
-                'Día Pago',
-                credito.diaPago ?? 'N/A',
-                icon: Icons.calendar_today_rounded,
-                colors: colors,
-                valueColor: colors.textPrimary,
-                fontWeight: FontWeight.w600,
+              Expanded(
+                child: _buildTableRowItem(
+                  'Día Pago',
+                  credito.diaPago ?? 'N/A',
+                  icon: Icons.calendar_today_rounded,
+                  colors: colors,
+                  valueColor: colors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              // Recreamos el item interactivo para el número de pago
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () {
-                    if (credito.fechas.isNotEmpty) {
-                      _showPaymentScheduleSheet(context, credito);
-                    }
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(4.0),
-                    child: _buildTableRowItem(
-                      'Pagos',
-                      credito.periodoPagoActual ?? credito.numPago ?? 'N/A',
-                      icon: Icons.format_list_numbered_rounded,
-                      colors: colors,
-                      valueColor:
-                          credito.fechas.isNotEmpty
-                              ? Colors.blueAccent
-                              : colors
-                                  .textPrimary, // Color azul si es interactivo
-                      fontWeight: FontWeight.w600,
+              Expanded(
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      if (credito.fechas.isNotEmpty) {
+                        _showPaymentScheduleSheet(context, credito);
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: _buildTableRowItem(
+                        'Pagos',
+                        credito.periodoPagoActual ?? credito.numPago ?? 'N/A',
+                        icon: Icons.format_list_numbered_rounded,
+                        colors: colors,
+                        valueColor: credito.fechas.isNotEmpty
+                            ? Colors.blueAccent
+                            : colors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -805,33 +807,44 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
           ),
         ),
 
-        // --- COLUMNA 4: Moratorios (condicional) ---
-        if (credito.estadoCredito?.moratorios != null &&
-            credito.estadoCredito!.moratorios > 0) ...[
-          const VerticalDivider(width: 20, indent: 16, endIndent: 16),
-          _buildTableRowItem(
-            /*  'Moratorios (${credito.estadoCredito?.diferenciaEnDias ?? 0}d)',
-            '\$${formatearNumero(credito.estadoCredito?.moratorios ?? 0.0)}', */
-            'Moratorios Acumulados',
-            '\$${formatearNumero(credito.estadoCredito?.acumulado ?? 0.0)}',
-            icon: Icons.warning_amber_rounded,
-            colors: colors,
-            valueColor: Colors.red.shade600,
-          ),
-        ],
+        // --- COLUMNA 4: Moratorios (FLEX 2) ---
+        // AQUÍ ESTÁ EL TRUCO:
+        // 1. Siempre renderizamos el espacio del divisor (VerticalDivider o SizedBox de 20 ancho).
+        // 2. Siempre renderizamos el Expanded. Si no hay datos, ponemos un SizedBox vacío.
+        
+        if (tieneMoratorios)
+          const VerticalDivider(width: 20, indent: 16, endIndent: 16)
+        else
+          const SizedBox(width: 20), // Mismo ancho que el Divider para no descuadrar
 
-        const Spacer(), // Empuja lo siguiente al final
+        Expanded(
+          flex: 2, // Flex fijo para reservar el espacio siempre
+          child: tieneMoratorios
+              ? _buildTableRowItem(
+                  'Moratorios Acum.',
+                  '\$${formatearNumero(credito.estadoCredito?.acumulado ?? 0.0)}',
+                  icon: Icons.warning_amber_rounded,
+                  colors: colors,
+                  valueColor: Colors.red.shade600,
+                )
+              : const SizedBox.shrink(), // Ocupa el Flex 2 pero invisible
+        ),
+
+        // Spacer para empujar lo último a la derecha, 
+        // ahora será consistente porque las columnas previas siempre suman el mismo Flex (3+4+3+2 = 12)
+        const Spacer(),
+
         // --- COLUMNA FINAL: Estatus y Acciones ---
         Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             _buildModernStatusChip(credito.estado),
             const SizedBox(width: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: getEstadoPagoColor(
-                  credito.estadoInterno,
-                ).withOpacity(0.1),
+                color:
+                    getEstadoPagoColor(credito.estadoInterno).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Text(
@@ -857,10 +870,8 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
               onSelected: (String value) {
                 switch (value) {
                   case 'editar':
-                    // Tu lógica para editar
                     break;
                   case 'eliminar':
-                    // Llama al diálogo de confirmación
                     _mostrarDialogoConfirmacionEliminar(
                       credito.idcredito,
                       credito.nombreGrupo,
@@ -868,37 +879,28 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
                     break;
                 }
               },
-              itemBuilder:
-                  (BuildContext context) => [
-                    PopupMenuItem<String>(
-                      value: 'editar',
-                      child: Row(
-                        children: const [
-                          Icon(
-                            Icons.edit_outlined,
-                            color: Colors.blue,
-                            size: 20,
-                          ),
-                          SizedBox(width: 12),
-                          Text('Editar'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem<String>(
-                      value: 'eliminar',
-                      child: Row(
-                        children: const [
-                          Icon(
-                            Icons.delete_outline,
-                            color: Colors.red,
-                            size: 20,
-                          ),
-                          SizedBox(width: 12),
-                          Text('Eliminar'),
-                        ],
-                      ),
-                    ),
-                  ],
+              itemBuilder: (BuildContext context) => [
+                PopupMenuItem<String>(
+                  value: 'editar',
+                  child: Row(
+                    children: const [
+                      Icon(Icons.edit_outlined, color: Colors.blue, size: 20),
+                      SizedBox(width: 12),
+                      Text('Editar'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem<String>(
+                  value: 'eliminar',
+                  child: Row(
+                    children: const [
+                      Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                      SizedBox(width: 12),
+                      Text('Eliminar'),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),

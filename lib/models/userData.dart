@@ -36,27 +36,36 @@ class UserData {
   });
 
   factory UserData.fromJson(Map<String, dynamic> json) {
-    var imagenesList = json['imagenes'] as List? ?? [];
-    List<ImageData> imagenesData = imagenesList.map((i) => ImageData.fromJson(i)).toList();
+  // 1. Procesar imágenes (esto estaba bien)
+  var imagenesList = json['imagenes'] as List? ?? [];
+  List<ImageData> imagenesData = imagenesList.map((i) => ImageData.fromJson(i)).toList();
 
-    var licenciaList = json['licencia'] as List? ?? [];
-    List<Licencia> licenciaData = licenciaList.map((i) => Licencia.fromJson(i)).toList();
-
-    return UserData(
-      idusuarios: json['idusuarios'] ?? '',
-      usuario: json['usuario'] ?? '',
-      tipoUsuario: json['tipoUsuario'] ?? '',
-      nombreCompleto: json['nombreCompleto'] ?? '',
-      email: json['email'] ?? '',
-      roles: List<String>.from(json['roles'] ?? []),
-      dbName: json['dbName'] ?? '',
-      nombreNegocio: json['nombreNegocio'] ?? '',
-      imagenes: imagenesData,
-      idnegocio: json['idnegocio'] ?? '',
-      redondeo: (json['redondeo'] as num?)?.toDouble() ?? 0.0,
-      licencia: licenciaData,
-    );
+  // 2. CORRECCIÓN EN LICENCIA
+  List<Licencia> licenciaData = [];
+  
+  if (json['licencia'] is List) {
+    // Si la API cambia y envía una lista, esto funcionará
+    licenciaData = (json['licencia'] as List).map((i) => Licencia.fromJson(i)).toList();
+  } else if (json['licencia'] is Map) {
+    // Si la API envía un objeto (tu caso actual), lo convertimos en una lista de 1 elemento
+    licenciaData = [Licencia.fromJson(json['licencia'])];
   }
+
+  return UserData(
+    idusuarios: json['idusuarios'] ?? '',
+    usuario: json['usuario'] ?? '',
+    tipoUsuario: json['tipoUsuario'] ?? '',
+    nombreCompleto: json['nombreCompleto'] ?? '',
+    email: json['email'] ?? '',
+    roles: List<String>.from(json['roles'] ?? []),
+    dbName: json['dbName'] ?? '',
+    nombreNegocio: json['nombreNegocio'] ?? '',
+    imagenes: imagenesData,
+    idnegocio: json['idnegocio'] ?? '',
+    redondeo: (json['redondeo'] as num?)?.toDouble() ?? 0.0,
+    licencia: licenciaData, // Pasamos la lista corregida
+  );
+}
 
   Map<String, dynamic> toJson() {
     return {

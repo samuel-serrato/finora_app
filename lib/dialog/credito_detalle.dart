@@ -747,6 +747,10 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
       montoGarantia: _creditoData!.montoGarantia,
       clientesParaRenovar: _creditoData!.clientesMontosInd,
       pagoCuotaTotal: _creditoData!.pagoCuota,
+      // ▼▼▼▼▼▼ AGREGA ESTA LÍNEA AQUÍ ▼▼▼▼▼▼
+      montoDesembolsado: _creditoData!.montoDesembolsado, 
+      // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
       onDataChanged: () {
         AppLogger.log("Callback onDataChanged llamado. Refrescando datos...");
         _fetchData();

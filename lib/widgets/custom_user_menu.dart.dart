@@ -2,6 +2,7 @@
 import 'package:finora_app/constants/routes.dart';
 import 'package:finora_app/providers/theme_provider.dart';
 import 'package:finora_app/providers/user_data_provider.dart';
+import 'package:finora_app/screens/home.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 // Importa tus providers y rutas aquí
@@ -14,6 +15,7 @@ class CustomUserMenu extends StatelessWidget {
   final bool isDarkMode;
   final Function(BuildContext)
   showCustomAboutDialog; // Función que viene de tu AppBar
+  final VoidCallback onRefreshHome; // <--- CAMBIA LA KEY POR ESTO
 
   const CustomUserMenu({
     Key? key,
@@ -21,6 +23,7 @@ class CustomUserMenu extends StatelessWidget {
     required this.onLogout,
     required this.isDarkMode,
     required this.showCustomAboutDialog,
+    required this.onRefreshHome, // <--- CAMBIA LA KEY POR ESTO
   }) : super(key: key);
 
   @override
@@ -115,17 +118,20 @@ class CustomUserMenu extends StatelessWidget {
             ],
           );
 
-          // Manejar la selección
-          if (selected != null) {
-            if (selected == 'logout') {
-              bool confirm = await _showLogoutDialog(context);
-              if (confirm) {
-                onLogout();
-              }
-            } else if (selected == 'configuracion') {
-              Navigator.pushNamed(context, AppRoutes.configuracion);
-            } else if (selected == 'acerca_de') {
-              showCustomAboutDialog(context);
+          if (selected == 'configuracion') {
+            final result = await Navigator.pushNamed(
+              context,
+              AppRoutes.configuracion,
+            );
+            if (result == true) {
+              onRefreshHome(); // <--- LLAMA A LA FUNCIÓN
+            }
+          } else if (selected == 'acerca_de') {
+            showCustomAboutDialog(context);
+          } else if (selected == 'logout') {
+            final bool shouldLogout = await _showLogoutDialog(context);
+            if (shouldLogout) {
+              onLogout();
             }
           }
         },

@@ -59,18 +59,29 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   // Estado para controlar la vista del submenú
   bool _showCreditSettings = false;
 
+  // --- AÑADE ESTAS DOS LÍNEAS ---
+  String? _diaCorteSeleccionado;
+  bool _isLoadingDiaCorte = true;
+  // --------------------------------
+
+    // --- AÑADE ESTA LÍNEA ---
+  String? _initialDiaCorte; 
+  // ------------------------
+
   @override
   void initState() {
     super.initState();
+
+    _loadSavedLogos();
+    _fetchCuentasBancarias();
+    _fetchDiaCorte();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final userData = Provider.of<UserDataProvider>(context, listen: false);
       setState(() {
         _roundingThreshold = userData.redondeo ?? 0.5;
       });
     });
-
-    _loadSavedLogos();
-    _fetchCuentasBancarias();
   }
 
   // Cargar los logos guardados previamente
@@ -80,6 +91,9 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
       _colorLogoImagePath = logoProvider.colorLogoPath;
       _whiteLogoImagePath = logoProvider.whiteLogoPath;
     });
+
+    //_loadSavedLogos();
+    //_fetchCuentasBancarias();
   }
 
   // --- EL MÉTODO BUILD AHORA UTILIZA SCAFFOLD ---
@@ -89,35 +103,41 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     final isDarkMode = themeProvider.isDarkMode;
     final colors = themeProvider.colors;
 
-    return Scaffold(
-      // El color de fondo se ajusta al tema para una apariencia consistente
+    
+  return Scaffold(
+    backgroundColor: colors.backgroundPrimary,
+    // --- REEMPLAZA TU APPBAR CON ESTE ---
+    appBar: AppBar(
       backgroundColor: colors.backgroundPrimary,
-      // AppBar reemplaza al _buildHeader personalizado
-      appBar: AppBar(
-        backgroundColor: colors.backgroundPrimary,
-        elevation: 1.0,
-        scrolledUnderElevation: 1.0,
-        // Título dinámico según la vista actual
-        title: Text(
-          _showCreditSettings ? 'Configuración de Crédito' : 'Configuración',
-          style: TextStyle(
-            color: colors.textPrimary,
-            fontWeight: FontWeight.bold,
-          ),
+      elevation: 1.0,
+      scrolledUnderElevation: 1.0,
+      title: Text(
+        _showCreditSettings ? 'Configuración de Crédito' : 'Configuración',
+        style: TextStyle(
+          color: colors.textPrimary,
+          fontWeight: FontWeight.bold,
         ),
-        // Botón de "atrás" personalizado para la sub-pantalla
-        leading:
-            _showCreditSettings
-                ? IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new, size: 22),
-                  onPressed: () {
-                    setState(() {
-                      _showCreditSettings = false;
-                    });
-                  },
-                )
-                : null, // Flutter manejará el botón de "atrás" por defecto
       ),
+      // Botón de "atrás" que siempre estará visible y controlará la salida.
+     leading: IconButton(
+  icon: const Icon(Icons.arrow_back_ios_new, size: 22),
+  onPressed: () {
+    if (_showCreditSettings) {
+      setState(() {
+        _showCreditSettings = false;
+      });
+    } else {
+      final bool didChange = _diaCorteSeleccionado != _initialDiaCorte;
+      
+      // --- PRUEBA 1: AÑADE ESTA LÍNEA ---
+      print('SALIENDO DE CONFIG. ¿Hubo cambios?: $didChange. Valor inicial: $_initialDiaCorte, Valor final: $_diaCorteSeleccionado');
+      // ----------------------------------
+
+      Navigator.pop(context, didChange);
+    }
+  },
+),
+    ),
       // El cuerpo de la pantalla usa el AnimatedSwitcher que ya tenías
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
@@ -227,6 +247,10 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
               const SizedBox(height: 24),
               _buildBankAccountsSection(context),
               const SizedBox(height: 24),
+              // --- AÑADE ESTAS DOS LÍNEAS AQUÍ ---
+              _buildPreferenciasSection(context),
+              const SizedBox(height: 24),
+              // ------------------------------------
               _buildSection(
                 context,
                 title: 'Crédito',
@@ -292,6 +316,178 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   //
   // (El código es muy extenso para pegarlo todo aquí de nuevo, pero
   // simplemente cópialas y pégalas a continuación. No necesitan cambios).
+
+  Future<void> _fetchDiaCorte() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('tokenauth') ?? '';
+
+    setState(() {
+      _isLoadingDiaCorte = true;
+    });
+
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/v1/configuracion/dia/corte'),
+        headers: {'tokenauth': token},
+      );
+
+        if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (mounted) {
+        setState(() {
+          _diaCorteSeleccionado = data['message'];
+          // --- ¡AÑADE ESTA LÍNEA! ---
+          _initialDiaCorte = data['message']; // Guardamos el valor inicial
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          _diaCorteSeleccionado = 'lunes';
+          // --- ¡AÑADE ESTA LÍNEA! ---
+          _initialDiaCorte = 'lunes'; // También aquí
+        });
+      }
+      AppLogger.log('Error al obtener día de corte: ${response.body}');
+    }
+  } catch (e) {
+    if (mounted) {
+      setState(() {
+        _diaCorteSeleccionado = 'lunes';
+        // --- ¡AÑADE ESTA LÍNEA! ---
+        _initialDiaCorte = 'lunes'; // Y aquí
+      });
+    }
+    AppLogger.log('Excepción al obtener día de corte: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingDiaCorte = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _updateDiaCorte(String nuevoDia) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('tokenauth') ?? '';
+
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/api/v1/configuracion/dia/corte'),
+        headers: {'tokenauth': token, 'Content-Type': 'application/json'},
+        body: jsonEncode({'diaCorte': nuevoDia}),
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Día de corte actualizado correctamente.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception('Error del servidor: ${response.statusCode}');
+      }
+    } catch (e) {
+      // Si falla, revertimos al valor anterior para que la UI sea consistente
+      _fetchDiaCorte();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo actualizar el día de corte: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _buildPreferenciasSection(BuildContext context) {
+    final userData = Provider.of<UserDataProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final colors = themeProvider.colors;
+
+    final List<String> dias = [
+      'lunes',
+      'martes',
+      'miercoles',
+      'jueves',
+      'viernes',
+      'sábado',
+      'domingo',
+    ];
+
+    return _buildSection(
+      context,
+      title: 'Preferencias',
+      isExpandable: true,
+      enabled: userData.tipoUsuario == 'Admin',
+      items: [
+        _isLoadingDiaCorte
+            ? const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(child: CircularProgressIndicator()),
+            )
+            : _buildConfigItem(
+              context,
+              title: 'Día de inicio de semana',
+              leadingIcon: Icons.calendar_today_outlined,
+              iconColor: Colors.blue,
+              trailing: Container(
+                // --- INICIO DE LOS CAMBIOS ---
+                height:
+                    38, // 1. AÑADE una altura fija para hacer el contenedor más bajo.
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                ), // 2. QUITA el padding vertical.
+
+                // --- FIN DE LOS CAMBIOS ---
+                decoration: BoxDecoration(
+                  color: colors.backgroundButton.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: colors.backgroundButton,
+                    width: 1.5,
+                  ),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _diaCorteSeleccionado,
+                    dropdownColor: colors.backgroundCard,
+                    icon: Icon(
+                      Icons.keyboard_arrow_down,
+                      color: colors.textPrimary,
+                    ),
+                    isDense: true, // <-- HACE MÁS COMPACTO EL BOTÓN CERRADO
+                   
+                    onChanged: (String? nuevoValor) {
+                      if (nuevoValor != null) {
+                        setState(() {
+                          _diaCorteSeleccionado = nuevoValor;
+                        });
+                        _updateDiaCorte(nuevoValor);
+                      }
+                    },
+                    items:
+                        dias.map<DropdownMenuItem<String>>((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(
+                              value.capitalize(),
+                              style: TextStyle(
+                                color: colors.textPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                  ),
+                ),
+              ),
+            ),
+      ],
+    );
+  }
 
   //<editor-fold desc="Funciones Auxiliares (sin cambios)">
   Widget _buildConfigItem(
@@ -428,139 +624,154 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
 
   // (Copia y reemplaza tu versión actual con esta)
   Widget _buildLogoUploader(BuildContext context) {
-  final themeProvider = Provider.of<ThemeProvider>(context);
-  final isDarkMode = themeProvider.isDarkMode;
-  final userData = Provider.of<UserDataProvider>(context);
-  bool isAdmin = userData.tipoUsuario == 'Admin';
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+    final userData = Provider.of<UserDataProvider>(context);
+    bool isAdmin = userData.tipoUsuario == 'Admin';
 
-  final colorLogo = userData.imagenes
-      .where((img) => img.tipoImagen == 'logoColor')
-      .firstOrNull;
-  final whiteLogo = userData.imagenes
-      .where((img) => img.tipoImagen == 'logoBlanco')
-      .firstOrNull;
+    final colorLogo =
+        userData.imagenes
+            .where((img) => img.tipoImagen == 'logoColor')
+            .firstOrNull;
+    final whiteLogo =
+        userData.imagenes
+            .where((img) => img.tipoImagen == 'logoBlanco')
+            .firstOrNull;
 
-  // --- INICIO DE LA LÓGICA RESPONSIVA ---
-  final screenWidth = MediaQuery.of(context).size.width;
-  // Definimos un punto de quiebre. Si la pantalla es más ancha que 768px, usamos un Row.
-  const double breakpoint = 768.0; 
+    // --- INICIO DE LA LÓGICA RESPONSIVA ---
+    final screenWidth = MediaQuery.of(context).size.width;
+    // Definimos un punto de quiebre. Si la pantalla es más ancha que 768px, usamos un Row.
+    const double breakpoint = 768.0;
 
-  // Creamos los dos widgets de subida para no repetirlos
-  final colorLogoUploader = _buildSingleLogoUploader(
-    context: context,
-    title: "Logo a color (modo claro)",
-    isDarkMode: isDarkMode,
-    isAdmin: isAdmin,
-    tempLogoBytes: _tempColorLogoBytes,
-    savedLogo: colorLogo,
-    logoType: "logoColor",
-    backgroundColor: isDarkMode ? Colors.grey[800]! : Colors.grey[200]!,
-  );
-
-  final whiteLogoUploader = _buildSingleLogoUploader(
-    context: context,
-    title: "Logo blanco (modo oscuro)",
-    isDarkMode: isDarkMode,
-    isAdmin: isAdmin,
-    tempLogoBytes: _tempWhiteLogoBytes,
-    savedLogo: whiteLogo,
-    logoType: "logoBlanco",
-    backgroundColor: Colors.grey[800]!,
-  );
-
-  // Widget que contendrá los uploaders, será un Row o un Column según el ancho
-  Widget logoUploadersLayout;
-
-  if (screenWidth > breakpoint) {
-    // LAYOUT PARA DESKTOP (pantalla ancha)
-    logoUploadersLayout = Row(
-      crossAxisAlignment: CrossAxisAlignment.start, // Alinea los elementos arriba
-      children: [
-        Expanded(child: colorLogoUploader), // Expanded para que compartan el espacio
-        SizedBox(width: 24), // Separador horizontal
-        Expanded(child: whiteLogoUploader),
-      ],
+    // Creamos los dos widgets de subida para no repetirlos
+    final colorLogoUploader = _buildSingleLogoUploader(
+      context: context,
+      title: "Logo a color (modo claro)",
+      isDarkMode: isDarkMode,
+      isAdmin: isAdmin,
+      tempLogoBytes: _tempColorLogoBytes,
+      savedLogo: colorLogo,
+      logoType: "logoColor",
+      backgroundColor: isDarkMode ? Colors.grey[800]! : Colors.grey[200]!,
     );
-  } else {
-    // LAYOUT PARA MÓVIL (pantalla estrecha)
-    logoUploadersLayout = Column(
-      children: [
-        colorLogoUploader,
-        SizedBox(height: 24), // Separador vertical
-        whiteLogoUploader,
-      ],
+
+    final whiteLogoUploader = _buildSingleLogoUploader(
+      context: context,
+      title: "Logo blanco (modo oscuro)",
+      isDarkMode: isDarkMode,
+      isAdmin: isAdmin,
+      tempLogoBytes: _tempWhiteLogoBytes,
+      savedLogo: whiteLogo,
+      logoType: "logoBlanco",
+      backgroundColor: Colors.grey[800]!,
     );
-  }
-  // --- FIN DE LA LÓGICA RESPONSIVA ---
 
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      SizedBox(height: 16),
-      
-      // Aquí usamos nuestro widget responsivo
-      logoUploadersLayout,
+    // Widget que contendrá los uploaders, será un Row o un Column según el ancho
+    Widget logoUploadersLayout;
 
-      // El resto de tu código para botones y textos sigue igual
-      if ((_tempColorLogoBytes != null || _tempWhiteLogoBytes != null) && isAdmin) ...[
-        Divider(height: 48), // Un poco más de espacio
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_isSaving)
-              CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
-              )
-            else
+    if (screenWidth > breakpoint) {
+      // LAYOUT PARA DESKTOP (pantalla ancha)
+      logoUploadersLayout = Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start, // Alinea los elementos arriba
+        children: [
+          Expanded(
+            child: colorLogoUploader,
+          ), // Expanded para que compartan el espacio
+          SizedBox(width: 24), // Separador horizontal
+          Expanded(child: whiteLogoUploader),
+        ],
+      );
+    } else {
+      // LAYOUT PARA MÓVIL (pantalla estrecha)
+      logoUploadersLayout = Column(
+        children: [
+          colorLogoUploader,
+          SizedBox(height: 24), // Separador vertical
+          whiteLogoUploader,
+        ],
+      );
+    }
+    // --- FIN DE LA LÓGICA RESPONSIVA ---
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: 16),
+
+        // Aquí usamos nuestro widget responsivo
+        logoUploadersLayout,
+
+        // El resto de tu código para botones y textos sigue igual
+        if ((_tempColorLogoBytes != null || _tempWhiteLogoBytes != null) &&
+            isAdmin) ...[
+          Divider(height: 48), // Un poco más de espacio
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (_isSaving)
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                )
+              else
+                ElevatedButton.icon(
+                  onPressed: _saveLogoChanges,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  icon: Icon(Icons.save, size: 16, color: Colors.white),
+                  label: Text(
+                    'Guardar cambios',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
+              SizedBox(width: 12),
               ElevatedButton.icon(
-                onPressed: _saveLogoChanges,
+                onPressed: _cancelLogoChanges,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
+                  backgroundColor: Colors.orange,
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                icon: Icon(Icons.save, size: 16, color: Colors.white),
-                label: Text('Guardar cambios', style: TextStyle(fontSize: 14)),
+                icon: Icon(Icons.cancel, size: 16, color: Colors.white),
+                label: Text('Cancelar', style: TextStyle(fontSize: 14)),
               ),
-            SizedBox(width: 12),
-            ElevatedButton.icon(
-              onPressed: _cancelLogoChanges,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              icon: Icon(Icons.cancel, size: 16, color: Colors.white),
-              label: Text('Cancelar', style: TextStyle(fontSize: 14)),
+            ],
+          ),
+        ],
+        SizedBox(height: 24),
+        Center(
+          child: Text(
+            "Formatos permitidos: PNG",
+            style: TextStyle(
+              fontSize: 12,
+              color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
             ),
-          ],
+          ),
         ),
+        SizedBox(height: 8),
+        Center(
+          child: Text(
+            "Estas imágenes se utilizarán como logos de la financiera en la aplicación según el modo de visualización",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ),
+        ),
+        SizedBox(height: 16),
       ],
-      SizedBox(height: 24),
-      Center(
-        child: Text(
-          "Formatos permitidos: PNG",
-          style: TextStyle(fontSize: 12, color: isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-        ),
-      ),
-      SizedBox(height: 8),
-      Center(
-        child: Text(
-          "Estas imágenes se utilizarán como logos de la financiera en la aplicación según el modo de visualización",
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 12, color: isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-        ),
-      ),
-      SizedBox(height: 16),
-    ],
-  );
-}
+    );
+  }
 
   // Widget auxiliar para no repetir código en el uploader de logos
   // DESPUÉS (MÉTODO CORREGIDO)
@@ -806,118 +1017,105 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   }
  */
   Widget _buildSection(
-  BuildContext context, {
-  required String title,
-  required List<Widget> items,
-  bool isExpandable = false,
-  bool enabled = true,
-  EdgeInsetsGeometry?
-  tilePadding,
-  double?
-  titleIconSize,
-  double?
-  titleIconContainerSize,
-  TextStyle?
-  sectionTitleTextStyle,
-}) {
-  final themeProvider = Provider.of<ThemeProvider>(context);
-  final colors = themeProvider.colors;
-  final isDarkMode = themeProvider.isDarkMode;
+    BuildContext context, {
+    required String title,
+    required List<Widget> items,
+    bool isExpandable = false,
+    bool enabled = true,
+    EdgeInsetsGeometry? tilePadding,
+    double? titleIconSize,
+    double? titleIconContainerSize,
+    TextStyle? sectionTitleTextStyle,
+  }) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final colors = themeProvider.colors;
+    final isDarkMode = themeProvider.isDarkMode;
 
-  final effectiveTilePadding =
-      tilePadding ??
-      const EdgeInsets.symmetric(
-        horizontal: 16.0,
-        vertical: 0.0,
-      );
-  final effectiveTitleIconSize =
-      titleIconSize ?? 16.0;
-  final effectiveTitleIconContainerSize =
-      titleIconContainerSize ?? 28.0;
-  final effectiveSectionTitleTextStyle =
-      sectionTitleTextStyle ??
-      TextStyle(
-        color: colors.textPrimary,
-        fontSize: 16,
-      );
+    final effectiveTilePadding =
+        tilePadding ??
+        const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0.0);
+    final effectiveTitleIconSize = titleIconSize ?? 16.0;
+    final effectiveTitleIconContainerSize = titleIconContainerSize ?? 28.0;
+    final effectiveSectionTitleTextStyle =
+        sectionTitleTextStyle ??
+        TextStyle(color: colors.textPrimary, fontSize: 16);
 
-  final ShapeBorder roundedShape = RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(12),
-    side: BorderSide(color: colors.divider, width: 1),
-  );
+    final ShapeBorder roundedShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: BorderSide(color: colors.divider, width: 1),
+    );
 
-  return Theme(
-    // Modificamos este Theme para que haga todo el trabajo
-    data: Theme.of(context).copyWith(
-      dividerColor: Colors.transparent,
-      // =========== INICIO DE LA SOLUCIÓN ===========
-      splashColor: Colors.transparent,    // Hace la "onda" transparente
-      highlightColor: Colors.transparent, // Quita el sombreado al presionar
-      // =========== FIN DE LA SOLUCIÓN ===========
-    ),
-    child: isExpandable
-        ? IgnorePointer(
-            ignoring: !enabled,
-            child: Opacity(
-              opacity: enabled ? 1.0 : 0.6,
-              child: ExpansionTile(
-                shape: roundedShape,
-                collapsedShape: roundedShape,
-                backgroundColor: colors.backgroundCard,
-                collapsedBackgroundColor: colors.backgroundCard,
-                onExpansionChanged: enabled ? (value) {} : null,
-                tilePadding: effectiveTilePadding,
-                title: Row(
-                  children: [
-                    Container(
-                      width: effectiveTitleIconContainerSize,
-                      height: effectiveTitleIconContainerSize,
-                      decoration: BoxDecoration(
-                        color: _getIconColor(title).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        _getSectionIcon(title),
-                        color: _getIconColor(title),
-                        size: effectiveTitleIconSize,
-                      ),
+    return Theme(
+      // Modificamos este Theme para que haga todo el trabajo
+      data: Theme.of(context).copyWith(
+        dividerColor: Colors.transparent,
+        // =========== INICIO DE LA SOLUCIÓN ===========
+        splashColor: Colors.transparent, // Hace la "onda" transparente
+        highlightColor: Colors.transparent, // Quita el sombreado al presionar
+        // =========== FIN DE LA SOLUCIÓN ===========
+      ),
+      child:
+          isExpandable
+              ? IgnorePointer(
+                ignoring: !enabled,
+                child: Opacity(
+                  opacity: enabled ? 1.0 : 0.6,
+                  child: ExpansionTile(
+                    shape: roundedShape,
+                    collapsedShape: roundedShape,
+                    backgroundColor: colors.backgroundCard,
+                    collapsedBackgroundColor: colors.backgroundCard,
+                    onExpansionChanged: enabled ? (value) {} : null,
+                    tilePadding: effectiveTilePadding,
+                    title: Row(
+                      children: [
+                        Container(
+                          width: effectiveTitleIconContainerSize,
+                          height: effectiveTitleIconContainerSize,
+                          decoration: BoxDecoration(
+                            color: _getIconColor(title).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            _getSectionIcon(title),
+                            color: _getIconColor(title),
+                            size: effectiveTitleIconSize,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(title, style: effectiveSectionTitleTextStyle),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Text(
-                      title,
-                      style: effectiveSectionTitleTextStyle,
+                    children: enabled ? items : [_buildDisabledMessage()],
+                    trailing: Icon(
+                      Icons.arrow_drop_down,
+                      size: 20,
+                      color:
+                          enabled
+                              ? (isDarkMode
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600])
+                              : Colors.grey,
                     ),
-                  ],
+                  ),
                 ),
-                children: enabled ? items : [_buildDisabledMessage()],
-                trailing: Icon(
-                  Icons.arrow_drop_down,
-                  size: 20,
-                  color: enabled
-                      ? (isDarkMode
-                          ? Colors.grey[400]
-                          : Colors.grey[600])
-                      : Colors.grey,
+              )
+              : Container(
+                decoration: BoxDecoration(
+                  color: colors.backgroundCard,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: colors.divider, width: 1),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: items,
+                  ),
                 ),
               ),
-            ),
-          )
-        : Container(
-            decoration: BoxDecoration(
-              color: colors.backgroundCard,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: colors.divider, width: 1),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: items,
-              ),
-            ),
-          ),
-  );
-}
+    );
+  }
 
   IconData _getSectionIcon(String title) {
     switch (title) {
@@ -1834,72 +2032,78 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
     );
   }
 
-// --- ¡NUEVO WIDGET! Para la barra de progreso lateral ---
-Widget _buildSideProgressBar(BuildContext context) {
-  final themeProvider = Provider.of<ThemeProvider>(context);
-  final colors = themeProvider.colors;
-  final licencia = Provider.of<UserDataProvider>(context, listen: false).licenciaActiva!;
+  // --- ¡NUEVO WIDGET! Para la barra de progreso lateral ---
+  Widget _buildSideProgressBar(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final colors = themeProvider.colors;
+    final licencia =
+        Provider.of<UserDataProvider>(context, listen: false).licenciaActiva!;
 
-  // --- Lógica de cálculo (la misma de antes) ---
-  final hoy = DateTime.now();
-  final fechaInicio = licencia.fechaInicio;
-  final fechaFin = licencia.fechaFin;
+    // --- Lógica de cálculo (la misma de antes) ---
+    final hoy = DateTime.now();
+    final fechaInicio = licencia.fechaInicio;
+    final fechaFin = licencia.fechaFin;
 
-  final totalDaysInCycle = fechaFin.difference(fechaInicio).inDays;
-  final elapsedDays = hoy.difference(fechaInicio).inDays;
-  final double progress = totalDaysInCycle > 0
-      ? (elapsedDays / totalDaysInCycle).clamp(0.0, 1.0)
-      : 1.0;
-  final remainingDays = fechaFin.difference(hoy).inDays;
-  final remainingDaysText = _getRemainingDaysText(remainingDays);
+    final totalDaysInCycle = fechaFin.difference(fechaInicio).inDays;
+    final elapsedDays = hoy.difference(fechaInicio).inDays;
+    final double progress =
+        totalDaysInCycle > 0
+            ? (elapsedDays / totalDaysInCycle).clamp(0.0, 1.0)
+            : 1.0;
+    final remainingDays = fechaFin.difference(hoy).inDays;
+    final remainingDaysText = _getRemainingDaysText(remainingDays);
 
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start, // Alinea el contenido de la columna a la izquierda
-    mainAxisSize: MainAxisSize.min, // Hace que la columna ocupe solo el espacio necesario
-    children: [
-      // Fila con el texto de los días restantes
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Ya no necesitamos la etiqueta "Progreso del ciclo", es más implícito
-          Text(
-            remainingDaysText,
-            style: TextStyle(
-              color: colors.textPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
+    return Column(
+      crossAxisAlignment:
+          CrossAxisAlignment
+              .start, // Alinea el contenido de la columna a la izquierda
+      mainAxisSize:
+          MainAxisSize
+              .min, // Hace que la columna ocupe solo el espacio necesario
+      children: [
+        // Fila con el texto de los días restantes
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Ya no necesitamos la etiqueta "Progreso del ciclo", es más implícito
+            Text(
+              remainingDaysText,
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 4),
+          ],
+        ),
+        const SizedBox(height: 4),
 
-      // La barra de progreso visual
-      LinearProgressIndicator(
-        value: progress,
-        minHeight: 6,
-        backgroundColor: colors.divider.withOpacity(0.5),
-        valueColor: AlwaysStoppedAnimation<Color>(const Color(0xFF5162F6)),
-        borderRadius: BorderRadius.circular(10),
-      ),
-    ],
-  );
-}
+        // La barra de progreso visual
+        LinearProgressIndicator(
+          value: progress,
+          minHeight: 6,
+          backgroundColor: colors.divider.withOpacity(0.5),
+          valueColor: AlwaysStoppedAnimation<Color>(const Color(0xFF5162F6)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ],
+    );
+  }
 
-// --- NO OLVIDES MANTENER ESTE HELPER ---
-String _getRemainingDaysText(int days) {
-  if (days < 0) {
-    return 'Vencido';
+  // --- NO OLVIDES MANTENER ESTE HELPER ---
+  String _getRemainingDaysText(int days) {
+    if (days < 0) {
+      return 'Vencido';
+    }
+    switch (days) {
+      case 0:
+        return 'Vence hoy';
+      case 1:
+        return 'Queda 1 día';
+      default:
+        return 'Quedan $days días';
+    }
   }
-  switch (days) {
-    case 0:
-      return 'Vence hoy';
-    case 1:
-      return 'Queda 1 día';
-    default:
-      return 'Quedan $days días';
-  }
-}
 
   // =======================================================================
   // ============ NUEVA VERSIÓN - SECCIÓN DE PLAN Y LICENCIA (v3) ============
@@ -1907,77 +2111,96 @@ String _getRemainingDaysText(int days) {
 
   // Pega esta función actualizada en tu _ConfiguracionScreenState
 
-  
-// --- WIDGET PRINCIPAL COMPLETAMENTE REFACTORIZADO ---
-Widget _buildPlanDetailsContent(BuildContext context) {
-  final themeProvider = Provider.of<ThemeProvider>(context);
-  final colors = themeProvider.colors;
-  final userData = Provider.of<UserDataProvider>(context, listen: false);
-  final licencia = userData.licenciaActiva!;
+  // --- WIDGET PRINCIPAL COMPLETAMENTE REFACTORIZADO ---
+  Widget _buildPlanDetailsContent(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final colors = themeProvider.colors;
+    final userData = Provider.of<UserDataProvider>(context, listen: false);
+    final licencia = userData.licenciaActiva!;
 
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0).copyWith(top: 0),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // --- SECCIÓN SUPERIOR (SIN CAMBIOS) ---
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text("Plan ${licencia.nombre}", style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
-            _buildStatusBadge(licencia.estadoLicencia, themeProvider.isDarkMode),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // --- ¡CAMBIO AQUÍ! ---
-        // Ahora usamos un Row para poner el precio al lado de la barra de progreso.
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end, // Alinea la base del precio con la barra
-          children: [
-            // Lado izquierdo: El Precio (sin cambios en su contenido)
-            Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: formatCurrency(licencia.totalUnitario),
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: colors.textPrimary),
-                  ),
-                  TextSpan(
-                    text: _getBillingCycleText(licencia.duracionMesesPlan),
-                    style: TextStyle(fontSize: 16, color: colors.textSecondary, fontWeight: FontWeight.w500),
-                  ),
-                ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16.0,
+        vertical: 8.0,
+      ).copyWith(top: 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // --- SECCIÓN SUPERIOR (SIN CAMBIOS) ---
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Plan ${licencia.nombre}",
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            const SizedBox(width: 24), // Espacio de separación
+              _buildStatusBadge(
+                licencia.estadoLicencia,
+                themeProvider.isDarkMode,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
 
-            // Lado derecho: La Barra de Progreso (envuelta en Expanded)
-            Expanded(
-              child: _buildSideProgressBar(context),
-            ),
-          ],
-        ),
-        // Ya no necesitamos la llamada separada a la barra de progreso aquí.
+          // --- ¡CAMBIO AQUÍ! ---
+          // Ahora usamos un Row para poner el precio al lado de la barra de progreso.
+          Row(
+            crossAxisAlignment:
+                CrossAxisAlignment
+                    .end, // Alinea la base del precio con la barra
+            children: [
+              // Lado izquierdo: El Precio (sin cambios en su contenido)
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: formatCurrency(licencia.totalUnitario),
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: colors.textPrimary,
+                      ),
+                    ),
+                    TextSpan(
+                      text: _getBillingCycleText(licencia.duracionMesesPlan),
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: colors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 24), // Espacio de separación
+              // Lado derecho: La Barra de Progreso (envuelta en Expanded)
+              Expanded(child: _buildSideProgressBar(context)),
+            ],
+          ),
 
-        const SizedBox(height: 16),
-        Divider(color: colors.divider),
-        const SizedBox(height: 16),
+          // Ya no necesitamos la llamada separada a la barra de progreso aquí.
+          const SizedBox(height: 16),
+          Divider(color: colors.divider),
+          const SizedBox(height: 16),
 
-        // --- El resto del widget continúa sin cambios ---
-        LayoutBuilder(
-          builder: (context, constraints) {
-            const double desktopBreakpoint = 900.0;
-            
-            if (constraints.maxWidth > desktopBreakpoint) {
-              return _buildDesktopCardsLayout(context);
-            } else {
-              return _buildMobileColumnLayout(context);
-            }
-          },
-        ),
-        
-       /*  const SizedBox(height: 24),
+          // --- El resto del widget continúa sin cambios ---
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const double desktopBreakpoint = 900.0;
+
+              if (constraints.maxWidth > desktopBreakpoint) {
+                return _buildDesktopCardsLayout(context);
+              } else {
+                return _buildMobileColumnLayout(context);
+              }
+            },
+          ),
+
+          /*  const SizedBox(height: 24),
 
         Center(
           child: ElevatedButton.icon(
@@ -2004,218 +2227,278 @@ Widget _buildPlanDetailsContent(BuildContext context) {
     );
   }
 
+  // --- NUEVOS WIDGETS DE LAYOUT ---
 
-
-// --- NUEVOS WIDGETS DE LAYOUT ---
-
-/// Construye la vista de 3 tarjetas horizontales para DESKTOP.
-/// Construye la vista de 3 tarjetas horizontales para DESKTOP.
-Widget _buildDesktopCardsLayout(BuildContext context) {
-  return IntrinsicHeight( // Hace que todas las tarjetas en el Row tengan la misma altura
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          flex: 1,
-          child: _buildInfoCard(
-            context,
-            title: 'Vigencia',
-            icon: Icons.date_range_outlined,
-            child: _buildDatesCardContent(context),
-          ),
-        ),
-        const SizedBox(width: 20),
-        Expanded(
-          flex: 1,
-          child: _buildInfoCard(
-            context,
-            title: 'Detalles de Pago',
-            icon: Icons.payment_outlined,
-            child: _buildPaymentCardContent(context),
-          ),
-        ),
-        const SizedBox(width: 20),
-        Expanded(
-          flex: 1,
-          child: _buildInfoCard(
-            context,
-            title: 'Características Incluidas',
-            icon: Icons.checklist_rtl_outlined,
-            // --- ¡CAMBIO! Llamada actualizada sin el parámetro isDesktop ---
-            child: _buildFeaturesCardContent(context),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-/// Construye la vista de columna única para MÓVIL.
-/// Construye la vista de columna única para MÓVIL.
-Widget _buildMobileColumnLayout(BuildContext context) {
-  final colors = Provider.of<ThemeProvider>(context).colors;
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _buildDatesCardContent(context),
-      _buildPaymentCardContent(context),
-      const SizedBox(height: 16),
-      Divider(color: colors.divider),
-      const SizedBox(height: 20), // Un poco más de espacio
-
-      // --- ¡NUEVO! Título fijo para la sección de características en móvil ---
-      Row(
+  /// Construye la vista de 3 tarjetas horizontales para DESKTOP.
+  /// Construye la vista de 3 tarjetas horizontales para DESKTOP.
+  Widget _buildDesktopCardsLayout(BuildContext context) {
+    return IntrinsicHeight(
+      // Hace que todas las tarjetas en el Row tengan la misma altura
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(Icons.checklist_rtl_outlined, color: colors.textSecondary, size: 20),
-          const SizedBox(width: 8),
-          Text(
-            'Características Incluidas',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colors.textPrimary),
+          Expanded(
+            flex: 1,
+            child: _buildInfoCard(
+              context,
+              title: 'Vigencia',
+              icon: Icons.date_range_outlined,
+              child: _buildDatesCardContent(context),
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            flex: 1,
+            child: _buildInfoCard(
+              context,
+              title: 'Detalles de Pago',
+              icon: Icons.payment_outlined,
+              child: _buildPaymentCardContent(context),
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            flex: 1,
+            child: _buildInfoCard(
+              context,
+              title: 'Características Incluidas',
+              icon: Icons.checklist_rtl_outlined,
+              // --- ¡CAMBIO! Llamada actualizada sin el parámetro isDesktop ---
+              child: _buildFeaturesCardContent(context),
+            ),
           ),
         ],
       ),
-      const SizedBox(height: 16), // Espacio entre el título y la lista
+    );
+  }
 
-      // --- La lista de características ahora se muestra directamente ---
-      _buildFeaturesCardContent(context),
-    ],
-  );
-}
-
-// --- NUEVO WIDGET DE TARJETA REUTILIZABLE ---
-
-Widget _buildInfoCard(BuildContext context, {required String title, required IconData icon, required Widget child}) {
-  final themeProvider = Provider.of<ThemeProvider>(context);
-  final colors = themeProvider.colors;
-
-  return Container(
-    decoration: BoxDecoration(
-      color: colors.backgroundCardDark,
-      borderRadius: BorderRadius.circular(16.0),
-      border: Border.all(color: colors.divider),
-    ),
-    padding: const EdgeInsets.all(20.0),
-    child: Column(
+  /// Construye la vista de columna única para MÓVIL.
+  /// Construye la vista de columna única para MÓVIL.
+  Widget _buildMobileColumnLayout(BuildContext context) {
+    final colors = Provider.of<ThemeProvider>(context).colors;
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _buildDatesCardContent(context),
+        _buildPaymentCardContent(context),
+        const SizedBox(height: 16),
+        Divider(color: colors.divider),
+        const SizedBox(height: 20), // Un poco más de espacio
+        // --- ¡NUEVO! Título fijo para la sección de características en móvil ---
         Row(
           children: [
-            Icon(icon, color: colors.textSecondary, size: 20),
+            Icon(
+              Icons.checklist_rtl_outlined,
+              color: colors.textSecondary,
+              size: 20,
+            ),
             const SizedBox(width: 8),
             Text(
-              title,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colors.textPrimary),
+              'Características Incluidas',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: colors.textPrimary,
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Divider(color: colors.divider.withOpacity(0.5)),
-        const SizedBox(height: 12),
-        child,
+        const SizedBox(height: 16), // Espacio entre el título y la lista
+        // --- La lista de características ahora se muestra directamente ---
+        _buildFeaturesCardContent(context),
       ],
-    ),
-  );
-}
+    );
+  }
 
-// --- WIDGETS DE CONTENIDO PARA CADA TARJETA ---
+  // --- NUEVO WIDGET DE TARJETA REUTILIZABLE ---
 
-/// Contenido para la tarjeta de Fechas.
-Widget _buildDatesCardContent(BuildContext context) {
-  final userData = Provider.of<UserDataProvider>(context, listen: false);
-  final licencia = userData.licenciaActiva!;
+  Widget _buildInfoCard(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final colors = themeProvider.colors;
 
-  return Column(
-    children: [
-      _buildInfoRow(context,
-        icon: Icons.play_circle_outline,
-        label: 'Fecha de inicio',
-        value: Text(DateFormatters.formatearDateTime(licencia.fechaInicio, tipo: 'corta'),
-          style: TextStyle(color: Provider.of<ThemeProvider>(context).colors.textPrimary, fontWeight: FontWeight.w500, fontSize: 13),
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.backgroundCardDark,
+        borderRadius: BorderRadius.circular(16.0),
+        border: Border.all(color: colors.divider),
       ),
-      _buildInfoRow(context,
-        icon: Icons.pause_circle_outline,
-        label: 'Vigente hasta',
-        value: Text(DateFormatters.formatearDateTime(licencia.fechaFin, tipo: 'corta'),
-          style: TextStyle(color: Provider.of<ThemeProvider>(context).colors.textPrimary, fontWeight: FontWeight.w500, fontSize: 13),
-        ),
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: colors.textSecondary, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: colors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Divider(color: colors.divider.withOpacity(0.5)),
+          const SizedBox(height: 12),
+          child,
+        ],
       ),
-      _buildInfoRow(context,
-        icon: Icons.hourglass_bottom_outlined,
-        label: 'Meses Contratados',
-        value: Text(licencia.duracionMeses.toString(),
-          style: TextStyle(color: Provider.of<ThemeProvider>(context).colors.textPrimary, fontWeight: FontWeight.w500, fontSize: 13),
-        ),
-      ),
-    ],
-  );
-}
+    );
+  }
 
-/// Contenido para la tarjeta de Pagos.
-Widget _buildPaymentCardContent(BuildContext context) {
-  final userData = Provider.of<UserDataProvider>(context, listen: false);
-  final licencia = userData.licenciaActiva!;
+  // --- WIDGETS DE CONTENIDO PARA CADA TARJETA ---
 
-  return Column(
-    children: [
-      _buildInfoRow(context,
-        icon: Icons.credit_card_outlined,
-        label: 'Pagado con',
-        value: Text(licencia.metodoPago.capitalize(),
-          style: TextStyle(color: Provider.of<ThemeProvider>(context).colors.textPrimary, fontWeight: FontWeight.w500, fontSize: 13),
-        ),
-      ),
-      _buildInfoRow(context,
-        icon: Icons.receipt_long_outlined,
-        label: 'Pagado Total',
-        value: Text(formatCurrency(licencia.precioTotal),
-          style: TextStyle(color: Provider.of<ThemeProvider>(context).colors.textPrimary, fontWeight: FontWeight.w500, fontSize: 13),
-        ),
-      ),
-      if (licencia.descuento > 0)
-        _buildInfoRow(context,
-          icon: Icons.sell_outlined,
-          label: 'Descuento aplicado',
-          value: Text('${formatCurrency(licencia.descuento)}',
-            style: TextStyle(color: Colors.green.shade400, fontWeight: FontWeight.bold, fontSize: 13),
+  /// Contenido para la tarjeta de Fechas.
+  Widget _buildDatesCardContent(BuildContext context) {
+    final userData = Provider.of<UserDataProvider>(context, listen: false);
+    final licencia = userData.licenciaActiva!;
+
+    return Column(
+      children: [
+        _buildInfoRow(
+          context,
+          icon: Icons.play_circle_outline,
+          label: 'Fecha de inicio',
+          value: Text(
+            DateFormatters.formatearDateTime(
+              licencia.fechaInicio,
+              tipo: 'corta',
+            ),
+            style: TextStyle(
+              color: Provider.of<ThemeProvider>(context).colors.textPrimary,
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+            ),
           ),
         ),
-    ],
-  );
-}
-
-/// Contenido para la tarjeta de Características (antes era tu ExpansionTile).
-/// Contenido para la tarjeta/sección de Características (AHORA ES UNA LISTA FIJA).
-Widget _buildFeaturesCardContent(BuildContext context) {
-  final themeProvider = Provider.of<ThemeProvider>(context);
-  final colors = themeProvider.colors;
-  final userData = Provider.of<UserDataProvider>(context, listen: false);
-  final licencia = userData.licenciaActiva!;
-
-  // Simplemente devolvemos una columna con los items.
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start, // Asegura que el texto de "sin límites" se alinee a la izquierda
-    children: [
-      ...licencia.restricciones.map((restriccion) {
-        return _buildFeatureItem(context,
-          icon: _getIconForRestrictionType(restriccion.tipoARestringir),
-          text: '${restriccion.nombre}',
-        );
-      }).toList(),
-
-      // Condición para cuando no hay restricciones
-      if (licencia.restricciones.isEmpty)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0), // Un poco de espacio vertical
-          child: Text(
-            'Todas las características están incluidas sin límites.',
-            style: TextStyle(color: colors.textSecondary, fontStyle: FontStyle.italic),
+        _buildInfoRow(
+          context,
+          icon: Icons.pause_circle_outline,
+          label: 'Vigente hasta',
+          value: Text(
+            DateFormatters.formatearDateTime(licencia.fechaFin, tipo: 'corta'),
+            style: TextStyle(
+              color: Provider.of<ThemeProvider>(context).colors.textPrimary,
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+            ),
           ),
         ),
-    ],
-  );
-}
+        _buildInfoRow(
+          context,
+          icon: Icons.hourglass_bottom_outlined,
+          label: 'Meses Contratados',
+          value: Text(
+            licencia.duracionMeses.toString(),
+            style: TextStyle(
+              color: Provider.of<ThemeProvider>(context).colors.textPrimary,
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
+  /// Contenido para la tarjeta de Pagos.
+  Widget _buildPaymentCardContent(BuildContext context) {
+    final userData = Provider.of<UserDataProvider>(context, listen: false);
+    final licencia = userData.licenciaActiva!;
+
+    return Column(
+      children: [
+        _buildInfoRow(
+          context,
+          icon: Icons.credit_card_outlined,
+          label: 'Pagado con',
+          value: Text(
+            licencia.metodoPago.capitalize(),
+            style: TextStyle(
+              color: Provider.of<ThemeProvider>(context).colors.textPrimary,
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        _buildInfoRow(
+          context,
+          icon: Icons.receipt_long_outlined,
+          label: 'Pagado Total',
+          value: Text(
+            formatCurrency(licencia.precioTotal),
+            style: TextStyle(
+              color: Provider.of<ThemeProvider>(context).colors.textPrimary,
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        if (licencia.descuento > 0)
+          _buildInfoRow(
+            context,
+            icon: Icons.sell_outlined,
+            label: 'Descuento aplicado',
+            value: Text(
+              '${formatCurrency(licencia.descuento)}',
+              style: TextStyle(
+                color: Colors.green.shade400,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Contenido para la tarjeta de Características (antes era tu ExpansionTile).
+  /// Contenido para la tarjeta/sección de Características (AHORA ES UNA LISTA FIJA).
+  Widget _buildFeaturesCardContent(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final colors = themeProvider.colors;
+    final userData = Provider.of<UserDataProvider>(context, listen: false);
+    final licencia = userData.licenciaActiva!;
+
+    // Simplemente devolvemos una columna con los items.
+    return Column(
+      crossAxisAlignment:
+          CrossAxisAlignment
+              .start, // Asegura que el texto de "sin límites" se alinee a la izquierda
+      children: [
+        ...licencia.restricciones.map((restriccion) {
+          return _buildFeatureItem(
+            context,
+            icon: _getIconForRestrictionType(restriccion.tipoARestringir),
+            text: '${restriccion.nombre}',
+          );
+        }).toList(),
+
+        // Condición para cuando no hay restricciones
+        if (licencia.restricciones.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              vertical: 8.0,
+            ), // Un poco de espacio vertical
+            child: Text(
+              'Todas las características están incluidas sin límites.',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 
   // --- Widgets y funciones auxiliares para la nueva sección (v3) ---
 
@@ -2254,7 +2537,6 @@ Widget _buildFeaturesCardContent(BuildContext context) {
     }
     return '/ Mes'; // Fallback
   }
-
 
   Widget _buildStatusBadge(String status, bool isDarkMode) {
     Color backgroundColor;
