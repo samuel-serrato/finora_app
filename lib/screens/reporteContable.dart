@@ -1039,6 +1039,18 @@ Widget _buildMobileDepositTag({
   }
 
   Widget _buildMobileTotalsSummary(BuildContext context) {
+
+    // --- NUEVOS CÁLCULOS MANUALES PARA PRECISIÓN ---
+    final double totalMoratoriosGenerados = reporteData.listaGrupos.fold(
+      0.0, (sum, g) => sum + g.moratorios.moratoriosAPagar);
+    
+    final double totalMoratoriosPagados = reporteData.listaGrupos.fold(
+      0.0, (sum, g) => sum + g.pagoficha.sumaMoratorio);
+
+    final double nuevoTotalBruto = reporteData.totalPagoficha + 
+                                   reporteData.totalSaldoDisponible + 
+                                   totalMoratoriosPagados;
+
     final colors = Provider.of<ThemeProvider>(context).colors;
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1121,10 +1133,19 @@ Widget _buildMobileDepositTag({
               ),
             ],
           ),
+             const Divider(height: 16),
+          // --- DESGLOSE DE MORATORIOS ---
           _buildMobileDetailRow(
             context,
-            'Moratorios',
-            currencyFormat.format(reporteData.saldoMoratorio),
+            'Moratorios Gen.',
+            currencyFormat.format(totalMoratoriosGenerados),
+            valueColor: totalMoratoriosGenerados > 0 ? Colors.red.shade400 : null,
+          ),
+          _buildMobileDetailRow(
+            context,
+            'Moratorios Pag.',
+            currencyFormat.format(totalMoratoriosPagados),
+            valueColor: totalMoratoriosPagados > 0 ? Colors.green.shade600 : null,
           ),
           const SizedBox(height: 12),
           Container(
@@ -1148,7 +1169,7 @@ Widget _buildMobileDepositTag({
                 const Divider(color: Colors.white30, height: 20),
                 _buildMobileTotalItem(
                   'Total Bruto',
-                  reporteData.sumaTotalCapMoraFav,
+                  nuevoTotalBruto
                 ),
               ],
             ),
@@ -1240,6 +1261,19 @@ Widget _buildMobileDepositTag({
   }
 
   Widget _buildDesktopTotalesCard(BuildContext context) {
+  
+    // --- NUEVOS CÁLCULOS MANUALES ---
+    final double totalMoratoriosGenerados = reporteData.listaGrupos.fold(
+      0.0, (sum, g) => sum + g.moratorios.moratoriosAPagar);
+    
+    final double totalMoratoriosPagados = reporteData.listaGrupos.fold(
+      0.0, (sum, g) => sum + g.pagoficha.sumaMoratorio);
+
+    final double nuevoTotalBruto = reporteData.totalPagoficha + 
+                                   reporteData.totalSaldoDisponible + 
+                                   totalMoratoriosPagados;
+
+
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
 
@@ -1305,12 +1339,20 @@ Widget _buildMobileDepositTag({
                       ),
                       const SizedBox(width: 24),
                       _buildDesktopSaldoFavorTotalItem(context),
+                          const SizedBox(width: 24),
+                      // --- NUEVOS ITEMS DE MORATORIOS ---
+                      _buildDesktopSummaryItem(
+                        context,
+                        'Mor. Gen.',
+                        totalMoratoriosGenerados,
+                      ),
                       const SizedBox(width: 24),
                       _buildDesktopSummaryItem(
                         context,
-                        'Moratorios',
-                        reporteData.saldoMoratorio,
+                        'Mor. Pag.',
+                        totalMoratoriosPagados,
                       ),
+                      
                       const SizedBox(width: 24),
                       _buildDesktopSummaryItem(
                         context,
@@ -1329,7 +1371,7 @@ Widget _buildMobileDepositTag({
                       _buildDesktopSummaryItem(
                         context,
                         'Total Bruto',
-                        reporteData.sumaTotalCapMoraFav,
+                        nuevoTotalBruto,
                         isPrimary: true,
                       ),
                     ],

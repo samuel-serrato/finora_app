@@ -45,6 +45,12 @@ class ReporteGeneralWidget extends StatelessWidget {
   Widget _buildDesktopLayout(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
+ final double totalMoratoriosPagados = listaReportes.fold(0.0, (sum, r) => sum + r.sumaMoratorio);
+    
+    // NUEVO CÁLCULO SOLICITADO
+    final double nuevoTotalBruto = (reporteData?.totalPagoficha ?? 0.0) + 
+                                   (reporteData?.totalSaldoDisponible ?? 0.0) + 
+                                   totalMoratoriosPagados;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -84,7 +90,7 @@ class ReporteGeneralWidget extends StatelessWidget {
                               Column(
                                 children: [
                                   _buildTotalsWidget(),
-                                  _buildTotalsIdealWidget(),
+                                  _buildTotalsIdealWidget(nuevoTotalBruto),
                                 ],
                               ),
                           ],
@@ -825,6 +831,7 @@ class ReporteGeneralWidget extends StatelessWidget {
     }
     return null;
   }
+  
 
   // === CAMBIO 3: Resumen de totales completamente rediseñado ===
   Widget _buildMobileTotalsSummary(BuildContext context) {
@@ -841,6 +848,10 @@ class ReporteGeneralWidget extends StatelessWidget {
       0.0,
       (sum, r) => sum + r.sumaMoratorio,
     );
+
+    final double nuevoTotalBruto = (reporteData?.totalPagoficha ?? 0.0) + 
+                               (reporteData?.totalSaldoDisponible ?? 0.0) + 
+                               totalMoratoriosPagados;
 
     return Container(
       margin: const EdgeInsets.only(top: 16),
@@ -893,7 +904,7 @@ class ReporteGeneralWidget extends StatelessWidget {
                 _buildMobileTotalItem(
                   context,
                   'Total Bruto',
-                  reporteData!.sumaTotalCapMoraFav,
+                  nuevoTotalBruto, // <--- USAMOS EL NUEVO CÁLCULO
                   isPrimary: true,
                 ),
               ],
@@ -1648,7 +1659,7 @@ class ReporteGeneralWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildTotalsIdealWidget() {
+  Widget _buildTotalsIdealWidget(double nuevoTotalBruto) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
       decoration: BoxDecoration(
@@ -1709,15 +1720,15 @@ class ReporteGeneralWidget extends StatelessWidget {
           const SizedBox(width: 50),
           Row(
             children: [
-              _buildTotalItem('Total Bruto', reporteData!.sumaTotalCapMoraFav),
+               _buildTotalItem('Total Bruto', nuevoTotalBruto), // <--- USAMOS EL NUEVO VALOR
               const SizedBox(width: 8),
               Tooltip(
                 message:
                     'El Total Bruto representa la suma completa de todos los conceptos:\n\n'
                     '• Total Pagos\n'
-                    '• Moratorios\n'
-                    '• Saldos a favor\n\n'
-                    'Es el total acumulado antes de aplicar cualquier ajuste o validación.',
+                    '• Saldos a favor\n'
+                    '• Moratorios\n',
+                    //'Es el total acumulado antes de aplicar cualquier ajuste o validación.',
                 decoration: BoxDecoration(
                   color: const Color(0xFFE53888),
                   borderRadius: BorderRadius.circular(12),

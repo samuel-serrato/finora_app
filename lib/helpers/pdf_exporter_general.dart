@@ -108,7 +108,16 @@ class ExportHelperGeneral {
                   pw.SizedBox(height: 10),
                   _buildPdfTotals(reporteData, currencyFormat, listaReportes),
                   pw.SizedBox(height: 10),
-                  _buildTotalsIdealPdfWidget(reporteData, currencyFormat),
+                   // --- INICIO CÁLCULO NUEVO TOTAL BRUTO ---
+  () {
+    final double totalMorPagados = listaReportes.fold(0.0, (sum, r) => sum + r.sumaMoratorio);
+    final double nuevoTotalBruto = reporteData.totalPagoficha + 
+                                   reporteData.totalSaldoDisponible + 
+                                   totalMorPagados;
+                                   
+    return _buildTotalsIdealPdfWidget(reporteData, currencyFormat, nuevoTotalBruto);
+  }(),
+  // --- FIN CÁLCULO ---
                   pw.SizedBox(height: 25),
                   _buildSimbologia(), // <-- La simbología ya estaba aquí, se actualizará su contenido.
                 ],
@@ -648,6 +657,8 @@ class ExportHelperGeneral {
   static pw.Widget _buildTotalsIdealPdfWidget(
     ReporteGeneralData reporteData,
     NumberFormat currencyFormat,
+      double nuevoTotalBruto, // <--- Nuevo parámetro
+
   ) {
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 15),
@@ -672,7 +683,7 @@ class ExportHelperGeneral {
           pw.SizedBox(width: 40),
           _buildTotalPdfItem(
             'Total Bruto',
-            reporteData.sumaTotalCapMoraFav,
+          nuevoTotalBruto, // <--- Usamos el valor calculado
             currencyFormat,
           ),
         ],

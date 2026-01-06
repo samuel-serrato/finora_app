@@ -574,6 +574,17 @@ pw.Widget _buildStandardDepositCardPdf(
   }
 
   pw.Widget _buildTotalesCard() {
+    // --- NUEVOS CÁLCULOS MANUALES PARA PRECISIÓN ---
+    final double totalMoratoriosGenerados = reporteData.listaGrupos.fold(
+      0.0, (sum, g) => sum + g.moratorios.moratoriosAPagar);
+    
+    final double totalMoratoriosPagados = reporteData.listaGrupos.fold(
+      0.0, (sum, g) => sum + g.pagoficha.sumaMoratorio);
+
+    final double nuevoTotalBruto = reporteData.totalPagoficha + 
+                                   reporteData.totalSaldoDisponible + 
+                                   totalMoratoriosPagados;
+
     return pw.Container(
       decoration: pw.BoxDecoration(
           border: pw.Border.all(color: PdfColors.grey300),
@@ -601,8 +612,7 @@ pw.Widget _buildStandardDepositCardPdf(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text('S. Favor Disponible',
-                          style:
-                              const pw.TextStyle(fontSize: 6, color: PdfColors.black)),
+                          style: const pw.TextStyle(fontSize: 6, color: PdfColors.black)),
                       pw.Text(
                           currencyFormat.format(reporteData.totalSaldoDisponible),
                           style: pw.TextStyle(
@@ -611,18 +621,20 @@ pw.Widget _buildStandardDepositCardPdf(
                               color: PdfColors.black)),
                       pw.Text(
                           '(Hist: ${currencyFormat.format(reporteData.totalSaldoFavor)})',
-                          style:
-                              const pw.TextStyle(fontSize: 5, color: PdfColors.grey)),
+                          style: const pw.TextStyle(fontSize: 5, color: PdfColors.grey)),
                     ],
                   ),
                 ),
-                _buildTotalItem('Moratorios', reporteData.saldoMoratorio),
-                pw.SizedBox(width: 40),
+                // --- CAMBIO: DESGLOSE DE MORATORIOS ---
+                _buildTotalItem('Mor. Gen.', totalMoratoriosGenerados),
+                _buildTotalItem('Mor. Pag.', totalMoratoriosPagados),
+                
+                pw.SizedBox(width: 20), // Ajustado el espacio para que quepa todo
                 _buildTotalItem('Total Ideal', reporteData.totalTotal,
                     isPrimary: true),
                 _buildTotalItem('Diferencia', reporteData.restante,
                     isPrimary: true),
-                _buildTotalItem('Total Bruto', reporteData.sumaTotalCapMoraFav,
+                _buildTotalItem('Total Bruto', nuevoTotalBruto, // <--- VALOR CORREGIDO
                     isPrimary: true),
               ],
             ),
