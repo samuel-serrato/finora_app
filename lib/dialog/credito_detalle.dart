@@ -47,8 +47,7 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
   // ▼▼▼ 1. AÑADE LA VARIABLE DE ESTADO DE CARGA AQUÍ ▼▼▼
   bool _isSaving = false;
 
-
-   // --- 2. AÑADE LAS NUEVAS VARIABLES DE ESTADO ---
+  // --- 2. AÑADE LAS NUEVAS VARIABLES DE ESTADO ---
   // Lista de estados posibles para el dropdown
   final List<String> _posiblesEstados = const [
     'Activo',
@@ -59,7 +58,7 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
   bool _isUpdatingStatus = false;
   // Para guardar el estado actual seleccionado en el dropdown
   String? _selectedEstado;
-  
+
   // Configuración de estilos para los estados (centralizado)
   final Map<String, Map<String, dynamic>> _statusConfig = const {
     'Activo': {
@@ -70,7 +69,6 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
     'Pagado': {'color': Colors.purple, 'icon': Icons.paid_outlined},
     'default': {'color': Colors.grey, 'icon': Icons.info_outline_rounded},
   };
-
 
   @override
   void initState() {
@@ -100,7 +98,6 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
     if (creditoResponse.success && creditoResponse.data != null) {
       _creditoData = creditoResponse.data;
 
-       
       // --- 3. INICIALIZA EL ESTADO SELECCIONADO ---
       _selectedEstado = _creditoData!.estado;
 
@@ -125,10 +122,12 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
     }
   }
 
-    // --- 4. AÑADE EL MÉTODO PARA MANEJAR EL CAMBIO DE ESTADO Y EL SNACKBAR ---
+  // --- 4. AÑADE EL MÉTODO PARA MANEJAR EL CAMBIO DE ESTADO Y EL SNACKBAR ---
 
   Future<void> _handleStatusChange(String? nuevoEstado) async {
-    if (nuevoEstado == null || nuevoEstado == _creditoData!.estado || !mounted) {
+    if (nuevoEstado == null ||
+        nuevoEstado == _creditoData!.estado ||
+        !mounted) {
       return;
     }
 
@@ -138,7 +137,10 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
     });
 
     // Usamos el idgrupos del crédito cargado
-    final response = await _creditoService.actualizarEstadoCredito(_creditoData!.idgrupos, nuevoEstado);
+    final response = await _creditoService.actualizarEstadoCredito(
+      _creditoData!.idgrupos,
+      nuevoEstado,
+    );
 
     if (!mounted) return;
 
@@ -146,16 +148,22 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
       setState(() {
         _creditoData!.estado = nuevoEstado;
       });
-      _showSnackBar('Estado actualizado a "$nuevoEstado" correctamente.', isError: false);
+      _showSnackBar(
+        'Estado actualizado a "$nuevoEstado" correctamente.',
+        isError: false,
+      );
       // ¡Llama al callback para refrescar la lista externa!
       widget.onEstadoCambiado?.call();
     } else {
-      _showSnackBar(response.error ?? 'Error al actualizar el estado.', isError: true);
+      _showSnackBar(
+        response.error ?? 'Error al actualizar el estado.',
+        isError: true,
+      );
       setState(() {
         _selectedEstado = _creditoData!.estado; // Revertir
       });
     }
-    
+
     setState(() {
       _isUpdatingStatus = false;
     });
@@ -189,8 +197,11 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
     final themeProvider = Provider.of<ThemeProvider>(context);
     final colors = themeProvider.colors;
     final isDarkMode = themeProvider.isDarkMode;
-     // --- OBTÉN EL USERDATA PROVIDER ---
-  final userDataProvider = Provider.of<UserDataProvider>(context, listen: false);
+    // --- OBTÉN EL USERDATA PROVIDER ---
+    final userDataProvider = Provider.of<UserDataProvider>(
+      context,
+      listen: false,
+    );
 
     // ▼▼▼ ¡LA MODIFICACIÓN PRINCIPAL ESTÁ AQUÍ! ▼▼▼
     // Envolvemos todo el contenido en un WillPopScope.
@@ -274,8 +285,11 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
                           const SizedBox(width: 8),
                           if (!_isLoading && _creditoData != null)
                             //_buildModernStatusChip(_creditoData!.estado),
-                              // --- ¡ESTE ES EL CAMBIO! ---
-                        _buildStatusWidget(userDataProvider.tipoUsuario, colors),
+                            // --- ¡ESTE ES EL CAMBIO! ---
+                            _buildStatusWidget(
+                              userDataProvider.tipoUsuario,
+                              colors,
+                            ),
                         ],
                       ),
                       if (!_isLoading && _creditoData != null)
@@ -748,9 +762,9 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
       clientesParaRenovar: _creditoData!.clientesMontosInd,
       pagoCuotaTotal: _creditoData!.pagoCuota,
       // ▼▼▼▼▼▼ AGREGA ESTA LÍNEA AQUÍ ▼▼▼▼▼▼
-      montoDesembolsado: _creditoData!.montoDesembolsado, 
-      // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+      montoDesembolsado: _creditoData!.montoDesembolsado,
 
+      // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
       onDataChanged: () {
         AppLogger.log("Callback onDataChanged llamado. Refrescando datos...");
         _fetchData();
@@ -827,7 +841,8 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
       sumPeriodoCapital += cliente.periodoCapital;
       sumPeriodoInteres += cliente.periodoInteres;
       sumTotalCapital += cliente.totalCapital;
-      sumTotalIntereses += cliente.totalIntereses;
+      // DESPUÉS (Cálculo corregido para la suma)
+      sumTotalIntereses += (cliente.periodoInteres * _creditoData!.plazo);
       sumCapitalMasInteres += cliente.capitalMasInteres;
       sumTotal += cliente.total;
     }
@@ -999,12 +1014,14 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
                             Text(
                               '\$${formatearNumero(montoDesembolsado)}',
                               style: TextStyle(
-                                color: tieneDescuento
-                                    ? Colors.green.shade600
-                                    : colors.textSecondary,
-                                fontWeight: tieneDescuento
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
+                                color:
+                                    tieneDescuento
+                                        ? Colors.green.shade600
+                                        : colors.textSecondary,
+                                fontWeight:
+                                    tieneDescuento
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
                               ),
                             ),
                             if (tieneDescuento)
@@ -1054,8 +1071,11 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
                         flexMonto,
                         colors,
                       ),
+                      // DESPUÉS (Cálculo corregido)
                       _buildDataCell(
-                        Text('\$${formatearNumero(cliente.totalIntereses)}'),
+                        Text(
+                          '\$${formatearNumero(cliente.periodoInteres * _creditoData!.plazo)}',
+                        ),
                         flexMonto,
                         colors,
                       ),
@@ -1077,7 +1097,6 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
           ),
           // --- FIN DE LA CORRECCIÓN ---
 
-
           // --- FILA DE TOTALES (queda fija abajo) ---
           Container(
             height: 50,
@@ -1085,12 +1104,13 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             decoration: BoxDecoration(
               color: colors.brandPrimary.withOpacity(0.08),
-              borderRadius: mostrarRedondeo
-                  ? const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      topRight: Radius.circular(12),
-                    )
-                  : BorderRadius.circular(12),
+              borderRadius:
+                  mostrarRedondeo
+                      ? const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      )
+                      : BorderRadius.circular(12),
             ),
             child: Row(
               children: [
@@ -1143,7 +1163,7 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
               ],
             ),
           ),
-          
+
           if (mostrarRedondeo)
             Container(
               height: 50,
@@ -1883,9 +1903,10 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
                     Icons.summarize_rounded,
                     themeProvider,
                   ),
+                  // DESPUÉS (Cálculo corregido)
                   _buildDetailRowIntegrantes(
                     'Total Intereses',
-                    '\$${formatearNumero(cliente.totalIntereses)}',
+                    '\$${formatearNumero(cliente.periodoInteres * _creditoData!.plazo)}',
                     Icons.leaderboard_rounded,
                     themeProvider,
                   ),
@@ -2192,104 +2213,105 @@ class _CreditoDetalleConTabsState extends State<CreditoDetalleConTabs>
 
   // Al final de la clase _CreditoDetalleConTabsState
 
-/// Widget que decide si mostrar el chip estático o el dropdown editable.
-Widget _buildStatusWidget(String tipoUsuario, dynamic colors) {
-  if (tipoUsuario == 'Admin') {
-    return _buildAdminStatusDropdown(colors);
+  /// Widget que decide si mostrar el chip estático o el dropdown editable.
+  Widget _buildStatusWidget(String tipoUsuario, dynamic colors) {
+    if (tipoUsuario == 'Admin') {
+      return _buildAdminStatusDropdown(colors);
+    }
+    return _buildModernStatusChip(_creditoData!.estado);
   }
-  return _buildModernStatusChip(_creditoData!.estado);
-}
 
-/// Widget reutilizable para el contenido (Icono + Texto).
-Widget _buildStatusRow(String estado) {
-  final config = _statusConfig[estado] ?? _statusConfig['default']!;
-  final color = config['color'] as Color;
-  final icon = config['icon'] as IconData;
+  /// Widget reutilizable para el contenido (Icono + Texto).
+  Widget _buildStatusRow(String estado) {
+    final config = _statusConfig[estado] ?? _statusConfig['default']!;
+    final color = config['color'] as Color;
+    final icon = config['icon'] as IconData;
 
-  return Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(icon, color: color, size: 16),
-      const SizedBox(width: 6),
-      Text(
-        estado,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ],
-  );
-}
-
-/// El NUEVO dropdown para administradores con estilo de chip.
-Widget _buildAdminStatusDropdown(dynamic colors) {
-  final config = _statusConfig[_selectedEstado] ?? _statusConfig['default']!;
-  final color = config['color'] as Color;
-
-  return Stack(
-    alignment: Alignment.center,
-    children: [
-      Container(
-        height: 34,
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: _selectedEstado,
-            onChanged: _isUpdatingStatus ? null : _handleStatusChange,
-            dropdownColor: colors.backgroundCard,
-            selectedItemBuilder: (context) {
-              return _posiblesEstados.map<Widget>((item) {
-                return Padding(
-                  padding: const EdgeInsets.only(left: 12.0),
-                  child: _buildStatusRow(item),
-                );
-              }).toList();
-            },
-            items: _posiblesEstados.map((value) {
-              return DropdownMenuItem<String>(
-                value: value,
-                child: _buildStatusRow(value),
-              );
-            }).toList(),
-            icon: Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: Icon(Icons.arrow_drop_down_rounded, color: color),
-            ),
-            isDense: true,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 16),
+        const SizedBox(width: 6),
+        Text(
+          estado,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
           ),
         ),
-      ),
-      if (_isUpdatingStatus)
-        SizedBox(
-          height: 18,
-          width: 18,
-          child: CircularProgressIndicator(strokeWidth: 2.5, color: color),
+      ],
+    );
+  }
+
+  /// El NUEVO dropdown para administradores con estilo de chip.
+  Widget _buildAdminStatusDropdown(dynamic colors) {
+    final config = _statusConfig[_selectedEstado] ?? _statusConfig['default']!;
+    final color = config['color'] as Color;
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          height: 34,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withOpacity(0.3)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedEstado,
+              onChanged: _isUpdatingStatus ? null : _handleStatusChange,
+              dropdownColor: colors.backgroundCard,
+              selectedItemBuilder: (context) {
+                return _posiblesEstados.map<Widget>((item) {
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 12.0),
+                    child: _buildStatusRow(item),
+                  );
+                }).toList();
+              },
+              items:
+                  _posiblesEstados.map((value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: _buildStatusRow(value),
+                    );
+                  }).toList(),
+              icon: Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: Icon(Icons.arrow_drop_down_rounded, color: color),
+              ),
+              isDense: true,
+            ),
+          ),
         ),
-    ],
-  );
-}
+        if (_isUpdatingStatus)
+          SizedBox(
+            height: 18,
+            width: 18,
+            child: CircularProgressIndicator(strokeWidth: 2.5, color: color),
+          ),
+      ],
+    );
+  }
 
-// 3. REFACTORIZA TU ANTIGUO `_buildModernStatusChip` PARA USAR LA LÓGICA CENTRALIZADA
-Widget _buildModernStatusChip(String estado) {
-  final config = _statusConfig[estado] ?? _statusConfig['default']!;
-  final color = config['color'] as Color;
+  // 3. REFACTORIZA TU ANTIGUO `_buildModernStatusChip` PARA USAR LA LÓGICA CENTRALIZADA
+  Widget _buildModernStatusChip(String estado) {
+    final config = _statusConfig[estado] ?? _statusConfig['default']!;
+    final color = config['color'] as Color;
 
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-    decoration: BoxDecoration(
-      color: color.withOpacity(0.1),
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: color.withOpacity(0.3)),
-    ),
-    child: _buildStatusRow(estado), // Reutilizamos el nuevo widget
-  );
-}
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: _buildStatusRow(estado), // Reutilizamos el nuevo widget
+    );
+  }
 }
 
 // <<< --- NUEVO WIDGET: El contenido personalizado para el tooltip de desglose --- >>>
