@@ -55,11 +55,10 @@ class _ResponsiveNavigationScreenState
   final PageController _pageController = PageController(initialPage: 0);
   final SideMenuController _sideMenuController = SideMenuController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
- // --- ¡CAMBIA ESTO! ---
+  // --- ¡CAMBIA ESTO! ---
   // Key _homeScreenKey = UniqueKey(); // Reemplaza esto...
-  final GlobalKey<HomeScreenState> _homeScreenKey = GlobalKey<HomeScreenState>(); // ...por esto.
-  
-
+  final GlobalKey<HomeScreenState> _homeScreenKey =
+      GlobalKey<HomeScreenState>(); // ...por esto.
 
   int _selectedIndex = 0;
   bool _isDesktopMenuOpen = true;
@@ -87,7 +86,7 @@ class _ResponsiveNavigationScreenState
     // No olvides quitar el listener para evitar memory leaks
     //_updateService.isUpdateAvailable.removeListener(_showUpdateDialog);
     // ... tu otro código de dispose ...
-//    _homeScreenRebuildNotifier.dispose(); // No olvides hacer dispose
+    //    _homeScreenRebuildNotifier.dispose(); // No olvides hacer dispose
     super.dispose();
   }
 
@@ -110,14 +109,14 @@ class _ResponsiveNavigationScreenState
     _buildNavigationItems();
   }
 
- 
   // --- ¡MODIFICA ESTA FUNCIÓN! ---
   void _refreshHomeScreen() {
     // Ahora usamos la GlobalKey para acceder al estado y llamar a su método público
     _homeScreenKey.currentState?.refreshData();
-    print("🔄 Solicitando a HomeScreen que refresque sus datos y su calendario.");
+    print(
+      "🔄 Solicitando a HomeScreen que refresque sus datos y su calendario.",
+    );
   }
-
 
   void _buildNavigationItems() {
     final userData = Provider.of<UserDataProvider>(context, listen: false);
@@ -130,7 +129,7 @@ class _ResponsiveNavigationScreenState
         icon: Icons.home_outlined,
         selectedIcon: Icons.home,
         screen: HomeScreen(
-           key: _homeScreenKey, // <--- ¡APLICA LA KEY AQUÍ!
+          key: _homeScreenKey, // <--- ¡APLICA LA KEY AQUÍ!
           username: username,
           tipoUsuario: userType,
         ),
@@ -270,25 +269,28 @@ class _ResponsiveNavigationScreenState
 
     final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
 
-     final List<Widget> pagesWithAppBar = _navigationItems.map((item) {
-    return Scaffold( // <--- Vuelve a la versión simple
-      backgroundColor: isDarkMode ? const Color(0xff121212) : const Color(0xFFF4F6F8),
-      appBar: CustomDesktopAppBar(
-        title: item.title,
-        onLogout: _logout,
-        onRefreshHome: _refreshHomeScreen, // <--- Pasa la función
-        // Quita la lógica de onRefreshHome por ahora
-      ),
-      body: item.screen,
-    );
-  }).toList();
+    final List<Widget> pagesWithAppBar =
+        _navigationItems.map((item) {
+          return Scaffold(
+            // <--- Vuelve a la versión simple
+            backgroundColor:
+                isDarkMode ? const Color(0xff121212) : const Color(0xFFF4F6F8),
+            appBar: CustomDesktopAppBar(
+              title: item.title,
+              onLogout: _logout,
+              onRefreshHome: _refreshHomeScreen, // <--- Pasa la función
+              // Quita la lógica de onRefreshHome por ahora
+            ),
+            body: item.screen,
+          );
+        }).toList();
 
     return Scaffold(
       body: Row(
         children: [
           SizedBox(
             // El ancho sigue siendo controlado por la misma variable de estado
-            width: _isDesktopMenuOpen ? 180 : 70,
+            width: _isDesktopMenuOpen ? 160 : 70,
             child: SideMenu(
               controller: _sideMenuController,
               style: SideMenuStyle(
@@ -306,13 +308,20 @@ class _ResponsiveNavigationScreenState
                     isDarkMode ? Colors.blueGrey[700] : const Color(0xFF2D336B),
                 selectedColor:
                     isDarkMode ? Colors.blueGrey[900] : const Color(0xFF5162F6),
-                selectedTitleTextStyle: const TextStyle(color: Colors.white),
+                 // --- INICIO DEL CAMBIO ---
+                selectedTitleTextStyle: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16, // <-- AÑADIDO
+                ),
                 selectedIconColor: Colors.white,
                 unselectedTitleTextStyle: TextStyle(
                   color: isDarkMode ? Colors.white : Colors.black,
+                  fontSize: 16, // <-- AÑADIDO
                 ),
+                // --- FIN DEL CAMBIO ---
                 unselectedIconColor: isDarkMode ? Colors.white : Colors.black,
                 backgroundColor: colors.backgroundCardDark,
+                iconSize: 22
               ),
               // <<< ¡CAMBIO PRINCIPAL AQUÍ! >>>
               // Se reemplaza el widget complejo por una llamada a un método más limpio.
@@ -358,32 +367,36 @@ class _ResponsiveNavigationScreenState
               // --- ESTADO ABIERTO: Muestra logo grande y botón al lado ---
               ? Row(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4.0,
-                      vertical: 20.0,
-                    ),
-                    child: SizedBox(
-                      height: 35,
-                      child: Image.asset(
-                        isDarkMode
-                            ? 'assets/finora_blanco.png'
-                            : 'assets/finora.png',
-                        fit: BoxFit.contain,
+                  Expanded(
+                    // <-- 1. Envolvemos en un Expanded
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2.0,
+                        vertical: 20.0,
+                      ),
+                      // 2. Alineamos la imagen a la izquierda dentro del espacio expandido
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: SizedBox(
+                          height: 35,
+                          child: Image.asset(
+                            isDarkMode
+                                ? 'assets/finora_blanco.png'
+                                : 'assets/finora.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                  const Spacer(),
+                  // const Spacer(), // <-- 3. Eliminamos el Spacer
                   IconButton(
-                    // <<< INICIO DE LA CORRECCIÓN >>>
-                    padding: EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(6),
                     constraints: const BoxConstraints(),
-                    tooltip:
-                        'Cerrar menú', // Es buena práctica añadir un tooltip en desktop
-                    // <<< FIN DE LA CORRECCIÓN >>>
+                    tooltip: 'Cerrar menú',
                     icon: Icon(
                       Icons.arrow_back_ios,
-                      size: 14,
+                      size: 12,
                       color: isDarkMode ? Colors.white70 : Colors.grey[700],
                     ),
                     onPressed: () => setState(() => _isDesktopMenuOpen = false),
@@ -868,12 +881,15 @@ class _ResponsiveNavigationScreenState
         case 'bitacora':
           _showBitacoraDialog();
           break;
-          case 'configuracion':
-        final result = await Navigator.pushNamed(context, AppRoutes.configuracion);
-        if (result == true) {
-          _refreshHomeScreen(); // <--- LLAMA A LA FUNCIÓN AQUÍ TAMBIÉN
-        }
-        break;
+        case 'configuracion':
+          final result = await Navigator.pushNamed(
+            context,
+            AppRoutes.configuracion,
+          );
+          if (result == true) {
+            _refreshHomeScreen(); // <--- LLAMA A LA FUNCIÓN AQUÍ TAMBIÉN
+          }
+          break;
         // --- FIN DE LA MODIFICACIÓN ---
         case 'about':
           showCustomAboutDialog(context);
