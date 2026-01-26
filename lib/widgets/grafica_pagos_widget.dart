@@ -57,16 +57,36 @@ class _GraficaPagosWidgetState extends State<GraficaPagosWidget> {
         _isFetching = false; // Liberamos el bloqueo aquí
       });
     } catch (e) {
-      if (!mounted) return;
-      
-      // 3. Estado de error: Actualiza todo en un solo setState
-      setState(() {
-        _errorMessage = e.toString().replaceFirst("Exception: ", "");
-        _isLoading = false;
-        _isFetching = false; // Liberamos el bloqueo también en caso de error
-      });
-    }
-    // Ya no necesitamos el bloque 'finally' para el estado
+  if (!mounted) return;
+
+  final errorMessageString = e.toString().replaceFirst("Exception: ", "");
+
+  // >>> INICIO DEL CAMBIO IMPORTANTE <<<
+  // Verificamos si el error es en realidad un mensaje de "estado vacío".
+  // Puedes ajustar el texto si el mensaje del servidor es ligeramente diferente.
+  if (errorMessageString.contains("No hay reportes de pagos") || 
+      errorMessageString.contains("No hay datos para este período")) {
+        
+    // Si es así, lo tratamos como un éxito con datos vacíos.
+    setState(() {
+      // Creamos una respuesta vacía para que la UI construya el esqueleto.
+      _graficaData = GraficaResponse(sumaTotal: 0, sumaTotalIdeal: 0, puntos: []); 
+      _isLoading = false;
+      _isFetching = false;
+      _errorMessage = null; // MUY IMPORTANTE: nos aseguramos de que no haya mensaje de error.
+    });
+
+  } else {
+    // Si es cualquier otro error (sin conexión, error del servidor, etc.),
+    // entonces sí lo mostramos como un error real.
+    setState(() {
+      _errorMessage = errorMessageString;
+      _isLoading = false;
+      _isFetching = false;
+    });
+  }
+  // >>> FIN DEL CAMBIO <<<
+}
   }
 
   void _navigate(int direction) {
@@ -325,33 +345,79 @@ class _GraficaPagosWidgetState extends State<GraficaPagosWidget> {
     );
   }
 
-  Widget _buildChartContent() {
-    if (_isLoading) {
-      return const Center(
-        key: ValueKey('loading'),
-        child: CircularProgressIndicator(),
-      );
-    }
-    if (_errorMessage != null) {
-      return Center(key: const ValueKey('error'), child: Text(_errorMessage!));
-    }
-    if (_graficaData == null || _graficaData!.puntos.isEmpty) {
-      return const Center(
-        key: ValueKey('empty'),
-        child: Text("No hay datos para este período."),
-      );
-    }
-
-    // <<< LA SOLUCIÓN ESTÁ AQUÍ >>>
-    // Añadimos una Key única al Padding que envuelve el gráfico.
-    // Esta clave cambia con la fecha y la vista, informando a AnimatedSwitcher
-    // que es un widget completamente nuevo.
-    return Padding(
-      key: ValueKey('${_currentView.name}-${_currentDate.toIso8601String()}'),
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: LineChart(_buildLineChartData()),
-    );
+ Widget _buildChartContent() {
+  if (_isLoading) {
+    return const Center(key: ValueKey('loading'), child: CircularProgressIndicator());
   }
+  if (_errorMessage != null) {
+    return Center(key: const ValueKey('error'), child: Text(_errorMessage!));
+  }
+
+  final bool isEmpty = _graficaData == null || _graficaData!.puntos.isEmpty;
+
+  // <<< INICIO DE LA LÓGICA RESPONSIVA >>>
+  // 1. Obtenemos el ancho de la pantalla del dispositivo.
+  final screenWidth = MediaQuery.of(context).size.width;
+
+  // 2. Decidimos un "punto de corte". Si la pantalla es más estrecha que esto,
+  //    consideramos que es "pequeña" (móvil). Puedes ajustar el valor 450 si es necesario.
+  final bool isSmallScreen = screenWidth < 450;
+
+  // 3. Definimos los tamaños de los elementos de forma condicional.
+  final double iconSize = isSmallScreen ? 48 : 60;
+  final double titleFontSize = isSmallScreen ? 15 : 18;
+  final double subtitleFontSize = isSmallScreen ? 12 : 14;
+  final double verticalSpacing = isSmallScreen ? 12 : 16;
+  // <<< FIN DE LA LÓGICA RESPONSIVA >>>
+
+  return Stack(
+    alignment: Alignment.center,
+    children: [
+      // 1. La gráfica (se mantiene igual, siempre se dibuja)
+      Padding(
+        key: ValueKey('${_currentView.name}-${_currentDate.toIso8601String()}'),
+        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        child: LineChart(_buildLineChartData()),
+      ),
+
+      // 2. El mensaje de estado vacío (ahora con estilos adaptativos)
+      if (isEmpty)
+        // Añadimos un Padding para que el texto nunca toque los bordes laterales
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.bar_chart_rounded,
+                size: iconSize, // <-- Usamos el tamaño adaptativo
+                color: widget.colors.textSecondary.withOpacity(0.5),
+              ),
+              SizedBox(height: verticalSpacing), // <-- Usamos el espaciado adaptativo
+              Text(
+                "Aún no hay reportes",
+                textAlign: TextAlign.center, // Es buena práctica centrar el texto
+                style: TextStyle(
+                  fontSize: titleFontSize, // <-- Usamos el tamaño de fuente adaptativo
+                  fontWeight: FontWeight.bold,
+                  color: widget.colors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Los datos de tus pagos aparecerán aquí.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: subtitleFontSize, // <-- Usamos el tamaño de fuente adaptativo
+                  color: widget.colors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+    ],
+  );
+}
 
   /// Calcula un límite superior y un intervalo "redondos" para el eje Y.
   /// Esto evita etiquetas con números extraños como "96.3k".
@@ -395,310 +461,251 @@ class _GraficaPagosWidgetState extends State<GraficaPagosWidget> {
   }
 
   LineChartData _buildLineChartData() {
-    final puntos = _graficaData!.puntos;
+  final puntos = _graficaData?.puntos ?? [];
+  final bool isEmpty = puntos.isEmpty;
+
+  // 1. Definimos las variables que cambiarán dependiendo de si hay datos o no
+  double finalMaxY;
+  double finalIntervalY;
+  double finalMaxX;
+  List<FlSpot> spots;
+  Map<int, String> bottomTitles;
+
+  if (isEmpty) {
+    // --- CONFIGURACIÓN PARA LA GRÁFICA VACÍA ---
+    finalMaxY = 1000;
+    finalIntervalY = 250;
+    finalMaxX = 6; // Dibuja 7 puntos en el eje X (de 0 a 6) para dar espacio
+    spots = [];   // La lista de puntos de la línea está vacía
+    
+    // Títulos vacíos para el eje X para que no muestre números
+    bottomTitles = { 0: '', 1: '', 2: '', 3: '', 4: '', 5: '', 6: '' };
+
+  } else {
+    // --- CONFIGURACIÓN CUANDO SÍ HAY DATOS (tu lógica original) ---
     double maxVal = 0;
     for (var p in puntos) {
       if (p.totalPago > maxVal) maxVal = p.totalPago;
-     // if ((p.sumaIdeal ?? 0) > maxVal) maxVal = p.sumaIdeal!;
     }
 
-    // <<< ¡AQUÍ ESTÁ EL CAMBIO PRINCIPAL! >>>
-    // Usamos nuestra nueva función para obtener límites e intervalos "bonitos".
     final bounds = _calculateAxisBounds(maxVal);
-    final double niceMaxY = bounds['max']!;
-    final double niceInterval = bounds['interval']!;
+    finalMaxY = bounds['max']!;
+    finalIntervalY = bounds['interval']!;
+    finalMaxX = (puntos.length - 1).toDouble();
+    spots = List.generate(puntos.length, (i) {
+      return FlSpot(i.toDouble(), puntos[i].totalPago);
+    });
+    bottomTitles = {}; // Los títulos se generarán dinámicamente más abajo
+  }
 
-    return LineChartData(
-      clipData: const FlClipData.none(),
-      gridData: FlGridData(
-        show: true,
-        drawVerticalLine: true,
-        verticalInterval: 1,
-        getDrawingVerticalLine:
-            (value) => FlLine(
-              color: widget.colors.textSecondary.withOpacity(0.1),
-              strokeWidth: 1,
-              dashArray: [3, 4],
-            ),
-        drawHorizontalLine: true,
-        getDrawingHorizontalLine:
-            (value) => FlLine(
-              color: widget.colors.textSecondary.withOpacity(0.1),
-              strokeWidth: 1,
-            ),
+  // 2. Construimos el LineChartData UNA SOLA VEZ, usando las variables definidas arriba
+  //    Esto garantiza que el estilo es idéntico en ambos casos.
+  return LineChartData(
+    clipData: const FlClipData.none(),
+    borderData: FlBorderData(show: false),
+    
+    // --- ESTILO DE LA CUADRÍCULA (AHORA UNIFICADO) ---
+    gridData: FlGridData(
+      show: true,
+      drawVerticalLine: true,
+      verticalInterval: 1,
+      getDrawingVerticalLine: (value) => FlLine(
+        color: widget.colors.textSecondary.withOpacity(0.1),
+        strokeWidth: 1,
+        dashArray: [3, 4], // Estilo de línea punteada
       ),
-      titlesData: FlTitlesData(
-        show: true,
-        rightTitles: const AxisTitles(
-          sideTitles: SideTitles(showTitles: false),
+      drawHorizontalLine: true,
+      getDrawingHorizontalLine: (value) => FlLine(
+        color: widget.colors.textSecondary.withOpacity(0.1),
+        strokeWidth: 1,
+      ),
+    ),
+
+    // --- LÍMITES DE LOS EJES (DINÁMICOS) ---
+    minX: 0,
+    minY: 0,
+    maxX: finalMaxX,
+    maxY: finalMaxY,
+
+    // --- TÍTULOS DE LOS EJES (CON LÓGICA PARA AMBOS CASOS) ---
+    titlesData: FlTitlesData(
+      show: true,
+      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+      leftTitles: AxisTitles(
+        sideTitles: SideTitles(
+          showTitles: true,
+          reservedSize: 44,
+          interval: finalIntervalY,
+          getTitlesWidget: (value, meta) {
+            if (value == finalMaxY || value == 0) {
+              return const SizedBox.shrink();
+            }
+            // Usa tu formateador de "k" y "M" en ambos casos
+            return Text(
+              _formatYAxisLabel(value),
+              style: TextStyle(color: widget.colors.textSecondary, fontSize: 10),
+              textAlign: TextAlign.left,
+            );
+          },
         ),
-        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        leftTitles: AxisTitles(
-          sideTitles: SideTitles(
-            showTitles: true,
-            reservedSize: 44,
-            // Usamos el NUEVO intervalo "redondo"
-            interval: niceInterval,
-            getTitlesWidget: (value, meta) {
-              // No mostramos el último valor si coincide con el máximo
-              // para evitar que se superponga con la gráfica.
-              if (value == niceMaxY || value == 0) {
-                return const SizedBox.shrink();
-              }
-              return Text(
-                _formatYAxisLabel(value),
-                style: TextStyle(
-                  color: widget.colors.textSecondary,
-                  fontSize: 10,
-                ),
-                textAlign: TextAlign.left,
-              );
-            },
-          ),
-        ),
-        bottomTitles: AxisTitles(
-          sideTitles: SideTitles(
-            showTitles: true,
-            reservedSize: 22,
-            interval: 1,
-            getTitlesWidget: (value, meta) {
+      ),
+      bottomTitles: AxisTitles(
+        sideTitles: SideTitles(
+          showTitles: true,
+          reservedSize: 22,
+          interval: 1,
+          getTitlesWidget: (value, meta) {
+            String text;
+            if (isEmpty) {
+              // Si la gráfica está vacía, usamos los títulos en blanco
+              text = bottomTitles[value.toInt()] ?? '';
+            } else {
+              // Si hay datos, usamos tu lógica original para obtener el nombre del período
               final index = value.toInt();
               if (index < 0 || index >= puntos.length) {
                 return const SizedBox.shrink();
               }
-
               final puntoActual = puntos[index];
-              String text = _getTranslatedPeriodName(puntoActual, _currentView);
+              text = _getTranslatedPeriodName(puntoActual, _currentView);
               text = text[0].toUpperCase() + text.substring(1);
 
-              if (_currentView == GraficaView.anual ||
-                  _currentView == GraficaView.semanal) {
+              if (_currentView == GraficaView.anual || _currentView == GraficaView.semanal) {
                 text = text.substring(0, 3);
               }
-
-              return SideTitleWidget(
-                axisSide: meta.axisSide,
-                space: 4,
-                child: Text(
-                  text,
-                  style: TextStyle(
-                    color: widget.colors.textSecondary,
-                    fontSize: 10,
-                  ),
-                ),
-              );
-            },
+            }
+            return SideTitleWidget(
+              axisSide: meta.axisSide,
+              space: 4,
+              child: Text(
+                text,
+                style: TextStyle(color: widget.colors.textSecondary, fontSize: 10),
+              ),
+            );
+          },
+        ),
+      ),
+    ),
+    
+    // --- DATOS DE LA LÍNEA Y SU ESTILO ---
+    lineBarsData: [
+      LineChartBarData(
+        spots: spots, // << Usa la lista de spots que puede estar vacía
+        isCurved: true,
+        gradient: LinearGradient(
+          colors: [
+            widget.colors.colorRecaudado,
+            widget.colors.colorRecaudado.withOpacity(0.8),
+          ],
+        ),
+        barWidth: 3,
+        isStrokeCapRound: true,
+        dotData: FlDotData(show: !isEmpty), // Oculta los puntos si la gráfica está vacía
+        belowBarData: BarAreaData(
+          show: true,
+          gradient: LinearGradient(
+            colors: [
+              widget.colors.colorRecaudado.withOpacity(0.2),
+              widget.colors.colorRecaudado.withOpacity(0.5),
+            ],
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
           ),
         ),
       ),
-      borderData: FlBorderData(show: false),
-      minX: 0,
-      maxX: (puntos.length - 1).toDouble(),
-      minY: 0,
-      // Usamos el NUEVO valor máximo "redondo"
-      maxY: niceMaxY,
+    ],
 
-      // <<< CAMBIO PRINCIPAL AQUÍ >>>
-      // Actualizamos el Tooltip para que muestre el período
-      lineTouchData: LineTouchData(
-        touchTooltipData: LineTouchTooltipData(
-          // ESTA LÍNEA AHORA FUNCIONARÁ CORRECTAMENTE
-          getTooltipColor: (spot) => widget.colors.tooltipBackground,
-          tooltipPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 8,
-          ),
-          tooltipBorder: const BorderSide(color: Colors.transparent),
-          tooltipRoundedRadius: 8,
-          getTooltipItems: (List<LineBarSpot> touchedSpots) {
-            if (touchedSpots.isEmpty) {
-              return [];
-            }
+    // --- TOOLTIPS (Se mantiene igual, solo se activa si hay datos) ---
+    lineTouchData: LineTouchData(
+      touchTooltipData: LineTouchTooltipData(
+        getTooltipColor: (spot) => widget.colors.tooltipBackground,
+        tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        tooltipBorder: const BorderSide(color: Colors.transparent),
+        tooltipRoundedRadius: 8,
+        getTooltipItems: (List<LineBarSpot> touchedSpots) {
+          if (touchedSpots.isEmpty) return [];
 
-            final spotIndex = touchedSpots.first.spotIndex;
-            final punto = puntos[spotIndex];
+          final spotIndex = touchedSpots.first.spotIndex;
+          final punto = puntos[spotIndex];
+          final nombrePeriodo = _getTranslatedPeriodName(punto, _currentView);
+          final headerText = '${nombrePeriodo[0].toUpperCase()}${nombrePeriodo.substring(1)}';
+          final periodoFormateado = _formatPeriodoForTooltip(punto, _currentView);
 
-            final nombrePeriodo = _getTranslatedPeriodName(punto, _currentView);
-            final headerText =
-                '${nombrePeriodo[0].toUpperCase()}${nombrePeriodo.substring(1)}';
+          final children = <TextSpan>[];
+          children.add(
+            TextSpan(
+              text: headerText,
+              style: TextStyle(
+                color: widget.colors.tooltipTextPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          );
 
-            // <<< 1. Llamamos a nuestra nueva función para formatear el período >>>
-            final periodoFormateado = _formatPeriodoForTooltip(
-              punto,
-              _currentView,
-            );
-
-            final children = <TextSpan>[];
-
-            // 2. Encabezado principal (Día, Semana, Mes)
+          if (periodoFormateado.isNotEmpty) {
             children.add(
               TextSpan(
-                text: headerText,
+                text: '\n$periodoFormateado',
                 style: TextStyle(
-                  color: widget.colors.tooltipTextPrimary, // <-- Color dinámico
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16, // Ligeramente más pequeño
+                  color: widget.colors.tooltipTextSecondary,
+                  fontWeight: FontWeight.normal,
+                  fontSize: 11,
                 ),
               ),
             );
+          }
+          children.add(const TextSpan(text: '\n', style: TextStyle(fontSize: 10)));
+          children.add(
+            TextSpan(
+              text: 'Recaudado:\n',
+              style: TextStyle(color: widget.colors.colorRecaudadoText, fontSize: 12),
+            ),
+          );
+          children.add(
+            TextSpan(
+              text: formatCurrency(punto.totalPago),
+              style: TextStyle(
+                color: widget.colors.colorRecaudadoText,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          );
 
-            // <<< 3. Añadimos el período formateado si existe >>>
-            if (periodoFormateado.isNotEmpty) {
-              children.add(
-                TextSpan(
-                  text: '\n$periodoFormateado', // El \n crea una nueva línea
-                  style: TextStyle(
-                    color:
-                        widget
-                            .colors
-                            .tooltipTextSecondary, // <-- Color dinámico
-                    fontWeight: FontWeight.normal,
-                    fontSize: 11, // Más pequeño
-                  ),
-                ),
+          return touchedSpots.map((touchedSpot) {
+            if (touchedSpot == touchedSpots.first) {
+              return LineTooltipItem(
+                '',
+                const TextStyle(fontSize: 0),
+                children: children,
+                textAlign: TextAlign.left,
               );
             }
-
-            // 4. Espaciador
-            children.add(
-              const TextSpan(text: '\n', style: TextStyle(fontSize: 10)),
-            );
-
-            // 5. Sección de "Recaudado"
-            children.add(
-              TextSpan(
-                text: 'Recaudado:\n',
-                style: TextStyle(
-                  color: widget.colors.colorRecaudadoText,
-                  fontSize: 12,
-                ),
-              ),
-            );
-            children.add(
-              TextSpan(
-                text: formatCurrency(punto.totalPago),
-                style: TextStyle(
-                  color: widget.colors.colorRecaudadoText,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            );
-
-            // 6. Sección de "Ideal"
-            /* children.add(
-              TextSpan(
-                text: '\nIdeal:',
-                style: TextStyle(
-                  color: widget.colors.colorIdealText.withOpacity(0.8),
-                  fontSize: 12,
-                  height: 1.8,
-                ),
-              ),
-            );
-            children.add(
-              TextSpan(
-                text:
-                    '\n' +
-                    (punto.sumaIdeal != null
-                        ? formatCurrency(punto.sumaIdeal!)
-                        : '—'),
-                style: TextStyle(
-                  color: widget.colors.colorIdealText,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ); */
-
-            return touchedSpots.map((touchedSpot) {
-              if (touchedSpot == touchedSpots.first) {
-                return LineTooltipItem(
-                  '',
-                  const TextStyle(fontSize: 0),
-                  children: children,
-                  textAlign: TextAlign.left,
-                );
-              }
-              return LineTooltipItem('', const TextStyle(fontSize: 0));
-            }).toList();
-          },
-        ),
-        getTouchedSpotIndicator: (
-          LineChartBarData barData,
-          List<int> spotIndexes,
-        ) {
-          return spotIndexes.map((index) {
-            return TouchedSpotIndicatorData(
-              const FlLine(color: Colors.transparent),
-              FlDotData(
-                getDotPainter: (spot, percent, barData, index) {
-                  return FlDotCirclePainter(
-                    radius: 8,
-                    color: AppColors.primary,
-                    strokeWidth: 2,
-                    strokeColor: widget.colors.backgroundCard,
-                  );
-                },
-              ),
-            );
+            return LineTooltipItem('', const TextStyle(fontSize: 0));
           }).toList();
         },
       ),
-      lineBarsData: [
-        LineChartBarData(
-          spots: List.generate(puntos.length, (i) {
-            return FlSpot(i.toDouble(), puntos[i].totalPago);
-          }),
-          isCurved: true,
-          gradient: LinearGradient(
-            colors: [
-              widget.colors.colorRecaudado,
-              widget.colors.colorRecaudado.withOpacity(0.8),
-            ],
-          ),
-          barWidth: 3,
-          isStrokeCapRound: true,
-          dotData: FlDotData(show: true),
-          belowBarData: BarAreaData(
-            show: true,
-            gradient: LinearGradient(
-              colors: [
-                widget.colors.colorRecaudado.withOpacity(0.2),
-                widget.colors.colorRecaudado.withOpacity(0.5),
-              ],
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
+      getTouchedSpotIndicator: (LineChartBarData barData, List<int> spotIndexes) {
+        return spotIndexes.map((index) {
+          return TouchedSpotIndicatorData(
+            const FlLine(color: Colors.transparent),
+            FlDotData(
+              getDotPainter: (spot, percent, barData, index) {
+                return FlDotCirclePainter(
+                  radius: 8,
+                  color: AppColors.primary,
+                  strokeWidth: 2,
+                  strokeColor: widget.colors.backgroundCard,
+                );
+              },
             ),
-          ),
-        ),
-        /* LineChartBarData(
-          spots: List.generate(puntos.length, (i) {
-            if (puntos[i].sumaIdeal == null) {
-              return FlSpot.nullSpot;
-            }
-            return FlSpot(i.toDouble(), puntos[i].sumaIdeal!);
-          }),
-          isCurved: true,
-          color: widget.colors.colorIdeal,
-          barWidth: 2,
-          isStrokeCapRound: true,
-          dotData: const FlDotData(show: true),
-          belowBarData: BarAreaData(
-            show: true,
-            gradient: LinearGradient(
-              colors: [
-                widget.colors.colorIdeal.withOpacity(0.2),
-                widget.colors.colorIdeal.withOpacity(0.5),
-              ],
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
-            ),
-          ),
-        ), */
-      ],
-    );
-  }
+          );
+        }).toList();
+      },
+    ),
+  );
+}
 
   // <<< ESTA ES LA NUEVA FUNCIÓN AUXILIAR >>>
   /// Formatea el string del período para mostrarlo de forma amigable en el tooltip.
