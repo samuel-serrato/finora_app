@@ -75,6 +75,8 @@ class ReporteGeneral {
   final String utilizadoPago;
 
   final List<Deposito> depositos;
+   // === NUEVO CAMPO AÑADIDO ===
+  final double restanteFicha;
 
   ReporteGeneral({
     required this.numero,
@@ -96,6 +98,8 @@ class ReporteGeneral {
     required this.saldoUtilizado,
     required this.saldoDisponible,
     required this.utilizadoPago,
+     // === AÑADIDO AL CONSTRUCTOR ===
+    required this.restanteFicha,
   });
 
   // El método factory ReporteGeneral.fromJson() ya estaba correcto y no necesita cambios.
@@ -150,6 +154,8 @@ class ReporteGeneral {
       saldoDisponible:
           (pagofichaData?['saldoDisponible'] as num?)?.toDouble() ?? 0.0,
       utilizadoPago: pagofichaData?['utilizadoPago']?.toString() ?? 'No',
+       // === LEER EL NUEVO VALOR DEL JSON ===
+      restanteFicha: (json['restanteFicha'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }

@@ -1,11 +1,11 @@
-// lib/helpers/pdf_exporter_general.dart (Versión final y corregida con Simbología y Abono Global)
+// lib/helpers/pdf_exporter_general.dart (Versión final con _truncateText corregido)
 
 import 'dart:io';
 import 'package:collection/collection.dart';
 import 'package:finora_app/ip.dart';
 import 'package:finora_app/models/reporte_general.dart';
 import 'package:finora_app/providers/user_data_provider.dart';
-import 'package:flutter/foundation.dart'; // Importante para kIsWeb
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
@@ -62,10 +62,9 @@ class ExportHelperGeneral {
     try {
       final doc = pw.Document();
       final userData = Provider.of<UserDataProvider>(context, listen: false);
-      final logoColor =
-          userData.imagenes
-              .where((img) => img.tipoImagen == 'logoColor')
-              .firstOrNull;
+      final logoColor = userData.imagenes.firstWhereOrNull(
+        (img) => img.tipoImagen == 'logoColor',
+      );
       final logoUrl =
           logoColor != null
               ? '$baseUrl/imagenes/subidas/${logoColor.rutaImagen}'
@@ -108,18 +107,23 @@ class ExportHelperGeneral {
                   pw.SizedBox(height: 10),
                   _buildPdfTotals(reporteData, currencyFormat, listaReportes),
                   pw.SizedBox(height: 10),
-                   // --- INICIO CÁLCULO NUEVO TOTAL BRUTO ---
-  () {
-    final double totalMorPagados = listaReportes.fold(0.0, (sum, r) => sum + r.sumaMoratorio);
-    final double nuevoTotalBruto = reporteData.totalPagoficha + 
-                                   reporteData.totalSaldoDisponible + 
-                                   totalMorPagados;
-                                   
-    return _buildTotalsIdealPdfWidget(reporteData, currencyFormat, nuevoTotalBruto);
-  }(),
-  // --- FIN CÁLCULO ---
+                  (() {
+                    final double totalMorPagados = listaReportes.fold(
+                      0.0,
+                      (sum, r) => sum + r.sumaMoratorio,
+                    );
+                    final double nuevoTotalBruto =
+                        reporteData.totalPagoficha +
+                        reporteData.totalSaldoDisponible +
+                        totalMorPagados;
+                    return _buildTotalsIdealPdfWidget(
+                      reporteData,
+                      currencyFormat,
+                      nuevoTotalBruto,
+                    );
+                  }()),
                   pw.SizedBox(height: 25),
-                  _buildSimbologia(), // <-- La simbología ya estaba aquí, se actualizará su contenido.
+                  _buildSimbologia(),
                 ],
           ),
         );
@@ -128,7 +132,6 @@ class ExportHelperGeneral {
       buildPdfPages();
 
       final Uint8List pdfBytes = await doc.save();
-
       final String? outputFile = await FilePicker.platform.saveFile(
         dialogTitle: 'Exportar Reporte General',
         fileName:
@@ -163,7 +166,6 @@ class ExportHelperGeneral {
     }
   }
 
-  // --- MÉTODO _buildSimbologia ACTUALIZADO ---
   static pw.Widget _buildSimbologia() {
     pw.Widget _legendItem(String text, PdfColor color, {pw.BoxBorder? border}) {
       return pw.Padding(
@@ -221,16 +223,10 @@ class ExportHelperGeneral {
               'Etiqueta rosa: Pago con Garantía',
               PdfColor.fromHex('#E53888'),
             ),
-            // ===============================================================
-            // === INICIO DEL CAMBIO: AÑADIR SIMBOLOGÍA PARA ABONO GLOBAL ===
-            // ===============================================================
             _legendItem(
-              'Etiqueta verde azulado: Abono Global', // <-- CAMBIADO
-              PdfColor.fromHex('#009688'), // Color teal
+              'Etiqueta verde azulado: Abono Global',
+              PdfColor.fromHex('#009688'),
             ),
-            // ===============================================================
-            // === FIN DEL CAMBIO ============================================
-            // ===============================================================
             _legendItem(
               'Etiqueta verde: Pago con Saldo a Favor',
               PdfColor.fromHex('#28a745'),
@@ -241,6 +237,9 @@ class ExportHelperGeneral {
     );
   }
 
+  // =========================================================================
+  // === MÉTODO AÑADIDO QUE FALTABA ==========================================
+  // =========================================================================
   static String _truncateText(String text, int maxLength) {
     if (text.length <= maxLength) {
       return text;
@@ -291,18 +290,16 @@ class ExportHelperGeneral {
           ...listaReportes.asMap().entries.map((entry) {
             final index = entry.key;
             final reporte = entry.value;
-            final totalPagos = reporte.pagoficha;
-            final montoFicha = reporte.montoficha;
             final moratoriosGenerados = reporte.moratoriosAPagar;
             final moratoriosPagados = reporte.sumaMoratorio;
             final moratoriosPendientes =
                 moratoriosGenerados - moratoriosPagados;
-            final bool pagoNoRealizado = totalPagos == 0.0;
-            final bool fichaCubierta = totalPagos >= montoFicha;
+            final bool pagoNoRealizado = reporte.pagoficha == 0.0;
+            final bool fichaCubierta = reporte.restanteFicha <= 0;
             final bool moratoriosCubiertos = moratoriosPendientes <= 0;
             final bool esCompleto = fichaCubierta && moratoriosCubiertos;
             final bool esIncompleto = !pagoNoRealizado && !esCompleto;
-            final double saldoContra = montoFicha - totalPagos;
+            final double saldoContra = reporte.restanteFicha;
             final double saldoContraDisplay =
                 saldoContra > 0 ? saldoContra : 0.0;
             final isLastRow = index == listaReportes.length - 1;
@@ -311,17 +308,17 @@ class ExportHelperGeneral {
               esIncompleto,
               isLastRow: isLastRow,
             );
+
             return pw.TableRow(
               verticalAlignment: pw.TableCellVerticalAlignment.middle,
               decoration: rowDecoration,
               children: [
                 _buildPdfCell((index + 1).toString(), isNumeric: true),
                 _buildPdfCell(reporte.tipoPago),
-                _buildPdfCell(_truncateText(reporte.grupos, 30)),
-                _buildPagosColumnPdf(
-                  reporte,
-                  currencyFormat,
-                ), // <-- Aquí se aplica la lógica
+                _buildPdfCell(
+                  _truncateText(reporte.grupos, 30),
+                ), // <-- Ahora funciona
+                _buildPagosColumnPdf(reporte, currencyFormat),
                 _buildFechasColumnPdf(reporte),
                 _buildPdfCell(
                   currencyFormat.format(reporte.montoficha),
@@ -358,7 +355,7 @@ class ExportHelperGeneral {
     );
   }
 
-  // --- MÉTODO _buildPagosColumnPdf ACTUALIZADO ---
+  // ... (El resto del archivo sin cambios)
   static pw.Widget _buildPagosColumnPdf(
     ReporteGeneral reporte,
     NumberFormat currencyFormat,
@@ -371,9 +368,6 @@ class ExportHelperGeneral {
 
     for (final deposito in reporte.depositos) {
       if (deposito.monto > 0) {
-        // ====================================================================
-        // === INICIO DEL CAMBIO: AÑADIR LÓGICA PARA ABONO GLOBAL ===========
-        // ====================================================================
         final bool isGarantia = deposito.garantia == "Si";
         final bool isSaldoGlobal = deposito.esSaldoGlobal == "Si";
 
@@ -396,7 +390,7 @@ class ExportHelperGeneral {
 
         paymentWidgets.add(
           pw.Container(
-            decoration: decoration, // Se aplica la decoración determinada
+            decoration: decoration,
             padding: const pw.EdgeInsets.symmetric(
               horizontal: 3,
               vertical: 1.5,
@@ -404,16 +398,10 @@ class ExportHelperGeneral {
             margin: const pw.EdgeInsets.only(bottom: 1),
             child: pw.Text(
               currencyFormat.format(deposito.monto),
-              style: pw.TextStyle(
-                color: textColor, // Se aplica el color de texto determinado
-                fontSize: 6,
-              ),
+              style: pw.TextStyle(color: textColor, fontSize: 6),
             ),
           ),
         );
-        // ====================================================================
-        // === FIN DEL CAMBIO =================================================
-        // ====================================================================
       }
     }
 
@@ -443,10 +431,6 @@ class ExportHelperGeneral {
       ),
     );
   }
-
-  // =========================================================================
-  // === EL RESTO DE LOS MÉTODOS AUXILIARES PERMANECEN SIN CAMBIOS ==========
-  // =========================================================================
 
   static pw.Widget _buildSaldoFavorColumnPdf(
     ReporteGeneral reporte,
@@ -545,11 +529,10 @@ class ExportHelperGeneral {
     final double totalInteres = reporteData.totalInteres;
     final double totalSaldoDisponible = reporteData.totalSaldoDisponible;
     final double totalSaldoFavorHistorico = reporteData.totalSaldoFavor;
-
-    double totalSaldoContra = listaReportes.fold(0.0, (sum, r) {
-      final saldo = r.montoficha - r.pagoficha;
-      return sum + (saldo > 0 ? saldo : 0);
-    });
+    double totalSaldoContra = listaReportes.fold(
+      0.0,
+      (sum, r) => sum + r.restanteFicha,
+    );
     final double totalMoratoriosGenerados = listaReportes.fold(
       0.0,
       (sum, r) => sum + r.moratoriosAPagar,
@@ -657,8 +640,7 @@ class ExportHelperGeneral {
   static pw.Widget _buildTotalsIdealPdfWidget(
     ReporteGeneralData reporteData,
     NumberFormat currencyFormat,
-      double nuevoTotalBruto, // <--- Nuevo parámetro
-
+    double nuevoTotalBruto,
   ) {
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 15),
@@ -681,11 +663,7 @@ class ExportHelperGeneral {
             currencyFormat,
           ),
           pw.SizedBox(width: 40),
-          _buildTotalPdfItem(
-            'Total Bruto',
-          nuevoTotalBruto, // <--- Usamos el valor calculado
-            currencyFormat,
-          ),
+          _buildTotalPdfItem('Total Bruto', nuevoTotalBruto, currencyFormat),
         ],
       ),
     );

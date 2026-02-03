@@ -106,7 +106,7 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: isDarkMode ? Colors.grey[850] : Colors.white,
+                  color: isDarkMode ? Colors.transparent : Colors.white,
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: ClipRRect(
@@ -1308,72 +1308,134 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
 
   // lib/screens/reporteContable.dart
 
-// REEMPLAZA ESTA FUNCIÓN COMPLETA EN TU ARCHIVO
-Widget _buildMobileAnalysisSection(
-  BuildContext context,
-  ReporteContableGrupo grupo,
-) {
-  final colors = Provider.of<ThemeProvider>(context).colors;
+  // REEMPLAZA ESTA FUNCIÓN COMPLETA EN TU ARCHIVO
+  Widget _buildMobileAnalysisSection(
+    BuildContext context,
+    ReporteContableGrupo grupo,
+  ) {
+    final colors = Provider.of<ThemeProvider>(context).colors;
 
-  final double pagoTotalAplicado =
-      grupo.pagoficha.sumaDeposito + grupo.pagoficha.favorUtilizado;
+    final double pagoTotalAplicado =
+        grupo.pagoficha.sumaDeposito + grupo.pagoficha.favorUtilizado;
 
-  final double depositosSinGarantia = grupo.pagoficha.depositos
-      .where((d) => d.garantia != 'Si')
-      .fold(0.0, (sum, d) => sum + d.deposito);
-  final double pagoEfectivoPeriodo =
-      depositosSinGarantia + grupo.pagoficha.favorUtilizado;
+    final double depositosSinGarantia = grupo.pagoficha.depositos
+        .where((d) => d.garantia != 'Si')
+        .fold(0.0, (sum, d) => sum + d.deposito);
+    final double pagoEfectivoPeriodo =
+        depositosSinGarantia + grupo.pagoficha.favorUtilizado;
 
-  final bool huboPagoConGarantia =
-      (pagoTotalAplicado - pagoEfectivoPeriodo).abs() > 0.01;
-  final bool esPagoSoloConGarantia =
-      pagoEfectivoPeriodo < 0.01 && pagoTotalAplicado > 0;
+    final bool huboPagoConGarantia =
+        (pagoTotalAplicado - pagoEfectivoPeriodo).abs() > 0.01;
+    final bool esPagoSoloConGarantia =
+        pagoEfectivoPeriodo < 0.01 && pagoTotalAplicado > 0;
 
-  double capitalAplicadoTotal = 0;
-  double interesAplicadoTotal = 0;
+    double capitalAplicadoTotal = 0;
+    double interesAplicadoTotal = 0;
 
-  if (pagoTotalAplicado > 0) {
-    final saldoGlobalAnterior = grupo.saldoGlobal - pagoTotalAplicado;
-    final num capitalPendienteAnterior = max(
-      0,
-      grupo.montoDesembolsado - saldoGlobalAnterior,
+    if (pagoTotalAplicado > 0) {
+      final saldoGlobalAnterior = grupo.saldoGlobal - pagoTotalAplicado;
+      final num capitalPendienteAnterior = max(
+        0,
+        grupo.montoDesembolsado - saldoGlobalAnterior,
+      );
+      final num capitalPendienteActual = max(
+        0,
+        grupo.montoDesembolsado - grupo.saldoGlobal,
+      );
+
+      capitalAplicadoTotal =
+          (capitalPendienteAnterior - capitalPendienteActual).toDouble();
+      interesAplicadoTotal = pagoTotalAplicado - capitalAplicadoTotal;
+    }
+
+    final double capitalPagadoEfectivo = min(
+      capitalAplicadoTotal,
+      pagoEfectivoPeriodo,
     );
-    final num capitalPendienteActual = max(
-      0,
-      grupo.montoDesembolsado - grupo.saldoGlobal,
-    );
+    final double interesPagadoEfectivo =
+        pagoEfectivoPeriodo - capitalPagadoEfectivo;
 
-    capitalAplicadoTotal =
-        (capitalPendienteAnterior - capitalPendienteActual).toDouble();
-    interesAplicadoTotal = pagoTotalAplicado - capitalAplicadoTotal;
-  }
+    final double capitalPendienteReal =
+        max(0, grupo.montoDesembolsado - grupo.saldoGlobal).toDouble();
+    final double InteresSobreDesembolso =
+        max(0, grupo.saldoGlobal - grupo.montoDesembolsado).toDouble();
 
-  final double capitalPagadoEfectivo = min(
-    capitalAplicadoTotal,
-    pagoEfectivoPeriodo,
-  );
-  final double interesPagadoEfectivo =
-      pagoEfectivoPeriodo - capitalPagadoEfectivo;
+    // === INICIO DEL CAMBIO: Se añade el cálculo que faltaba ===
+    final double InteresSobreSolicitado =
+        max(0, grupo.saldoGlobal - grupo.montoSolicitado).toDouble();
+    // === FIN DEL CAMBIO ===
 
-  final double capitalPendienteReal =
-      max(0, grupo.montoDesembolsado - grupo.saldoGlobal).toDouble();
-  final double InteresSobreDesembolso =
-      max(0, grupo.saldoGlobal - grupo.montoDesembolsado).toDouble();
-
-  // === INICIO DEL CAMBIO: Se añade el cálculo que faltaba ===
-  final double InteresSobreSolicitado =
-      max(0, grupo.saldoGlobal - grupo.montoSolicitado).toDouble();
-  // === FIN DEL CAMBIO ===
-
-
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      if (pagoTotalAplicado > 0) ...[
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (pagoTotalAplicado > 0) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0),
+            child: Text(
+              'Aplicación del Pago del Período',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: colors.textPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  'Abono a Capital',
+                  style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                ),
+                _buildMobileAnalysisValue(
+                  context,
+                  cashValue: capitalPagadoEfectivo,
+                  appliedValue: capitalAplicadoTotal,
+                  showAppliedValue: huboPagoConGarantia,
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  'Abono a Interés',
+                  style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                ),
+                _buildMobileAnalysisValue(
+                  context,
+                  cashValue: interesPagadoEfectivo,
+                  appliedValue: interesAplicadoTotal,
+                  showAppliedValue: huboPagoConGarantia,
+                  valueColor:
+                      interesPagadoEfectivo > 0 ? Colors.green.shade700 : null,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildMobileAnalysisNote(
+            context,
+            capitalAplicadoTotal,
+            interesAplicadoTotal,
+            pagoTotalAplicado,
+            esPagoSoloConGarantia,
+            huboPagoConGarantia,
+          ),
+          const Divider(height: 20),
+        ],
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 4.0),
           child: Text(
-            'Aplicación del Pago del Período',
+            'Estado Global del Crédito',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
@@ -1382,89 +1444,26 @@ Widget _buildMobileAnalysisSection(
           ),
         ),
         const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                'Abono a Capital',
-                style: TextStyle(fontSize: 12, color: colors.textSecondary),
-              ),
-              _buildMobileAnalysisValue(
-                context,
-                cashValue: capitalPagadoEfectivo,
-                appliedValue: capitalAplicadoTotal,
-                showAppliedValue:
-                    huboPagoConGarantia,
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                'Abono a Interés',
-                style: TextStyle(fontSize: 12, color: colors.textSecondary),
-              ),
-              _buildMobileAnalysisValue(
-                context,
-                cashValue: interesPagadoEfectivo,
-                appliedValue: interesAplicadoTotal,
-                showAppliedValue:
-                    huboPagoConGarantia,
-                valueColor:
-                    interesPagadoEfectivo > 0 ? Colors.green.shade700 : null,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        _buildMobileAnalysisNote(
+        _buildMobileDetailRow(
           context,
-          capitalAplicadoTotal,
-          interesAplicadoTotal,
-          pagoTotalAplicado,
-          esPagoSoloConGarantia,
-          huboPagoConGarantia,
+          'Capital Desembolsado Pendiente',
+          widget.currencyFormat.format(capitalPendienteReal),
         ),
-        const Divider(height: 20),
+        // === INICIO DEL CAMBIO: Se modifica este widget para mostrar ambos valores ===
+        _buildMobileDetailRow(
+          context,
+          'Interés Acumulado (s/ Solicitado)', // Etiqueta principal
+          widget.currencyFormat.format(
+            InteresSobreSolicitado,
+          ), // Valor principal
+          valueColor: InteresSobreSolicitado > 0 ? Colors.green.shade700 : null,
+          tooltipMessage: // Se añade el tooltip con la información secundaria
+              'Sobre Desembolso: ${widget.currencyFormat.format(InteresSobreDesembolso)}',
+        ),
+        // === FIN DEL CAMBIO ===
       ],
-      Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4.0),
-        child: Text(
-          'Estado Global del Crédito',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: colors.textPrimary,
-          ),
-        ),
-      ),
-      const SizedBox(height: 8),
-      _buildMobileDetailRow(
-        context,
-        'Capital Desembolsado Pendiente',
-        widget.currencyFormat.format(capitalPendienteReal),
-      ),
-      // === INICIO DEL CAMBIO: Se modifica este widget para mostrar ambos valores ===
-      _buildMobileDetailRow(
-        context,
-        'Interés Acumulado (s/ Solicitado)', // Etiqueta principal
-        widget.currencyFormat.format(InteresSobreSolicitado), // Valor principal
-        valueColor: InteresSobreSolicitado > 0 ? Colors.green.shade700 : null,
-        tooltipMessage: // Se añade el tooltip con la información secundaria
-            'Sobre Desembolso: ${widget.currencyFormat.format(InteresSobreDesembolso)}',
-      ),
-      // === FIN DEL CAMBIO ===
-    ],
-  );
-}
+    );
+  }
 
   // REEMPLAZA ESTA FUNCIÓN COMPLETA (VERSIÓN MÓVIL FINAL)
 
@@ -2029,10 +2028,11 @@ Widget _buildMobileAnalysisSection(
     ReporteContableGrupo grupo,
   ) {
     final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
+    final colors = Provider.of<ThemeProvider>(context).colors;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 1,
-      color: isDarkMode ? Colors.grey[800] : Colors.white,
+      color: colors.card2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(6),
         side: BorderSide(
@@ -2182,7 +2182,7 @@ Widget _buildMobileAnalysisSection(
             children: [
               TableRow(
                 decoration: BoxDecoration(
-                  color: isDarkMode ? Colors.grey[800] : Colors.grey[100],
+                  color: isDarkMode ? Colors.transparent : Colors.grey[100],
                   border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
                 ),
                 children: const [
@@ -2392,7 +2392,7 @@ Widget _buildMobileAnalysisSection(
           width: double.infinity,
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: isDarkMode ? Colors.grey[850] : Colors.white,
+            color: isDarkMode ? Colors.transparent : Colors.white,
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
               color: isDarkMode ? Colors.grey[700]! : Colors.grey[200]!,
@@ -2598,7 +2598,7 @@ Widget _buildMobileAnalysisSection(
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey[850] : Colors.white,
+        color: isDarkMode ? Colors.transparent : Colors.white,
         borderRadius: BorderRadius.circular(4),
         border: Border.all(
           color: isDarkMode ? Colors.grey[700]! : Colors.grey[200]!,
@@ -2778,7 +2778,7 @@ Widget _buildMobileAnalysisSection(
           width: double.infinity,
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: isDarkMode ? Colors.grey[850] : Colors.white,
+            color: isDarkMode ? Colors.transparent : Colors.white,
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
               color: isDarkMode ? Colors.grey[700]! : Colors.grey[200]!,
@@ -2837,7 +2837,7 @@ Widget _buildMobileAnalysisSection(
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey[850] : Colors.white,
+        color: isDarkMode ? Colors.transparent : Colors.white,
         borderRadius: BorderRadius.circular(4),
         border: Border.all(
           color: isDarkMode ? Colors.grey[700]! : Colors.grey[200]!,
@@ -2943,7 +2943,7 @@ Widget _buildMobileAnalysisSection(
       width: double.infinity,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey[850] : Colors.white,
+        color: isDarkMode ? Colors.transparent : Colors.white,
         borderRadius: BorderRadius.circular(4),
         border: Border.all(
           color:
@@ -2971,8 +2971,7 @@ Widget _buildMobileAnalysisSection(
           ),
           const SizedBox(height: 8),
           Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
@@ -2994,10 +2993,11 @@ Widget _buildMobileAnalysisSection(
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: isDarkMode ? Colors.grey[850] : Colors.white,
+                      color: isDarkMode ? Colors.transparent : Colors.white,
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
-                        color: isDarkMode ? Colors.grey[700]! : Colors.grey[200]!,
+                        color:
+                            isDarkMode ? Colors.grey[700]! : Colors.grey[200]!,
                       ),
                     ),
                     child: Column(
@@ -3007,7 +3007,10 @@ Widget _buildMobileAnalysisSection(
                           'Interés Acumulado (s/ Solicitado)',
                           style: TextStyle(
                             fontSize: 10,
-                            color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                            color:
+                                isDarkMode
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
                           ),
                         ),
                         Text(
@@ -3022,11 +3025,14 @@ Widget _buildMobileAnalysisSection(
                         Padding(
                           padding: const EdgeInsets.only(top: 2.0),
                           child: Text(
-                           '(s. desembolso:\n${widget.currencyFormat.format(InteresSobreDesembolso)})',
+                            '(s. desembolso:\n${widget.currencyFormat.format(InteresSobreDesembolso)})',
                             style: TextStyle(
                               fontWeight: FontWeight.w500,
                               fontSize: 10,
-                              color: isDarkMode ? Colors.grey[500] : Colors.grey[700],
+                              color:
+                                  isDarkMode
+                                      ? Colors.grey[500]
+                                      : Colors.grey[700],
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -3073,8 +3079,7 @@ Widget _buildMobileAnalysisSection(
                     label: 'Abono a Capital',
                     cashValue: capitalPagadoEfectivo,
                     appliedValue: capitalAplicadoTotal,
-                    showAppliedValue:
-                        huboPagoConGarantia,
+                    showAppliedValue: huboPagoConGarantia,
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -3084,8 +3089,7 @@ Widget _buildMobileAnalysisSection(
                     label: 'Abono a Interés',
                     cashValue: interesPagadoEfectivo,
                     appliedValue: interesAplicadoTotal,
-                    showAppliedValue:
-                        huboPagoConGarantia,
+                    showAppliedValue: huboPagoConGarantia,
                   ),
                 ),
               ],
@@ -3212,7 +3216,7 @@ Widget _buildMobileAnalysisSection(
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey[800] : Colors.grey[100],
+        color: isDarkMode ? Colors.transparent : Colors.grey[100],
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
@@ -3457,7 +3461,7 @@ Widget _buildMobileAnalysisSection(
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey[850] : Colors.white,
+        color: isDarkMode ? Colors.transparent : Colors.white,
         borderRadius: BorderRadius.circular(4),
         border: Border.all(
           color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,

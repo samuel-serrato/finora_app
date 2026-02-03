@@ -364,8 +364,10 @@ class ReporteGeneralWidget extends StatelessWidget {
   ) {
     final colors = Provider.of<ThemeProvider>(context).colors;
     final bool pagoNoRealizado = reporte.pagoficha == 0.0;
+    // DESPUÉS (CORREGIDO):
+    // La ficha se considera cubierta si el restante es 0 o menos.
     final bool esCompleto =
-        reporte.pagoficha >= reporte.montoficha &&
+        reporte.restanteFicha <= 0 &&
         (reporte.moratoriosAPagar - reporte.sumaMoratorio) <= 0;
 
     Color statusColor;
@@ -816,15 +818,19 @@ class ReporteGeneralWidget extends StatelessWidget {
     );
   }
 
+  // --- MÉTODO MODIFICADO (MÓVIL) ---
   String _buildSaldoContraText(ReporteGeneral reporte) {
-    final double saldoContra = reporte.montoficha - reporte.pagoficha;
+    // Ya no se calcula, se usa el valor del API
+    final double saldoContra = reporte.restanteFicha;
     return saldoContra > 0
         ? currencyFormat.format(saldoContra)
         : currencyFormat.format(0.0);
   }
 
+  // --- MÉTODO MODIFICADO (MÓVIL) ---
   Color? _getSaldoContraColor(ReporteGeneral reporte, BuildContext context) {
-    if ((reporte.montoficha - reporte.pagoficha) > 0) {
+    // La condición ahora usa el nuevo campo
+    if (reporte.restanteFicha > 0) {
       return Provider.of<ThemeProvider>(context, listen: false).isDarkMode
           ? Colors.red[300]
           : Colors.red[700];
@@ -834,12 +840,12 @@ class ReporteGeneralWidget extends StatelessWidget {
   
 
   // === CAMBIO 3: Resumen de totales completamente rediseñado ===
+   // --- MÉTODO MODIFICADO (TOTALES MÓVIL) ---
   Widget _buildMobileTotalsSummary(BuildContext context) {
-    // Calculamos los totales que no vienen en reporteData
-    double totalSaldoContra = listaReportes.fold(0.0, (sum, r) {
-      final saldo = r.montoficha - r.pagoficha;
-      return sum + (saldo > 0 ? saldo : 0);
-    });
+    // === CAMBIO: Usamos fold para sumar el nuevo campo restanteFicha ===
+    double totalSaldoContra =
+        listaReportes.fold(0.0, (sum, r) => sum + r.restanteFicha);
+
     final double totalMoratoriosGenerados = listaReportes.fold(
       0.0,
       (sum, r) => sum + r.moratoriosAPagar,
@@ -852,6 +858,7 @@ class ReporteGeneralWidget extends StatelessWidget {
     final double nuevoTotalBruto = (reporteData?.totalPagoficha ?? 0.0) + 
                                (reporteData?.totalSaldoDisponible ?? 0.0) + 
                                totalMoratoriosPagados;
+
 
     return Container(
       margin: const EdgeInsets.only(top: 16),
@@ -1068,8 +1075,11 @@ class ReporteGeneralWidget extends StatelessWidget {
             final moratoriosPendientes =
                 moratoriosGenerados - moratoriosPagados;
 
-            final bool pagoNoRealizado = totalPagos == 0.0;
-            final bool fichaCubierta = totalPagos >= montoFicha;
+            final bool pagoNoRealizado = reporte.pagoficha == 0.0; // Se usa pagoficha aquí, es correcto.
+
+             // DESPUÉS (CORREGIDO):
+            // La ficha está cubierta si el API nos dice que el restante es 0 o menos.
+            final bool fichaCubierta = reporte.restanteFicha <= 0;
             final bool moratoriosCubiertos = moratoriosPendientes <= 0;
             final bool esCompleto = fichaCubierta && moratoriosCubiertos;
             final bool esIncompleto = !pagoNoRealizado && !esCompleto;
@@ -1189,12 +1199,12 @@ class ReporteGeneralWidget extends StatelessWidget {
     );
   }
 
+   // --- MÉTODO MODIFICADO (ESCRITORIO) ---
   Widget _buildSaldoContra(ReporteGeneral reporte, BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
-    final double montoFicha = reporte.montoficha;
-    final double totalPagos = reporte.pagoficha;
-    final double saldoContra = montoFicha - totalPagos;
+    // === CAMBIO: Usar el campo del API en lugar de calcular ===
+    final double saldoContra = reporte.restanteFicha;
     final String displayValue =
         saldoContra > 0
             ? currencyFormat.format(saldoContra)
@@ -1557,6 +1567,7 @@ class ReporteGeneralWidget extends StatelessWidget {
     );
   }
 
+    // --- MÉTODO MODIFICADO (TOTALES ESCRITORIO) ---
   Widget _buildTotalsWidget() {
     if (reporteData == null) {
       return const SizedBox.shrink();
@@ -1569,10 +1580,9 @@ class ReporteGeneralWidget extends StatelessWidget {
     final double totalSaldoDisponible = reporteData!.totalSaldoDisponible;
     final double totalSaldoFavorHistorico = reporteData!.totalSaldoFavor;
 
-    double totalSaldoContra = listaReportes.fold(0.0, (sum, r) {
-      final saldo = r.montoficha - r.pagoficha;
-      return sum + (saldo > 0 ? saldo : 0);
-    });
+    // === CAMBIO: Usamos fold para sumar el nuevo campo restanteFicha ===
+    double totalSaldoContra = listaReportes.fold(0.0, (sum, r) => sum + r.restanteFicha);
+    
     final double totalMoratoriosGenerados = listaReportes.fold(
       0.0,
       (sum, r) => sum + r.moratoriosAPagar,
@@ -1592,11 +1602,13 @@ class ReporteGeneralWidget extends StatelessWidget {
         ),
       );
     }
-
+    
+    // El resto del widget permanece igual, pero la variable `totalSaldoContra`
+    // ya tiene el valor correcto.
     return _buildTotalsRow('Totales', [
       (content: totalText(totalPagosFicha), column: 3),
       (content: totalText(totalFicha), column: 5),
-      (content: totalText(totalSaldoContra), column: 6),
+      (content: totalText(totalSaldoContra), column: 6), // <--- USA EL NUEVO CÁLCULO
       (content: totalText(totalCapital), column: 7),
       (content: totalText(totalInteres), column: 8),
       (
@@ -1621,6 +1633,7 @@ class ReporteGeneralWidget extends StatelessWidget {
       (content: totalText(totalMoratoriosPagados), column: 11),
     ]);
   }
+  
 
   Widget _buildTotalsRow(
     String label,

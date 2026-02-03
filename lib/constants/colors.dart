@@ -172,6 +172,8 @@ class AppColors {
 
   Color get card => _isDarkMode ? _darkCard : _lightCard;
 
+  Color get card2 => _isDarkMode ? _darkBlueBlack : _lightCard;
+
   Color get buttonCreditAction =>
       _isDarkMode ? const Color(0xFF5C6777) : _lightText;
 
