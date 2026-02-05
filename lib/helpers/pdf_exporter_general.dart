@@ -53,6 +53,7 @@ class ExportHelperGeneral {
     required DateTimeRange? selectedDateRange,
     required String? selectedReportType,
     required NumberFormat currencyFormat,
+    String? nombreUsuario, // <--- NUEVO PARÁMETRO OPCIONAL
   }) async {
     if (reporteData == null || selectedDateRange == null) {
       mostrarDialogoError(context, 'No hay datos para exportar');
@@ -99,6 +100,7 @@ class ExportHelperGeneral {
                   reporteData: reporteData,
                   financieraLogo: financieraLogo,
                   finoraLogo: finoraLogo,
+                  nombreUsuario: nombreUsuario, // <--- LO PASAMOS AQUÍ
                 ),
             footer: (context) => _buildPdfFooter(context),
             build:
@@ -747,6 +749,7 @@ class ExportHelperGeneral {
     required ReporteGeneralData reporteData,
     required Uint8List? financieraLogo,
     required Uint8List finoraLogo,
+    String? nombreUsuario, // <--- RECIBIMOS EL PARÁMETRO
   }) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -778,7 +781,21 @@ class ExportHelperGeneral {
             color: PdfColor.fromHex('#5162F6'),
           ),
         ),
-        pw.SizedBox(height: 20),
+
+        pw.SizedBox(height: 10),
+          // --- AQUÍ AGREGAMOS EL NOMBRE DEL USUARIO (CON LA NUEVA CONDICIÓN) ---
+        if (nombreUsuario != null &&
+            nombreUsuario.isNotEmpty &&
+            nombreUsuario != 'Todos los usuarios')
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 4),
+            child: pw.Text(
+              'Asesor: $nombreUsuario',
+              style: pw.TextStyle(fontSize: 8),
+            ),
+          ),
+        // --------------------------------------------
+        pw.SizedBox(height: 5),
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [

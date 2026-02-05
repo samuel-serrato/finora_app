@@ -14,6 +14,7 @@ import 'package:finora_app/helpers/responsive_helpers.dart';
 import 'package:finora_app/ip.dart';
 import 'package:finora_app/models/reporte_contable.dart';
 import 'package:finora_app/models/reporte_general.dart';
+import 'package:finora_app/models/usuarios.dart';
 import 'package:finora_app/providers/theme_provider.dart';
 import 'package:finora_app/screens/reporteContable.dart';
 import 'package:finora_app/screens/reporteGeneral.dart';
@@ -24,6 +25,7 @@ import 'package:intl/intl.dart';
 import 'package:open_file/open_file.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:collection/collection.dart';
 
 // Se crea una nueva clase para la pantalla de reportes.
 class ReportesScreenMobile extends StatefulWidget {
@@ -48,6 +50,13 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
   // --- VARIABLES DE ESTADO (COMBINACIÓN DE DESKTOP Y MOBILE) ---
   String? selectedReportType;
   DateTimeRange? selectedDateRange;
+
+  // --- NUEVAS VARIABLES PARA USUARIOS ---
+  List<Usuario> _usuarios = [];
+  String? _selectedUsuarioId; // Null significa "Todos"
+  bool _isLoadingUsuarios = false;
+  // --------------------------------------
+
   bool isLoading = false;
   bool hasGenerated = false;
   bool hasError = false;
@@ -64,6 +73,37 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
   // <<< ADAPTACIÓN: Controladores de Scroll si tus widgets de reporte los necesitan
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
+  @override
+  void initState() {
+    super.initState();
+    // Cargamos los usuarios al iniciar la pantalla
+    _cargarUsuarios();
+  }
+
+  // --- NUEVO MÉTODO PARA CARGAR USUARIOS ---
+  Future<void> _cargarUsuarios() async {
+    setState(() => _isLoadingUsuarios = true);
+
+    try {
+      final response = await _reportesService.obtenerUsuariosCampo();
+      if (!mounted) return;
+
+      if (response.success) {
+        setState(() {
+          _usuarios = response.data ?? [];
+        });
+      } else {
+        // Opcional: mostrar un error pequeño o simplemente dejar la lista vacía
+        debugPrint('Error cargando usuarios: ${response.error}');
+      }
+    } catch (e) {
+      debugPrint('Excepción cargando usuarios: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingUsuarios = false);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -84,7 +124,6 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
       return;
     }
 
-    // 1. Preparamos el estado de la UI para la carga
     setState(() {
       isLoading = true;
       hasGenerated = false;
@@ -96,41 +135,37 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
     });
 
     try {
-      // 2. Usamos el servicio para obtener los datos
       if (selectedReportType == 'Contable') {
+        // 1. Llamamos al servicio para obtener el reporte contable
         final response = await _reportesService.obtenerReporteContable(
           fechaInicio: selectedDateRange!.start,
           fechaFin: selectedDateRange!.end,
+          idUsuario: _selectedUsuarioId,
         );
 
         if (!mounted) return;
 
+        // 2. Si la respuesta es exitosa y el objeto 'data' no es nulo...
         if (response.success && response.data != null) {
           setState(() {
-            // El API devuelve un solo objeto, pero la UI espera una lista
+            // --- ¡AQUÍ ESTÁ LA LÓGICA CORRECTA QUE TENÍAS! ---
+            // El API devuelve un solo objeto, pero la UI espera una lista.
+            // Lo solucionamos creando una lista que contiene ese único objeto.
             listaReportesContable = [response.data!];
             hasGenerated = true;
           });
         } else {
-          // Manejo de caso "No hay reportes", que es un éxito funcional
-          if (response.error == "No hay reportes de pagos") {
-            setState(() {
-              hasGenerated =
-                  true; // Se "generó" correctamente, pero sin resultados.
-            });
-          } else {
-            // Error real
-            setState(() {
-              hasError = true;
-              errorMessage = response.error ?? 'Ocurrió un error desconocido.';
-            });
-          }
+          // Si no hay datos, lo consideramos "generado" pero vacío, sin mostrar un error rojo.
+          setState(() {
+            hasGenerated = true;
+          });
         }
       } else {
-        // Reporte General
+        // Esta parte para el Reporte General ya funcionaba perfectamente
         final response = await _reportesService.obtenerReporteGeneral(
           fechaInicio: selectedDateRange!.start,
           fechaFin: selectedDateRange!.end,
+          idUsuario: _selectedUsuarioId,
         );
 
         if (!mounted) return;
@@ -142,13 +177,9 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
             hasGenerated = true;
           });
         } else {
-          // Manejo de caso "No hay reportes"
           if (response.error == "No hay reportes de pagos") {
-            setState(() {
-              hasGenerated = true;
-            });
+            setState(() => hasGenerated = true);
           } else {
-            // Error real
             setState(() {
               hasError = true;
               errorMessage = response.error ?? 'Ocurrió un error desconocido.';
@@ -157,16 +188,13 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
         }
       }
     } catch (e) {
-      // Captura errores inesperados que no son de la API (ej. un error en el propio código)
       if (!mounted) return;
       setState(() {
         hasError = true;
         errorMessage = 'Ocurrió un error inesperado en la app: ${e.toString()}';
       });
     } finally {
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -207,39 +235,41 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
       },
     );
 
-    try {
-      await Future.delayed(Duration(milliseconds: 500));
+     try {
+      await Future.delayed(const Duration(milliseconds: 500));
 
-      // ...
+      // 1. OBTENEMOS EL NOMBRE DEL USUARIO ANTES DE CUALQUIER OTRA COSA
+      String nombreUsuarioSeleccionado = "Todos los usuarios";
+      if (_selectedUsuarioId != null) {
+        final usuarioEncontrado = _usuarios.firstWhereOrNull(
+          (u) => u.idusuarios == _selectedUsuarioId,
+        );
+        nombreUsuarioSeleccionado = usuarioEncontrado?.nombreCompleto ?? "Todos los usuarios";
+      }
+
       if (selectedReportType == 'Contable') {
-        // Exportar reporte contable
         if (listaReportesContable.isEmpty) {
-          Navigator.pop(context); // Cierra diálogo de carga
+          Navigator.pop(context);
           mostrarDialogoError('No hay datos contables para exportar');
           return;
         }
 
-        // --- INICIO DE LA CORRECCIÓN ---
-
-        // 1. Crea una instancia del helper.
+        // --- ¡AQUÍ ESTÁ LA CORRECCIÓN PARA LA EXPORTACIÓN! ---
+        // Le pasamos el 5to parámetro que ahora es requerido
         final pdfHelper = PDFExportHelperContable(
           listaReportesContable.first,
           currencyFormat,
           selectedReportType,
           context,
+          nombreUsuarioSeleccionado, // <--- PARÁMETRO AÑADIDO
         );
 
-        // 2. Llama al nuevo método público que hace todo.
         await pdfHelper.exportToPdf();
 
-        // 3. Cierra el diálogo de carga.
-        Navigator.pop(context);
+        if (mounted) Navigator.pop(context);
 
-        // Ya no necesitas más código aquí, el helper se encarga de mostrar los SnackBars.
-
-        // --- FIN DE LA CORRECCIÓN ---
       } else {
-        // Exportar reporte general
+        // Esta parte para el reporte General ya estaba bien
         if (reporteData == null || listaReportes.isEmpty) {
           Navigator.pop(context);
           mostrarDialogoError(
@@ -248,9 +278,8 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
           return;
         }
 
-        Navigator.pop(context); // Cerrar diálogo de carga
-
-        // Llamar al método corregido del ExportHelperGeneral
+        if (mounted) Navigator.pop(context);
+        
         await ExportHelperGeneral.exportToPdf(
           context: context,
           reporteData: reporteData,
@@ -258,10 +287,11 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
           selectedDateRange: selectedDateRange,
           selectedReportType: selectedReportType,
           currencyFormat: currencyFormat,
+          nombreUsuario: nombreUsuarioSeleccionado,
         );
       }
     } catch (e) {
-      if (Navigator.canPop(context)) {
+      if (mounted && Navigator.canPop(context)) {
         Navigator.pop(context);
       }
       mostrarDialogoError('Error al exportar: ${e.toString()}');
@@ -354,7 +384,7 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
         bottom: PreferredSize(
           // Ajustamos la altura de la AppBar dinámicamente
           // Le damos más altura en móvil para que quepa todo en la columna.
-          preferredSize: Size.fromHeight(isMobileLayout ? 110.0 : 50.0),
+          preferredSize: Size.fromHeight(isMobileLayout ? 180.0 : 50.0),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
             // <<< CAMBIO 3: La lógica ahora es un simple if/else
@@ -370,7 +400,10 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
   }
 
   // Contenido de la AppBar para el diseño móvil (en columna)
+  // --- 1. MODIFICAMOS EL LAYOUT MÓVIL ---
   Widget _buildMobileAppBarContent(dynamic colors, bool sePuedeGenerar) {
+    // Eliminamos la variable showUserFilter
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,27 +415,151 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
             Expanded(flex: 1, child: _buildDateRangePickerButton(colors)),
           ],
         ),
+
+        // SIEMPRE MOSTRAMOS EL FILTRO DE USUARIOS
+        const SizedBox(height: 12),
+        _buildDropdownUsuarios(colors),
+
         const SizedBox(height: 16),
         _buildActionButtons(colors, sePuedeGenerar),
       ],
     );
   }
 
-  // Contenido de la AppBar para el diseño de escritorio (en fila)
+  // --- 2. MODIFICAMOS EL LAYOUT ESCRITORIO ---
   Widget _buildDesktopAppBarContent(dynamic colors, bool sePuedeGenerar) {
+    // Eliminamos la variable showUserFilter
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        // Filtro de tipo de reporte
-        SizedBox(width: 300, child: _buildDropdownTipoReporte(colors)),
+        SizedBox(width: 250, child: _buildDropdownTipoReporte(colors)),
         const SizedBox(width: 12),
-        // Filtro de fecha
-        SizedBox(width: 300, child: _buildDateRangePickerButton(colors)),
-        const Spacer(), // Empuja los botones de acción hacia la derecha
-        // Botones de acción
+        SizedBox(width: 250, child: _buildDateRangePickerButton(colors)),
+
+        // SIEMPRE MOSTRAMOS EL FILTRO DE USUARIOS
+        const SizedBox(width: 12),
+        SizedBox(width: 250, child: _buildDropdownUsuarios(colors)),
+
+        const Spacer(),
         SizedBox(
-          width: 400,
+          width: 300,
           child: _buildActionButtons(colors, sePuedeGenerar),
+        ),
+      ],
+    );
+  }
+
+  // --- 3. NUEVO WIDGET DROPDOWN DE USUARIOS ---
+  Widget _buildDropdownUsuarios(dynamic colors) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Filtrar por Usuario',
+
+          style: TextStyle(
+            color: colors.textSecondary,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 40,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: colors.backgroundCard,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child:
+              _isLoadingUsuarios
+                  ? Center(
+                    child: SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: colors.brandPrimary,
+                      ),
+                    ),
+                  )
+                  : DropdownButtonHideUnderline(
+                    child: DropdownButton2<String?>(
+                      value:
+                          _selectedUsuarioId, // Si es null, muestra el hint (Todos)
+                      hint: Text(
+                        'Todos los usuarios',
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontSize: 12,
+                        ),
+                      ),
+                      isExpanded: true,
+                      items: [
+                        // Opción para "Todos"
+                        DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text(
+                            'Todos los usuarios',
+                            style: TextStyle(
+                              color: colors.textPrimary,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        // Lista de usuarios traída de la API
+                        ..._usuarios.map((Usuario user) {
+                          return DropdownMenuItem<String?>(
+                            value:
+                                user.idusuarios, // Asumiendo que el modelo tiene 'idusuarios'
+                            child: Text(
+                              user.nombreCompleto, // Asumiendo 'nombreCompleto' o 'nombre'
+                              style: TextStyle(
+                                color: colors.textSecondary,
+                                fontSize: 12,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }),
+                      ],
+                      onChanged: (newValue) {
+                        setState(() {
+                          _selectedUsuarioId = newValue;
+                          hasGenerated = false; // Forzamos nueva generación
+                        });
+                      },
+                      iconStyleData: IconStyleData(
+                        icon: Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Icon(
+                            Icons.keyboard_arrow_down,
+                            color: colors.textSecondary.withOpacity(0.7),
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      dropdownStyleData: DropdownStyleData(
+                        maxHeight: 300,
+                        decoration: BoxDecoration(
+                          color: colors.backgroundCard,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      menuItemStyleData: const MenuItemStyleData(
+                        height: 40,
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                    ),
+                  ),
         ),
       ],
     );
