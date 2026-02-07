@@ -736,6 +736,7 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
 
         // --- COLUMNA 2: Métricas Financieras (FLEX 3) ---
         // REDUCIDO de 4 a 3 para darle espacio al Monto Ficha en la siguiente columna
+      
         Expanded(
           flex: 4,
           child: Row(
@@ -781,6 +782,7 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
           child: Row(
             children: [
               // --- NUEVO: MONTO FICHA ---
+                //Se agregó monto ficha a la vista de 1 columna
               Expanded(
                 child: _buildTableRowItem(
                   'Monto Ficha',
