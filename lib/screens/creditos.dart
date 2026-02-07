@@ -10,10 +10,12 @@ import 'package:finora_app/models/creditos.dart';
 import 'package:finora_app/models/fecha_pago.dart';
 import 'package:finora_app/models/usuarios.dart';
 import 'package:finora_app/providers/theme_provider.dart';
+import 'package:finora_app/providers/ui_provider.dart';
 import 'package:finora_app/services/api_service.dart';
 import 'package:finora_app/services/credito_service.dart';
 import 'package:finora_app/utils/date_formatters.dart';
 import 'package:finora_app/widgets/filtros_genericos_widget.dart';
+import 'package:finora_app/widgets/global_layout_button.dart';
 import 'package:finora_app/widgets/hoverableActionButton.dart';
 import 'package:finora_app/widgets/ordenamiento_genericos.dart';
 import 'package:http/http.dart' as http;
@@ -71,7 +73,7 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
   String? _estadoCreditoSeleccionadoFiltroAPI = 'Activo';
   List<Usuario> _usuarios = [];
   bool _isLoadingUsuarios = false;
-  int? _userSelectedCrossAxisCount; // null = automático, 1, 2, 3 = fijo
+  //  int? _userSelectedCrossAxisCount; // null = automático, 1, 2, 3 = fijo
   static const double mobileLayoutBreakpoint = 750.0;
   bool _isButtonHovered = false; // <-- AÑADE ESTA LÍNEA
 
@@ -638,6 +640,7 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
   // AÑADE ESTE MÉTODO PRINCIPAL PARA EL NUEVO LAYOUT
   // Este es el widget que construye la tarjeta en formato de fila.
   // REEMPLAZA tu método _buildTableRowCardContent con esta versión completa
+  // REEMPLAZA TU MÉTODO _buildTableRowCardContent CON ESTE:
   Widget _buildTableRowCardContent(Credito credito, dynamic colors) {
     Color getEstadoPagoColor(String? estado) {
       switch (estado?.toLowerCase()) {
@@ -654,9 +657,8 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
       }
     }
 
-    // Verificamos si tiene moratorios para decidir qué pintar, 
-    // pero el ESPACIO lo reservaremos siempre.
-    final bool tieneMoratorios = credito.estadoCredito?.moratorios != null &&
+    final bool tieneMoratorios =
+        credito.estadoCredito?.moratorios != null &&
         credito.estadoCredito!.moratorios > 0;
 
     return Row(
@@ -672,7 +674,10 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.blue.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
@@ -680,14 +685,18 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
                     child: Text(
                       credito.tipo,
                       style: const TextStyle(
-                          color: Colors.blue,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600),
+                        color: Colors.blue,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.purple.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
@@ -695,9 +704,10 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
                     child: Text(
                       credito.tipoPlazo,
                       style: const TextStyle(
-                          color: Colors.purple,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600),
+                        color: Colors.purple,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -724,8 +734,8 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
 
         const VerticalDivider(width: 30, indent: 16, endIndent: 16),
 
-        // --- COLUMNA 2: Métricas Financieras (FLEX 4) ---
-        // Reduje de 5 a 4 para darle espacio a la columna de Moratorios
+        // --- COLUMNA 2: Métricas Financieras (FLEX 3) ---
+        // REDUCIDO de 4 a 3 para darle espacio al Monto Ficha en la siguiente columna
         Expanded(
           flex: 4,
           child: Row(
@@ -746,6 +756,8 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
                   valueColor: Colors.green.shade600,
                 ),
               ),
+              // Ocultamos Interés si el espacio es muy reducido, o lo dejamos si cabe.
+              // En este caso lo dejamos pero ocupará menos espacio proporcional.
               Expanded(
                 child: _buildTableRowItem(
                   'Interés',
@@ -762,11 +774,25 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
 
         const VerticalDivider(width: 30, indent: 16, endIndent: 16),
 
-        // --- COLUMNA 3: Detalles de Pago (FLEX 3) ---
+        // --- COLUMNA 3: Detalles de Pago (FLEX 4) ---
+        // AUMENTADO de 3 a 4 para que quepan los 3 elementos (Ficha, Día, Pagos)
         Expanded(
-          flex: 3,
+          flex: 5,
           child: Row(
             children: [
+              // --- NUEVO: MONTO FICHA ---
+              Expanded(
+                child: _buildTableRowItem(
+                  'Monto Ficha',
+                  '\$${formatearNumero(credito.pagoCuota ?? 0.0)}',
+                  icon: Icons.payments_rounded, // Icono de dinero/pagos
+                  colors: colors,
+                  valueColor:
+                      Colors.blue.shade800, // Un azul fuerte para resaltar
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              // ---------------------------
               Expanded(
                 child: _buildTableRowItem(
                   'Día Pago',
@@ -794,9 +820,10 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
                         credito.periodoPagoActual ?? credito.numPago ?? 'N/A',
                         icon: Icons.format_list_numbered_rounded,
                         colors: colors,
-                        valueColor: credito.fechas.isNotEmpty
-                            ? Colors.blueAccent
-                            : colors.textPrimary,
+                        valueColor:
+                            credito.fechas.isNotEmpty
+                                ? Colors.blueAccent
+                                : colors.textPrimary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -807,31 +834,26 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
           ),
         ),
 
-        // --- COLUMNA 4: Moratorios (FLEX 2) ---
-        // AQUÍ ESTÁ EL TRUCO:
-        // 1. Siempre renderizamos el espacio del divisor (VerticalDivider o SizedBox de 20 ancho).
-        // 2. Siempre renderizamos el Expanded. Si no hay datos, ponemos un SizedBox vacío.
-        
         if (tieneMoratorios)
           const VerticalDivider(width: 20, indent: 16, endIndent: 16)
         else
-          const SizedBox(width: 20), // Mismo ancho que el Divider para no descuadrar
+          const SizedBox(width: 20),
 
+        // --- COLUMNA 4: Moratorios (FLEX 2) ---
         Expanded(
-          flex: 2, // Flex fijo para reservar el espacio siempre
-          child: tieneMoratorios
-              ? _buildTableRowItem(
-                  'Moratorios Acum.',
-                  '\$${formatearNumero(credito.estadoCredito?.acumulado ?? 0.0)}',
-                  icon: Icons.warning_amber_rounded,
-                  colors: colors,
-                  valueColor: Colors.red.shade600,
-                )
-              : const SizedBox.shrink(), // Ocupa el Flex 2 pero invisible
+          flex: 3,
+          child:
+              tieneMoratorios
+                  ? _buildTableRowItem(
+                    'Moratorios Acum.',
+                    '\$${formatearNumero(credito.estadoCredito?.acumulado ?? 0.0)}',
+                    icon: Icons.warning_amber_rounded,
+                    colors: colors,
+                    valueColor: Colors.red.shade600,
+                  )
+                  : const SizedBox.shrink(),
         ),
 
-        // Spacer para empujar lo último a la derecha, 
-        // ahora será consistente porque las columnas previas siempre suman el mismo Flex (3+4+3+2 = 12)
         const Spacer(),
 
         // --- COLUMNA FINAL: Estatus y Acciones ---
@@ -843,8 +865,9 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color:
-                    getEstadoPagoColor(credito.estadoInterno).withOpacity(0.1),
+                color: getEstadoPagoColor(
+                  credito.estadoInterno,
+                ).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Text(
@@ -879,28 +902,37 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
                     break;
                 }
               },
-              itemBuilder: (BuildContext context) => [
-                PopupMenuItem<String>(
-                  value: 'editar',
-                  child: Row(
-                    children: const [
-                      Icon(Icons.edit_outlined, color: Colors.blue, size: 20),
-                      SizedBox(width: 12),
-                      Text('Editar'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem<String>(
-                  value: 'eliminar',
-                  child: Row(
-                    children: const [
-                      Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                      SizedBox(width: 12),
-                      Text('Eliminar'),
-                    ],
-                  ),
-                ),
-              ],
+              itemBuilder:
+                  (BuildContext context) => [
+                    PopupMenuItem<String>(
+                      value: 'editar',
+                      child: Row(
+                        children: const [
+                          Icon(
+                            Icons.edit_outlined,
+                            color: Colors.blue,
+                            size: 20,
+                          ),
+                          SizedBox(width: 12),
+                          Text('Editar'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'eliminar',
+                      child: Row(
+                        children: const [
+                          Icon(
+                            Icons.delete_outline,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                          SizedBox(width: 12),
+                          Text('Eliminar'),
+                        ],
+                      ),
+                    ),
+                  ],
             ),
           ],
         ),
@@ -1065,168 +1097,13 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
     );
   }
 
-  // Pega este nuevo método en tu clase
-  Widget _buildLayoutControlButton(BuildContext context, dynamic colors) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.isDarkMode;
-
-    // Elige el ícono a mostrar basado en la selección actual
-    IconData iconData;
-    if (_userSelectedCrossAxisCount == null ||
-        _userSelectedCrossAxisCount! > 1) {
-      iconData = Icons.grid_view_rounded;
-    } else {
-      iconData = Icons.view_list_rounded;
-    }
-
-    // --- INICIO DE CAMBIOS PARA HOVER ---
-
-    // 1. Determina los colores y sombras basados en el estado de hover
-    final Color backgroundColor =
-        _isButtonHovered // <-- USA LA VARIABLE DE ESTADO
-            ? (isDarkMode
-                ? Colors.white.withOpacity(0.1)
-                : Colors.grey.shade200)
-            : themeProvider.colors.backgroundCard;
-
-    final List<BoxShadow> boxShadow = [
-      BoxShadow(
-        color: (isDarkMode ? Colors.black : Colors.grey).withOpacity(
-          _isButtonHovered ? 0.15 : 0.1,
-        ), // <-- Sombra dinámica
-        blurRadius: _isButtonHovered ? 12 : 8, // <-- Blur dinámico
-        offset: Offset(0, _isButtonHovered ? 4 : 2), // <-- Offset dinámico
-      ),
-    ];
-
-    // --- FIN DE CAMBIOS PARA HOVER ---
-
-    return PopupMenuButton<int>(
-      tooltip: '',
-      offset: const Offset(0, 35),
-      onSelected: (int value) {
-        setState(() {
-          if (value == 0) {
-            _userSelectedCrossAxisCount = null;
-          } else {
-            _userSelectedCrossAxisCount = value;
-          }
-        });
-      },
-      color: colors.backgroundPrimary,
-      elevation: 8,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-
-      // 2. Envuelve el Container con un MouseRegion
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter:
-            (_) => setState(
-              () => _isButtonHovered = true,
-            ), // <-- Actualiza estado al entrar
-        onExit:
-            (_) => setState(
-              () => _isButtonHovered = false,
-            ), // <-- Actualiza estado al salir
-
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-          decoration: BoxDecoration(
-            color: backgroundColor, // <-- USA EL COLOR DINÁMICO
-            borderRadius: BorderRadius.circular(25),
-            border: Border.all(
-              color:
-                  isDarkMode ? Colors.grey[700]! : Colors.grey.withOpacity(0.3),
-              width: 1.3,
-            ),
-            boxShadow: boxShadow, // <-- USA LA SOMBRA DINÁMICA
-          ),
-          child: Icon(
-            iconData,
-            size: 22,
-            color: isDarkMode ? Colors.white : Colors.black87,
-          ),
-        ),
-      ),
-
-      itemBuilder:
-          (context) => [
-            _buildPopupMenuItem(
-              1,
-              '1 Columna',
-              Icons.view_list_rounded,
-              colors,
-            ),
-            _buildPopupMenuItem(
-              2,
-              '2 Columnas',
-              Icons.grid_view_rounded,
-              colors,
-            ),
-            _buildPopupMenuItem(
-              3,
-              '3 Columnas',
-              Icons.view_quilt_rounded,
-              colors,
-            ),
-            const PopupMenuDivider(),
-            _buildPopupMenuItem(
-              0,
-              'Automático',
-              Icons.dynamic_feed_rounded,
-              colors,
-            ),
-          ],
-    );
-  }
-
-  // Un helper para crear los items del menú de forma consistente
-  PopupMenuItem<int> _buildPopupMenuItem(
-    int value,
-    String text,
-    IconData icon,
-    dynamic colors,
-  ) {
-    final bool isSelected =
-        (_userSelectedCrossAxisCount == value) ||
-        (_userSelectedCrossAxisCount == null && value == 0);
-
-    return PopupMenuItem<int>(
-      value: value,
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? Colors.blueAccent : colors.textSecondary,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            text,
-            style: TextStyle(
-              color: isSelected ? Colors.blueAccent : colors.textPrimary,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   /// ESTE ES EL NUEVO MÉTODO CENTRAL PARA EL LAYOUT
-  /// Utiliza LayoutBuilder para crear una rejilla responsiva.
-  // Pega este método actualizado en tu clase, reemplazando la versión anterior.
-
-  // Pega este método actualizado en tu clase, reemplazando la versión anterior.
-
-  // Pega este método actualizado, reemplazando el tuyo.
-  // Reemplaza tu método _buildContent con esta versión actualizada
-  // Reemplaza tu método _buildContent con esta versión final
-  // Reemplaza tu método _buildContent con esta versión mejorada
-  // En tu clase _SeguimientoScreenMobileState
-
-  // Reemplaza tu método _buildContent con esta versión mejorada
   Widget _buildContent(dynamic colors) {
+    // Obtenemos el provider
+    final uiProvider = Provider.of<UiProvider>(context);
+    final userSelectedCount =
+        uiProvider.crossAxisCount; // Usamos el valor global
     // Las secciones de carga, error y estado vacío no cambian.
     if (isLoading && listaFiltrada.isEmpty) {
       return Center(child: _buildModernLoading());
@@ -1256,9 +1133,12 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
         final bool isDesktopLayout = screenWidth > mobileLayoutBreakpoint;
 
         int crossAxisCount;
-        if (isDesktopLayout && _userSelectedCrossAxisCount != null) {
-          crossAxisCount = _userSelectedCrossAxisCount!;
+
+        // Usamos la variable del provider
+        if (isDesktopLayout && userSelectedCount != null) {
+          crossAxisCount = userSelectedCount;
         } else if (isDesktopLayout) {
+          // Lógica automática
           const double cardIdealWidth = 380.0;
           crossAxisCount = (screenWidth / cardIdealWidth).floor();
           if (crossAxisCount == 0) crossAxisCount = 1;
@@ -1558,11 +1438,11 @@ class _SeguimientoScreenMobileState extends State<SeguimientoScreenMobile>
                   const SizedBox(width: 8),
                   _buildSortButton(context, currentColors),
 
+                  // DESPUÉS (¡Más simple!):
                   if (isDesktopLayout) ...[
                     const SizedBox(width: 8),
-                    _buildLayoutControlButton(context, currentColors),
+                    const GlobalLayoutButton(), // <-- Ahora solo usas el widget
                   ],
-
                   const SizedBox(width: 8),
 
                   // Este Widget tomará todo el espacio del medio

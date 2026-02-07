@@ -1,9 +1,7 @@
 // Archivo: lib/widgets/responsive_scaffold_list_view.dart
 
 import 'dart:async';
-
 import 'package:finora_app/providers/theme_provider.dart';
-import 'package:finora_app/widgets/hoverableActionButton.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -21,15 +19,12 @@ class ResponsiveScaffoldListView<T> extends StatefulWidget {
   final int currentPage;
   final int totalPages;
 
-  // --- ¡NUEVOS PARÁMETROS DE ANIMACIÓN! ---
+  // --- ANIMACIÓN ---
   final AnimationController animationController;
   final Animation<double> fadeAnimation;
 
   // --- BUILDERS PARA LAS TARJETAS ---
-  /// Construye el widget para una tarjeta en la vista de grid estándar.
   final Widget Function(BuildContext context, T item) cardBuilder;
-
-  /// Construye el widget para una tarjeta en la vista de fila (desktop, 1 columna).
   final Widget Function(BuildContext context, T item) tableRowCardBuilder;
 
   // --- CALLBACKS PARA ACCIONES ---
@@ -40,20 +35,18 @@ class ResponsiveScaffoldListView<T> extends StatefulWidget {
   final ScrollController scrollController;
 
   // --- WIDGETS DE LA BARRA DE ACCIONES ---
-  /// El botón de filtros, construido en la pantalla padre.
   final Widget? filterButton;
-
-  /// El botón de ordenamiento, construido en la pantalla padre.
   final Widget sortButton;
-
-  // --- ¡NUEVO PARÁMETRO! ---
-  /// Un widget opcional para mostrar en la barra de acciones, como una fila de chips de filtro.
   final Widget? actionBarContent;
+  
+  // --- PARÁMETROS PARA EL LAYOUT (RECIBIDOS DEL PADRE) ---
+  /// El número de columnas seleccionado globalmente (viene del UiProvider a través del padre).
+  final int? userSelectedCrossAxisCount;
+  /// El botón que controla el cambio de vista (construido en el padre, idealmente con GlobalLayoutButton).
+  final Widget? layoutControlButton;
 
-  // --- ALTURA DE LA TARJETA (opcional pero recomendado) ---
+  // --- CONFIGURACIÓN VISUAL ---
   final double cardHeight;
-
-  // --- TEXTOS PERSONALIZABLES ---
   final String appBarTitle;
   final String searchHintText;
   final String addItemText;
@@ -61,9 +54,7 @@ class ResponsiveScaffoldListView<T> extends StatefulWidget {
   final String emptyStateTitle;
   final String emptyStateSubtitle;
   final IconData emptyStateIcon;
-
-  // --- ¡AÑADE ESTA LÍNEA! ---
-  final Object? fabHeroTag; // Usamos Object? para permitir null
+  final Object? fabHeroTag;
 
   const ResponsiveScaffoldListView({
     super.key,
@@ -88,7 +79,10 @@ class ResponsiveScaffoldListView<T> extends StatefulWidget {
     // Action Bar
     this.filterButton,
     required this.sortButton,
-    // Textos
+    this.actionBarContent,
+    this.userSelectedCrossAxisCount,
+    this.layoutControlButton,
+    // Textos y Configuración
     this.appBarTitle = '',
     this.searchHintText = 'Buscar...',
     this.addItemText = 'Agregar',
@@ -96,13 +90,9 @@ class ResponsiveScaffoldListView<T> extends StatefulWidget {
     this.emptyStateTitle = 'No se encontraron resultados',
     this.emptyStateSubtitle = 'Aún no hay elementos registrados.',
     this.emptyStateIcon = Icons.inbox_rounded,
-    // --- ¡AÑADE LOS NUEVOS PARÁMETROS AQUÍ! ---
-    this.actionBarContent,
-    this.cardHeight = 220, // Altura por defecto para las tarjetas verticales
-    // --- ¡AÑADE LOS NUEVOS PARÁMETROS AQUÍ! ---
+    this.cardHeight = 220,
     required this.animationController,
     required this.fadeAnimation,
-    // --- ¡AÑADE ESTA LÍNEA AL CONSTRUCTOR! ---
     this.fabHeroTag,
   });
 
@@ -115,7 +105,6 @@ class _ResponsiveScaffoldListViewState<T>
     extends State<ResponsiveScaffoldListView<T>> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchTimer;
-  int? _userSelectedCrossAxisCount; // null = auto, 1, 2, 3...
   static const double mobileLayoutBreakpoint = 750.0;
 
   @override
@@ -127,8 +116,6 @@ class _ResponsiveScaffoldListViewState<T>
 
   @override
   Widget build(BuildContext context) {
-    // ... (el método build principal se mantiene casi igual)
-    // Solo asegúrate de que el AppBar tenga suficiente altura.
     final themeProvider = Provider.of<ThemeProvider>(context);
     final colors = themeProvider.colors;
 
@@ -140,17 +127,12 @@ class _ResponsiveScaffoldListViewState<T>
         return Scaffold(
           backgroundColor: colors.backgroundPrimary,
           appBar: AppBar(
-            // El título es opcional. Si no lo quieres, puedes quitar esta línea.
-            // title: Text(widget.appBarTitle),
             backgroundColor: colors.backgroundPrimary,
             surfaceTintColor: colors.backgroundPrimary,
             elevation: 1.0,
             shadowColor: Colors.black.withOpacity(0.1),
-            // Ajustamos la altura para dar espacio a todos los filtros
             bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(
-                80.0,
-              ), // Aumentamos la altura
+              preferredSize: const Size.fromHeight(80.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -178,19 +160,12 @@ class _ResponsiveScaffoldListViewState<T>
     dynamic colors,
     bool isDesktopLayout,
   ) {
-    // --- 1. GESTIÓN DE ESTADOS INICIALES ---
-
-    // Muestra el spinner de carga si es la primera carga y la lista está vacía.
     if (widget.isLoading && widget.items.isEmpty) {
       return Center(child: _buildModernLoading());
     }
-
-    // Muestra el estado de error si hubo un problema y la lista está vacía.
     if (widget.hasError && widget.items.isEmpty) {
       return _buildErrorState(context);
     }
-
-    // Muestra el estado vacío si la búsqueda no arrojó resultados o no hay datos.
     if (widget.noItemsFound || (widget.items.isEmpty && !widget.isLoading)) {
       return LayoutBuilder(
         builder: (context, constraints) {
@@ -205,20 +180,16 @@ class _ResponsiveScaffoldListViewState<T>
       );
     }
 
-    // --- 2. FUNCIÓN DE AYUDA PARA LA ANIMACIÓN ---
-
-    // Esta función envuelve cualquier widget `child` con las animaciones.
     Widget _buildAnimatedItem(Widget child, int index, int totalItems) {
       return FadeTransition(
         opacity: widget.fadeAnimation,
         child: SlideTransition(
           position: Tween<Offset>(
-            begin: const Offset(0, 0.1), // Empieza ligeramente abajo
-            end: Offset.zero, // Termina en su posición normal
+            begin: const Offset(0, 0.1),
+            end: Offset.zero,
           ).animate(
             CurvedAnimation(
               parent: widget.animationController,
-              // El `Interval` crea el efecto escalonado (staggered)
               curve: Interval(
                 (index / (totalItems == 0 ? 1 : totalItems)) * 0.5,
                 1.0,
@@ -231,54 +202,41 @@ class _ResponsiveScaffoldListViewState<T>
       );
     }
 
-    // --- 3. LÓGICA DE LAYOUT RESPONSIVO ---
-
-    // Obtenemos el ancho de la pantalla para decidir el número de columnas.
     final double screenWidth = MediaQuery.of(context).size.width;
-
     int crossAxisCount;
-    // Si el usuario seleccionó un número de columnas en desktop, lo usamos.
-    if (isDesktopLayout && _userSelectedCrossAxisCount != null) {
-      crossAxisCount = _userSelectedCrossAxisCount!;
-      // Si no, lo calculamos automáticamente para desktop.
+
+    // Lee el valor que viene desde el padre (que a su vez lo lee del Provider)
+    if (isDesktopLayout && widget.userSelectedCrossAxisCount != null) {
+      crossAxisCount = widget.userSelectedCrossAxisCount!;
     } else if (isDesktopLayout) {
-      const double cardIdealWidth = 380.0; // Ancho ideal de una tarjeta
+      const double cardIdealWidth = 380.0;
       crossAxisCount = (screenWidth / cardIdealWidth).floor();
       if (crossAxisCount == 0) crossAxisCount = 1;
-      // En móvil, siempre es una columna.
     } else {
       crossAxisCount = 1;
     }
 
-    // Determinamos si debemos usar el layout de fila (tabla).
     final bool useTableRowLayout = isDesktopLayout && crossAxisCount == 1;
 
-    // --- 4. CONSTRUCCIÓN DEL LISTADO ---
-
-    // Si es layout de fila (tabla), usamos ListView.builder.
     if (useTableRowLayout) {
       return ListView.builder(
         controller: widget.scrollController,
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
         itemCount: widget.items.length + (widget.isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
-          // Muestra el spinner al final si se están cargando más items.
           if (index == widget.items.length) {
             return const Center(child: CircularProgressIndicator());
           }
           final item = widget.items[index];
-          // Construimos la tarjeta para la fila.
           final card = Padding(
             padding: const EdgeInsets.only(bottom: 16.0),
             child: widget.tableRowCardBuilder(context, item),
           );
-          // La envolvemos en la animación.
           return _buildAnimatedItem(card, index, widget.items.length);
         },
       );
     }
 
-    // Si es layout de grid, usamos GridView.builder.
     return GridView.builder(
       controller: widget.scrollController,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
@@ -286,33 +244,20 @@ class _ResponsiveScaffoldListViewState<T>
         crossAxisCount: crossAxisCount,
         crossAxisSpacing: 16.0,
         mainAxisSpacing: 16.0,
-        mainAxisExtent: widget.cardHeight, // Altura fija para las tarjetas
+        mainAxisExtent: widget.cardHeight,
       ),
       itemCount: widget.items.length + (widget.isLoadingMore ? 1 : 0),
       itemBuilder: (context, index) {
-        // Muestra el spinner al final.
         if (index == widget.items.length) {
           return const Center(child: CircularProgressIndicator());
         }
         final item = widget.items[index];
-        // Construimos la tarjeta para el grid.
         final card = widget.cardBuilder(context, item);
-        // La envolvemos en la animación.
         return _buildAnimatedItem(card, index, widget.items.length);
       },
     );
   }
 
-  // --- Widgets de la Barra de Acciones ---
-
-  // --- MÉTODO ACTUALIZADO PARA _buildSearchAndFilters ---
-  // REEMPLAZA TU MÉTODO _buildSearchAndFilters POR ESTE:
-  // REEMPLAZA TU MÉTODO _buildSearchAndFilters POR ESTA VERSIÓN FINAL:
-  // Archivo: lib/widgets/responsive_scaffold_list_view.dart
-
-  // ... (dentro de la clase _ResponsiveScaffoldListViewState)
-
-  // REEMPLAZA TU MÉTODO _buildSearchAndFilters POR ESTA VERSIÓN DEFINITIVA:
   Widget _buildSearchAndFilters(
     BuildContext context,
     dynamic colors,
@@ -324,7 +269,6 @@ class _ResponsiveScaffoldListViewState<T>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. Barra de búsqueda
           Container(
             height: 40,
             decoration: BoxDecoration(
@@ -378,61 +322,21 @@ class _ResponsiveScaffoldListViewState<T>
             ),
           ),
           const SizedBox(height: 16),
-
-          // 2. Fila ÚNICA de acciones
-          // 2. Fila ÚNICA de acciones
           Row(
             children: [
-              // ▼▼▼ VERSIÓN MÁS LIMPIA DE LA CORRECCIÓN ▼▼▼
               if (widget.filterButton != null) ...[
                 widget.filterButton!,
                 const SizedBox(width: 8),
               ],
 
               widget.sortButton,
-              if (isDesktopLayout) ...[
+
+              // Simplemente mostramos el botón que nos pasen. No le importa qué hace.
+              if (isDesktopLayout && widget.layoutControlButton != null) ...[
                 const SizedBox(width: 8),
-                // Así se usa el nuevo widget
-                LayoutControlButton(
-                  userSelectedCrossAxisCount: _userSelectedCrossAxisCount,
-                  onLayoutSelected: (int value) {
-                    setState(() {
-                      _userSelectedCrossAxisCount = (value == 0) ? null : value;
-                    });
-                  },
-                  // Pasamos la función que construye los items
-                  itemBuilder:
-                      (context, colors) => [
-                        _buildPopupMenuItem(
-                          1,
-                          '1 Columna',
-                          Icons.view_list_rounded,
-                          colors,
-                        ),
-                        _buildPopupMenuItem(
-                          2,
-                          '2 Columnas',
-                          Icons.grid_view_rounded,
-                          colors,
-                        ),
-                        _buildPopupMenuItem(
-                          3,
-                          '3 Columnas',
-                          Icons.view_quilt_rounded,
-                          colors,
-                        ),
-                        const PopupMenuDivider(),
-                        _buildPopupMenuItem(
-                          0,
-                          'Automático',
-                          Icons.dynamic_feed_rounded,
-                          colors,
-                        ),
-                      ],
-                ),
+                widget.layoutControlButton!,
               ],
 
-              // Contenido del medio (los chips), que se expande
               Expanded(
                 child:
                     widget.actionBarContent != null
@@ -443,7 +347,6 @@ class _ResponsiveScaffoldListViewState<T>
                         : const SizedBox(),
               ),
 
-              // Botón de "Agregar" a la derecha (solo en desktop)
               if (isDesktopLayout) _buildAddButton(context),
             ],
           ),
@@ -457,7 +360,6 @@ class _ResponsiveScaffoldListViewState<T>
     final colors = themeProvider.colors;
     return ElevatedButton.icon(
       onPressed: widget.onAddItem,
-      //icon: const Icon(Icons.add_rounded, size: 20),
       label: Text(widget.addItemText),
       style: ElevatedButton.styleFrom(
         backgroundColor: colors.backgroundButton,
@@ -469,103 +371,9 @@ class _ResponsiveScaffoldListViewState<T>
     );
   }
 
-  /* Widget _buildLayoutControlButton(BuildContext context, dynamic colors) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.isDarkMode;
-
-    IconData iconData;
-    if (_userSelectedCrossAxisCount == null ||
-        _userSelectedCrossAxisCount! > 1) {
-      iconData = Icons.grid_view_rounded;
-    } else {
-      iconData = Icons.view_list_rounded;
-    }
-
-    return PopupMenuButton<int>(
-      onSelected: (int value) {
-        setState(() {
-          _userSelectedCrossAxisCount = (value == 0) ? null : value;
-        });
-      },
-      color: colors.backgroundPrimary,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      tooltip: 'Cambiar vista',
-
-      // La magia está aquí: el child del PopupMenuButton es nuestro HoverableContainer
-      child: HoverableActionButton(
-        child: Icon(
-          iconData,
-          size: 22,
-          color: isDarkMode ? Colors.white : Colors.black87,
-        ),
-      ),
-
-      // El itemBuilder se mantiene exactamente igual
-      itemBuilder:
-          (context) => [
-            _buildPopupMenuItem(
-              1,
-              '1 Columna (Fila)',
-              Icons.view_list_rounded,
-              colors,
-            ),
-            _buildPopupMenuItem(
-              2,
-              '2 Columnas',
-              Icons.grid_view_rounded,
-              colors,
-            ),
-            _buildPopupMenuItem(
-              3,
-              '3 Columnas',
-              Icons.view_quilt_rounded,
-              colors,
-            ),
-            const PopupMenuDivider(),
-            _buildPopupMenuItem(
-              0,
-              'Automático',
-              Icons.dynamic_feed_rounded,
-              colors,
-            ),
-          ],
-    );
-  } */
-
-  PopupMenuItem<int> _buildPopupMenuItem(
-    int value,
-    String text,
-    IconData icon,
-    dynamic colors,
-  ) {
-    final bool isSelected =
-        (_userSelectedCrossAxisCount == value) ||
-        (_userSelectedCrossAxisCount == null && value == 0);
-    return PopupMenuItem<int>(
-      value: value,
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? Colors.blueAccent : colors.textSecondary,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            text,
-            style: TextStyle(
-              color: isSelected ? Colors.blueAccent : colors.textPrimary,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildModernFAB(dynamic colors) {
     return FloatingActionButton(
-      heroTag: widget.fabHeroTag, // <--- ¡CAMBIO IMPORTANTE!
+      heroTag: widget.fabHeroTag,
       onPressed: widget.onAddItem,
       child: const Icon(Icons.add_rounded),
       backgroundColor: colors.backgroundButton,
@@ -574,8 +382,6 @@ class _ResponsiveScaffoldListViewState<T>
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     );
   }
-
-  // --- Widgets de Estado ---
 
   Widget _buildResultsCountInfo(dynamic colors) {
     String textoAMostrar;
@@ -604,6 +410,9 @@ class _ResponsiveScaffoldListViewState<T>
     );
   }
 
+  // --- Widgets de estado (Loading, Empty, Error) ---
+  // (Estos métodos no necesitan cambios)
+  
   Widget _buildModernLoading() => Center(
     child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -687,97 +496,4 @@ class _ResponsiveScaffoldListViewState<T>
       ],
     ),
   );
-}
-
-class LayoutControlButton extends StatefulWidget {
-  final int? userSelectedCrossAxisCount;
-  final Function(int) onLayoutSelected;
-  // Pasamos la función que construye los items del menú para mantener el código limpio
-  final List<PopupMenuEntry<int>> Function(BuildContext, dynamic) itemBuilder;
-
-  const LayoutControlButton({
-    super.key,
-    required this.userSelectedCrossAxisCount,
-    required this.onLayoutSelected,
-    required this.itemBuilder,
-  });
-
-  @override
-  _LayoutControlButtonState createState() => _LayoutControlButtonState();
-}
-
-class _LayoutControlButtonState extends State<LayoutControlButton> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final colors = themeProvider.colors;
-    final isDarkMode = themeProvider.isDarkMode;
-
-    // Lógica del ícono
-    IconData iconData;
-    if (widget.userSelectedCrossAxisCount == null ||
-        widget.userSelectedCrossAxisCount! > 1) {
-      iconData = Icons.grid_view_rounded;
-    } else {
-      iconData = Icons.view_list_rounded;
-    }
-
-    // Lógica de colores del hover
-    final Color backgroundColor =
-        _isHovered
-            ? (isDarkMode
-                ? Colors.white.withOpacity(0.1)
-                : Colors.grey.shade200)
-            : colors.backgroundCard;
-
-    final Color borderColor =
-        (isDarkMode ? Colors.grey[700]! : Colors.grey.withOpacity(0.3));
-
-    return PopupMenuButton<int>(
-      offset: const Offset(0, 35),
-      onSelected: widget.onLayoutSelected,
-      color: colors.backgroundPrimary,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      //tooltip: 'Cambiar vista',
-      tooltip: '',
-
-      // El child es el que maneja el hover
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(25),
-            border: Border.all(
-              color: borderColor,
-              width: _isHovered ? 1.3 : 1.3,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: (isDarkMode ? Colors.black : Colors.grey).withOpacity(
-                  _isHovered ? 0.15 : 0.1,
-                ),
-                blurRadius: _isHovered ? 12 : 8,
-                offset: Offset(0, _isHovered ? 4 : 2),
-              ),
-            ],
-          ),
-          child: Icon(
-            iconData,
-            size: 22,
-            color: isDarkMode ? Colors.white : Colors.black87,
-          ),
-        ),
-      ),
-      // Usamos la función que nos pasaron para construir los items
-      itemBuilder: (context) => widget.itemBuilder(context, colors),
-    );
-  }
 }

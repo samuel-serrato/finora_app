@@ -1,3 +1,5 @@
+// Archivo: lib/screens/gestion/gestionar_usuarios_screen.dart
+
 import 'dart:async';
 import 'package:finora_app/constants/colors.dart';
 import 'package:finora_app/dialog/usuario_detalle_dialog.dart';
@@ -19,6 +21,10 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../utils/app_logger.dart';
 
+// --- 1. IMPORTAR LOS WIDGETS Y PROVIDERS NECESARIOS ---
+import 'package:finora_app/providers/ui_provider.dart';
+import 'package:finora_app/widgets/global_layout_button.dart';
+// --------------------------------------------------------
 
 class GestionarUsuariosScreen extends StatefulWidget {
   const GestionarUsuariosScreen({Key? key}) : super(key: key);
@@ -30,36 +36,131 @@ class GestionarUsuariosScreen extends StatefulWidget {
 
 class _GestionarUsuariosScreenState extends State<GestionarUsuariosScreen>
     with TickerProviderStateMixin {
-  // --- Servicios para la lógica de datos ---
-  // ADAPTADO: Se cambian las listas y variables de 'Cliente' a 'Usuario'.
+  // --- Todas tus variables de estado se mantienen igual ---
   List<Usuario> listaUsuarios = [];
   bool isLoading = true;
   bool errorDeConexion = false;
-  bool noItemsFound = false; // Renombrado de noUsersFound
+  bool noItemsFound = false;
   Timer? _timer;
-
-  // --- Servicios y Controladores ---
   final ApiService _apiService = ApiService();
   final UsuarioService _usuarioService = UsuarioService();
   final TextEditingController _searchController = TextEditingController();
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   final ScrollController _scrollController = ScrollController();
-
-  // --- Paginación y Búsqueda ---
   bool _isLoadingMore = false;
   int currentPage = 1;
   int totalPaginas = 1;
   int totalDatos = 0;
   String _currentSearchQuery = '';
   bool _isSearching = false;
-
-  // --- Ordenamiento y Filtros ---
   String? _sortColumnKey;
   bool _sortAscending = true;
   Map<String, dynamic> _filtrosActivos = {};
   late List<ConfiguracionFiltro> _configuracionesFiltros;
-  String? _tipoUsuarioSeleccionadoFiltroAPI; // Para los chips de filtro rápido
+  String? _tipoUsuarioSeleccionadoFiltroAPI;
+
+  // (El resto de tus métodos initState, dispose, obtenerUsuarios, etc. se mantienen igual)
+  // ...
+  // ... (Aquí iría todo tu código de lógica de datos que ya tienes)
+  // ...
+
+  // --- 2. MODIFICAR EL MÉTODO BUILD ---
+  @override
+  Widget build(BuildContext context) {
+    final colors = Provider.of<ThemeProvider>(context).colors;
+    // Obtenemos la instancia del UiProvider para leer la configuración
+    final uiProvider = Provider.of<UiProvider>(context);
+
+    return Container(
+      color: colors.backgroundPrimary,
+      child: Column(
+        children: [
+          if (context.isMobile) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Center(
+                child: Container(
+                  width: 40,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[400],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 16.0, bottom: 4.0),
+              child: Text(
+                'Gestionar Usuarios',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: colors.textPrimary,
+                ),
+              ),
+            ),
+          ],
+          Expanded(
+            child: ResponsiveScaffoldListView<Usuario>(
+              // --- Datos y Estado ---
+              items: listaUsuarios,
+              isLoading: isLoading,
+              isLoadingMore: _isLoadingMore,
+              hasError: errorDeConexion,
+              noItemsFound: noItemsFound,
+              totalItems: totalDatos,
+              currentPage: currentPage,
+              totalPages: totalPaginas,
+              scrollController: _scrollController,
+
+              // --- ¡CONECTANDO LA LÓGICA GLOBAL AQUÍ! ---
+              userSelectedCrossAxisCount:
+                  uiProvider.crossAxisCount, // <-- Le pasamos el valor guardado
+              layoutControlButton:
+                  const GlobalLayoutButton(), // <-- Le pasamos el botón reutilizable
+              // --- Builders para las tarjetas ---
+              cardBuilder:
+                  (context, usuario) =>
+                      _buildStandardUsuarioCard(usuario, colors),
+              tableRowCardBuilder:
+                  (context, usuario) =>
+                      _buildTableRowUsuarioCard(usuario, colors),
+              cardHeight: 180,
+
+              // --- Callbacks para acciones ---
+              onRefresh: _onRefresh,
+              onLoadMore: _loadMoreData,
+              onSearchChanged: _onSearchChanged,
+              onAddItem: _agregarUsuario,
+
+              // --- Widgets de la barra de acciones ---
+              actionBarContent: _buildUserTypeFilterChips(colors),
+              sortButton: _buildSortButton(context, colors),
+              // filterButton: _buildFilterButton(context), // Opcional, si lo necesitas
+
+              // --- Textos y animaciones ---
+              appBarTitle: 'Usuarios',
+              searchHintText: 'Buscar por nombre, usuario...',
+              addItemText: 'Agregar Usuario',
+              loadingText: 'Cargando usuarios...',
+              emptyStateTitle: 'No se encontraron usuarios',
+              emptyStateSubtitle:
+                  'Aún no hay usuarios registrados. ¡Agrega uno!',
+              emptyStateIcon: Icons.people_outline_rounded,
+              animationController: _animationController,
+              fadeAnimation: _fadeAnimation,
+              fabHeroTag: 'fab_usuarios',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- El resto de tu código no necesita cambios ---
+  // (Pego el resto de tu código para que lo tengas completo)
 
   @override
   void initState() {
@@ -84,7 +185,7 @@ class _GestionarUsuariosScreenState extends State<GestionarUsuariosScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _apiService.setContext(context);
-        _fetchData(page: 1); // Llamada inicial
+        _fetchData(page: 1);
       }
     });
   }
@@ -98,7 +199,6 @@ class _GestionarUsuariosScreenState extends State<GestionarUsuariosScreen>
     super.dispose();
   }
 
-  // ADAPTADO: Se definen los filtros para Usuarios.
   void _initializarFiltros() {
     _configuracionesFiltros = [
       ConfiguracionFiltro(
@@ -113,7 +213,6 @@ class _GestionarUsuariosScreenState extends State<GestionarUsuariosScreen>
     };
   }
 
-  // ADAPTADO: Se definen los campos de ordenamiento para Usuarios.
   final Map<String, Map<String, dynamic>> _sortableFieldsWithTypes = {
     'Nombre Completo': {
       'api_key': 'nombrecompleto',
@@ -131,9 +230,6 @@ class _GestionarUsuariosScreenState extends State<GestionarUsuariosScreen>
       'icon': Icons.calendar_today_rounded,
     },
   };
-
-  // --- Lógica Principal de Datos ---
-  // --- Lógica de Datos (Obtener, Buscar, Cargar más) ---
 
   Future<void> _fetchData({required int page, bool loadMore = false}) async {
     if (_isSearching && _currentSearchQuery.isNotEmpty) {
@@ -334,14 +430,12 @@ class _GestionarUsuariosScreenState extends State<GestionarUsuariosScreen>
   String _buildFilterQuery() {
     List<String> queryParams = [];
 
-    // Filtro rápido por tipo de usuario (chips)
     if (_tipoUsuarioSeleccionadoFiltroAPI != null) {
       queryParams.add(
         'tipoUsuario=${Uri.encodeComponent(_tipoUsuarioSeleccionadoFiltroAPI!)}',
       );
     }
 
-    // Filtros del modal genérico
     _filtrosActivos.forEach((key, value) {
       if (value != null &&
           value.toString().isNotEmpty &&
@@ -353,17 +447,12 @@ class _GestionarUsuariosScreenState extends State<GestionarUsuariosScreen>
     return queryParams.join('&');
   }
 
-  // --- Lógica de Acciones (CRUD) ---
-
-  // --- MÉTODO ACTUALIZADO PARA AGREGAR USUARIO ---
   void _agregarUsuario() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      constraints: const BoxConstraints(
-        maxWidth: double.infinity,
-      ),
+      constraints: const BoxConstraints(maxWidth: double.infinity),
       builder: (context) {
         return LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
@@ -375,14 +464,11 @@ class _GestionarUsuariosScreenState extends State<GestionarUsuariosScreen>
             double dialogMaxHeight;
 
             if (screenWidth < mobileBreakpoint) {
-              // --- LÓGICA MÓVIL ---
               dialogMaxWidth = screenWidth;
-              dialogMaxHeight = screenHeight * 0.95; 
+              dialogMaxHeight = screenHeight * 0.95;
             } else {
-              // --- LÓGICA DESKTOP ---
-              // Para usuarios, un ancho más pequeño puede ser suficiente.
               dialogMaxWidth = screenWidth * 0.6;
-              if (dialogMaxWidth > 1200) { // Un máximo más pequeño para formularios simples
+              if (dialogMaxWidth > 1200) {
                 dialogMaxWidth = 1200;
               }
               dialogMaxHeight = screenHeight * 0.85;
@@ -397,9 +483,7 @@ class _GestionarUsuariosScreenState extends State<GestionarUsuariosScreen>
                 child: SizedBox(
                   width: dialogMaxWidth,
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: dialogMaxHeight,
-                    ),
+                    constraints: BoxConstraints(maxHeight: dialogMaxHeight),
                     child: nUsuarioForm(onUsuarioAgregado: _onRefresh),
                   ),
                 ),
@@ -411,16 +495,12 @@ class _GestionarUsuariosScreenState extends State<GestionarUsuariosScreen>
     );
   }
 
-  // --- MÉTODO ACTUALIZADO PARA EDITAR USUARIO ---
   void _editarUsuario(Usuario usuario) {
-    // Copiamos la misma lógica para mantener la coherencia.
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      constraints: const BoxConstraints(
-        maxWidth: double.infinity,
-      ),
+      constraints: const BoxConstraints(maxWidth: double.infinity),
       builder: (context) {
         return LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
@@ -451,9 +531,7 @@ class _GestionarUsuariosScreenState extends State<GestionarUsuariosScreen>
                 child: SizedBox(
                   width: dialogMaxWidth,
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: dialogMaxHeight,
-                    ),
+                    constraints: BoxConstraints(maxHeight: dialogMaxHeight),
                     child: editUsuarioForm(
                       idUsuario: usuario.idusuarios,
                       onUsuarioEditado: _onRefresh,
@@ -527,168 +605,40 @@ class _GestionarUsuariosScreenState extends State<GestionarUsuariosScreen>
     }
   }
 
-// Archivo: lib/screens/gestion/gestionar_usuarios_screen.dart
+  void _showUsuarioDetails(Usuario usuario) {
+    final fullScreenWidth = MediaQuery.of(context).size.width;
 
-void _showUsuarioDetails(Usuario usuario) {
-  // Obtenemos el ancho total de la pantalla ANTES de llamar al BottomSheet.
-  final fullScreenWidth = MediaQuery.of(context).size.width;
+    const double mobileBreakpoint = 600.0;
+    double dialogMaxWidth;
 
-  // Definimos las constantes y calculamos el ancho del diálogo aquí mismo.
-  const double mobileBreakpoint = 600.0; // Breakpoint para Usuarios
-  double dialogMaxWidth;
-
-  if (fullScreenWidth < mobileBreakpoint) {
-    // En móvil, el diálogo ocupa todo el ancho.
-    dialogMaxWidth = fullScreenWidth;
-  } else {
-    // --- EN ESCRITORIO ---
-    // ¡ESTE ES EL ÚNICO NÚMERO QUE DEBES AJUSTAR!
-    // Define el ancho como un porcentaje de la pantalla.
-    dialogMaxWidth = fullScreenWidth * 0.6; // <-- Cambia este valor si lo necesitas
-  }
-
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    // Usamos la propiedad `constraints` para pasar el ancho calculado.
-    constraints: BoxConstraints(
-      maxWidth: dialogMaxWidth,
-    ),
-    builder: (context) {
-      // El builder ahora solo se preocupa por el contenido vertical.
-      return Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            // La altura máxima se sigue controlando aquí.
-            maxHeight: MediaQuery.of(context).size.height * 0.80,
-          ),
-          child: InfoUsuarioDialog(idUsuario: usuario.idusuarios),
-        ),
-      );
-    },
-  );
-}
-
-  String _buildEndpoint({required int page, String? searchQuery}) {
-    List<String> queryParams = [];
-    if (_sortColumnKey != null) {
-      queryParams.add('${_sortColumnKey}=${_sortAscending ? 'AZ' : 'ZA'}');
+    if (fullScreenWidth < mobileBreakpoint) {
+      dialogMaxWidth = fullScreenWidth;
+    } else {
+      dialogMaxWidth = fullScreenWidth * 0.6;
     }
-    String searchPath =
-        (searchQuery != null && searchQuery.isNotEmpty)
-            ? '/${Uri.encodeComponent(searchQuery)}'
-            : '';
-    String finalQuery = queryParams.where((p) => p.isNotEmpty).join('&');
-    return '/api/v1/usuarios$searchPath?limit=12&page=$page${finalQuery.isNotEmpty ? '&$finalQuery' : ''}';
-  }
 
-  // --- Widgets de Construcción de UI ---
-  // --- Método Build ---
-  @override
-Widget build(BuildContext context) {
-  final colors = Provider.of<ThemeProvider>(context).colors;
-
-  // <<< WIDGET CONTENEDOR PRINCIPAL >>>
-  // Usamos un Container para darle un color de fondo a toda la vista,
-  // incluyendo el área detrás de la nueva barra.
-  return Container(
-    color: colors.backgroundPrimary, // Asigna el color de fondo correcto
-    child: Column(
-      children: [
-        
-        // <<< 1. LA BARRA PARA DESLIZAR (DRAG HANDLE) >>>
-        // Es un simple Container con bordes redondeados, centrado.
-        // <<< CÓDIGO MUCHO MÁS LIMPIO Y DECLARATIVO >>>
-        // Solo se muestra la barra si el contexto se considera 'móvil'
-        if (context.isMobile) ...[
-            // Drag Handle
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Center(
-                child: Container(
-                  width: 40,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[400],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-
-            // Título de la pantalla (solo para móvil)
-            Padding(
-              padding: const EdgeInsets.only(top: 16.0, bottom: 4.0),
-              child: Text(
-                'Gestionar Usuarios', // <-- CAMBIA ESTE TEXTO
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color:
-                      colors.textPrimary, // O el color que prefieras de tu tema
-                ),
-              ),
-            ),
-          ],
-
-        // <<< 2. TU CONTENIDO ORIGINAL, ENVUELTO EN EXPANDED >>>
-        // Expanded es CRUCIAL. Le dice al ListView que ocupe todo el
-        // espacio vertical restante, evitando errores de layout.
-        Expanded(
-          child: ResponsiveScaffoldListView<Usuario>(
-            // --- Datos y Estado (sin cambios) ---
-            items: listaUsuarios,
-            isLoading: isLoading,
-            isLoadingMore: _isLoadingMore,
-            hasError: errorDeConexion,
-            noItemsFound: noItemsFound,
-            totalItems: totalDatos,
-            currentPage: currentPage,
-            totalPages: totalPaginas,
-            scrollController: _scrollController,
-
-            // --- Builders para las tarjetas (sin cambios) ---
-            cardBuilder: (context, usuario) =>
-                _buildStandardUsuarioCard(usuario, colors),
-            tableRowCardBuilder: (context, usuario) =>
-                _buildTableRowUsuarioCard(usuario, colors),
-            cardHeight: 180,
-
-            // --- Callbacks para acciones (sin cambios) ---
-            onRefresh: _onRefresh,
-            onLoadMore: _loadMoreData,
-            onSearchChanged: _onSearchChanged,
-            onAddItem: _agregarUsuario,
-
-            // --- Widgets de la barra de acciones (sin cambios) ---
-            actionBarContent: _buildUserTypeFilterChips(colors),
-            sortButton: _buildSortButton(context, colors),
-
-            // --- Textos y animaciones (sin cambios) ---
-            appBarTitle: 'Usuarios',
-            searchHintText: 'Buscar por nombre, usuario...',
-            addItemText: 'Agregar Usuario',
-            loadingText: 'Cargando usuarios...',
-            emptyStateTitle: 'No se encontraron usuarios',
-            emptyStateSubtitle: 'Aún no hay usuarios registrados. ¡Agrega uno!',
-            emptyStateIcon: Icons.people_outline_rounded,
-            animationController: _animationController,
-            fadeAnimation: _fadeAnimation,
-            fabHeroTag: 'fab_usuarios',
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      constraints: BoxConstraints(maxWidth: dialogMaxWidth),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
           ),
-        ),
-      ],
-    ),
-  );
-}
-  // --- Widgets de UI (Cards, Chips, Popups) ---
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.80,
+            ),
+            child: InfoUsuarioDialog(idUsuario: usuario.idusuarios),
+          ),
+        );
+      },
+    );
+  }
 
   Widget _buildStandardUsuarioCard(Usuario usuario, dynamic colors) {
-    // El Container, Material e InkWell externos se mantienen igual.
     return Container(
       decoration: BoxDecoration(
         color: colors.backgroundCard,
@@ -708,32 +658,24 @@ Widget build(BuildContext context) {
           onTap: () => _showUsuarioDetails(usuario),
           child: Padding(
             padding: const EdgeInsets.all(20),
-            // 1. Column principal con spaceBetween, igual que en Cliente.
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // --- SECCIÓN SUPERIOR: Idéntica en estructura a la de Cliente ---
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildUserTypeChip(
-                      usuario.tipoUsuario,
-                    ), // Chip de tipo de usuario
+                    _buildUserTypeChip(usuario.tipoUsuario),
                     const Spacer(),
-                    _buildPopupMenu(usuario, colors), // Menú de opciones
+                    _buildPopupMenu(usuario, colors),
                   ],
                 ),
 
-                // --- SECCIÓN INFERIOR: Estructura replicada de Cliente ---
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 2. Row para Nombre/Fecha (y un posible chip a la derecha si lo hubiera).
                     Row(
                       children: [
-                        // La columna para el nombre y la fecha está dentro de un Expanded
-                        // para ocupar el espacio disponible, igual que en Cliente.
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -761,21 +703,14 @@ Widget build(BuildContext context) {
                             ],
                           ),
                         ),
-                        // NOTA: El modelo Usuario no tiene un "status" como el Cliente.
-                        // Si lo tuviera, aquí iría el chip de estado, como en la tarjeta de Cliente.
-                        // Al no tenerlo, el Expanded de arriba simplemente ocupa todo el ancho.
                       ],
                     ),
 
-                    // 3. Divisor, igual que en Cliente.
                     const Divider(height: 24),
 
-                    // 4. Row para la información de contacto, con spaceBetween.
-                    // Esta estructura es más flexible que dos Rows separadas.
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // Usamos Expanded para que cada chip pueda crecer pero no desbordarse.
                         Expanded(
                           child: _buildInfoChip(
                             Icons.person_outline_rounded,
@@ -784,7 +719,7 @@ Widget build(BuildContext context) {
                             colors,
                           ),
                         ),
-                        const SizedBox(width: 14), // Espacio entre los chips
+                        const SizedBox(width: 14),
                         Expanded(
                           child: _buildInfoChip(
                             Icons.email_outlined,
@@ -947,7 +882,6 @@ Widget build(BuildContext context) {
     ],
   );
 
-  // ADAPTADO: Chip para el tipo de usuario.
   Widget _buildUserTypeChip(String tipoUsuario) {
     final bool esAdmin = tipoUsuario.toLowerCase() == 'admin';
     final color = esAdmin ? Colors.purple : Colors.blue;
@@ -977,68 +911,70 @@ Widget build(BuildContext context) {
     );
   }
 
-  // ADAPTADO: Chips de filtro rápido por tipo de usuario.
-Widget _buildUserTypeFilterChips(dynamic colors) {
-  final tipos = ['Todos', 'Admin', 'Asesor'];
-  final themeProvider = Provider.of<ThemeProvider>(context);
+  Widget _buildUserTypeFilterChips(dynamic colors) {
+    final tipos = ['Todos', 'Admin', 'Asesor'];
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
-  return SizedBox(
-    height: 32,
-    child: ListView(
-      scrollDirection: Axis.horizontal,
-      children: tipos.map((tipo) {
-        final isSelected =
-            (_tipoUsuarioSeleccionadoFiltroAPI == null && tipo == 'Todos') ||
-                (_tipoUsuarioSeleccionadoFiltroAPI == tipo);
-        return Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: FilterChip(
-            showCheckmark: false,
-            label: Text(tipo, style: const TextStyle(fontSize: 12)),
-            selected: isSelected,
-            onSelected: (selected) {
-              if (selected) {
-                setState(
-                  () =>
-                      _tipoUsuarioSeleccionadoFiltroAPI =
-                          tipo == 'Todos' ? null : tipo,
-                );
-                _aplicarFiltrosYOrdenamiento();
-              }
-            },
-            backgroundColor: themeProvider.colors.backgroundCard,
-            selectedColor: Colors.blue.withOpacity(0.2),
-            labelStyle: TextStyle(
-              color: isSelected
-                  ? Colors.blue
-                  : (themeProvider.isDarkMode
-                      ? Colors.white70
-                      : Colors.grey[700]),
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: BorderSide(
-                color: isSelected
-                    ? Colors.blue
-                    : (themeProvider.isDarkMode
-                        ? Colors.grey[700]!
-                        : Colors.grey.withOpacity(0.3)),
-                width: isSelected ? 1.5 : 1.0,
-              ),
-            ),
-            // --- CORRECCIÓN APLICADA ---
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, // <-- AÑADIDO
-            visualDensity: VisualDensity.compact,                   // <-- AÑADIDO
-          ),
-        );
-      }).toList(),
-    ),
-  );
-}
+    return SizedBox(
+      height: 32,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children:
+            tipos.map((tipo) {
+              final isSelected =
+                  (_tipoUsuarioSeleccionadoFiltroAPI == null &&
+                      tipo == 'Todos') ||
+                  (_tipoUsuarioSeleccionadoFiltroAPI == tipo);
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilterChip(
+                  showCheckmark: false,
+                  label: Text(tipo, style: const TextStyle(fontSize: 12)),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(
+                        () =>
+                            _tipoUsuarioSeleccionadoFiltroAPI =
+                                tipo == 'Todos' ? null : tipo,
+                      );
+                      _aplicarFiltrosYOrdenamiento();
+                    }
+                  },
+                  backgroundColor: themeProvider.colors.backgroundCard,
+                  selectedColor: Colors.blue.withOpacity(0.2),
+                  labelStyle: TextStyle(
+                    color:
+                        isSelected
+                            ? Colors.blue
+                            : (themeProvider.isDarkMode
+                                ? Colors.white70
+                                : Colors.grey[700]),
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(
+                      color:
+                          isSelected
+                              ? Colors.blue
+                              : (themeProvider.isDarkMode
+                                  ? Colors.grey[700]!
+                                  : Colors.grey.withOpacity(0.3)),
+                      width: isSelected ? 1.5 : 1.0,
+                    ),
+                  ),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+              );
+            }).toList(),
+      ),
+    );
+  }
 
   Widget _buildFilterButton(BuildContext context) {
-    // La implementación genérica de Clientes funciona perfectamente aquí.
     return buildFilterButtonMobile(
       context,
       _filtrosActivos,
@@ -1053,34 +989,6 @@ Widget _buildUserTypeFilterChips(dynamic colors) {
       },
     );
   }
-
-  /*  Widget _buildSortButton(BuildContext context, dynamic colors) {
-    // El widget de Clientes se adapta sin cambios.
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final selectedFieldInfo = _sortableFieldsWithTypes.entries.firstWhere((e) => e.value['api_key'] == _sortColumnKey, orElse: () => null as MapEntry<String, Map<String, dynamic>>?);
-
-    return HoverableActionButton(
-      onTap: () => _showSortOptions(context),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            selectedFieldInfo?.value['icon'] ?? Icons.tune_rounded,
-            size: 20,
-            color: _sortColumnKey != null ? Colors.blueAccent : (themeProvider.isDarkMode ? Colors.white : Colors.black87),
-          ),
-          if (_sortColumnKey != null) ...[
-            const SizedBox(width: 4),
-            Icon(
-              _sortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-              size: 16,
-              color: Colors.blueAccent,
-            ),
-          ],
-        ],
-      ),
-    );
-  } */
 
   Widget _buildSortButton(BuildContext context, AppColors colors) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -1288,7 +1196,8 @@ Widget _buildUserTypeFilterChips(dynamic colors) {
         descText += ' (Z-A)';
         break;
       default:
-        ascText += '';
+        // Si no es ni fecha ni texto, no mostramos descripción de dirección.
+        ascText = '';
         descText = '';
         break;
     }
@@ -1324,41 +1233,8 @@ Widget _buildUserTypeFilterChips(dynamic colors) {
     }
     return null;
   }
-
-  /* void _showSortOptions(BuildContext context) {
-    // La lógica del modal genérico de Clientes funciona perfectamente.
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (modalContext) => OrdenamientoGenericoMobile.create(
-        context: context,
-        sortableFields: _sortableFieldsWithTypes,
-        currentSortKey: _sortColumnKey,
-        isAscending: _sortAscending,
-        onApply: (newSortKey, newIsAscending) {
-          setState(() {
-            _sortColumnKey = newSortKey;
-            _sortAscending = newIsAscending;
-          });
-          _aplicarFiltrosYOrdenamiento();
-          Navigator.pop(context);
-        },
-        onReset: () {
-          setState(() {
-            _sortColumnKey = null;
-            _sortAscending = true;
-          });
-          _aplicarFiltrosYOrdenamiento();
-          Navigator.pop(context);
-        }
-      )
-    );
-  } */
 }
 
-// ADAPTADO: He movido buildFilterButtonMobile fuera de la clase State para que sea una función de nivel superior reutilizable.
-// Si ya la tienes en otro archivo, puedes importarla.
 Widget buildFilterButtonMobile(
   BuildContext context,
   Map<String, dynamic> filtrosActivos,

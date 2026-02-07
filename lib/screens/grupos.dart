@@ -1,5 +1,3 @@
-// Archivo: lib/screens/grupos_screen_mobile.dart
-
 import 'dart:async';
 import 'dart:math';
 import 'package:finora_app/dialog/grupo_detalle_dialog.dart';
@@ -8,10 +6,12 @@ import 'package:finora_app/forms/ngrupo_form.dart';
 import 'package:finora_app/models/grupos.dart';
 import 'package:finora_app/models/usuarios.dart';
 import 'package:finora_app/providers/theme_provider.dart';
+import 'package:finora_app/providers/ui_provider.dart'; // <--- 1. IMPORTAR UI PROVIDER
 import 'package:finora_app/services/api_service.dart';
 import 'package:finora_app/services/grupo_service.dart';
 import 'package:finora_app/utils/date_formatters.dart';
 import 'package:finora_app/widgets/filtros_genericos_widget.dart';
+import 'package:finora_app/widgets/global_layout_button.dart';
 import 'package:finora_app/widgets/hoverableActionButton.dart';
 import 'package:finora_app/widgets/ordenamiento_genericos.dart';
 import 'package:finora_app/widgets/responsive_scaffold_list_view.dart';
@@ -35,7 +35,6 @@ class GruposScreenMobile extends StatefulWidget {
 
 class _GruposScreenMobileState extends State<GruposScreenMobile>
     with TickerProviderStateMixin {
-  // --- Variables de estado (sin cambios en su mayoría) ---
   List<Grupo> listaGrupos = [];
   List<Grupo> listaFiltrada = [];
   bool isLoading = false;
@@ -63,62 +62,13 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
   String? _estadoGrupoSeleccionadoFiltroAPI;
   List<Usuario> _usuarios = [];
   bool _isLoadingUsuarios = false;
-  // --- Fin de variables de estado ---
+  
+  // --- 2. VARIABLE PARA EL HOVER DEL BOTÓN ---
+  bool _isButtonHovered = false; 
 
-  // --- VERSIÓN ACTUALIZADA CON ANIMACIÓN DE SUBIDA Y DISEÑO RESPONSIVO ---
-  // Archivo: lib/screens/grupos_screen_mobile.dart
-
-  // Archivo: lib/screens/grupos_screen_mobile.dart
-
-  void _showModernGrupoDetails(String idGrupo, String nombreGrupo) {
-    // Obtenemos el ancho total de la pantalla ANTES de llamar al BottomSheet.
-    final fullScreenWidth = MediaQuery.of(context).size.width;
-
-    // Definimos las constantes y calculamos el ancho del diálogo aquí mismo.
-    const double mobileBreakpoint = 600.0; // Breakpoint para Grupos
-    double dialogMaxWidth;
-
-    if (fullScreenWidth < mobileBreakpoint) {
-      // En móvil, el diálogo ocupa todo el ancho.
-      dialogMaxWidth = fullScreenWidth;
-    } else {
-      // --- EN ESCRITORIO ---
-      // ¡ESTE ES EL ÚNICO NÚMERO QUE DEBES AJUSTAR!
-      // Define el ancho como un porcentaje de la pantalla.
-      dialogMaxWidth =
-          fullScreenWidth * 0.8; // <-- Cambia este valor si lo necesitas
-    }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      // Usamos la propiedad `constraints` para pasar el ancho calculado.
-      constraints: BoxConstraints(maxWidth: dialogMaxWidth),
-      builder: (context) {
-        // El builder ahora solo se preocupa por el contenido vertical.
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              // La altura máxima se sigue controlando aquí.
-              maxHeight: MediaQuery.of(context).size.height * 0.92,
-            ),
-            child: GrupoDetalleDialog(
-              idGrupo: idGrupo,
-              nombreGrupo: nombreGrupo,
-              onGrupoRenovado: _onRefresh,
-              // --- ¡AQUÍ ESTÁ EL CAMBIO! ---
-              // Le pasamos la misma función que usamos para renovar.
-              onEstadoCambiado: _onRefresh,
-            ),
-          ),
-        );
-      },
-    );
-  }
+  // Constantes de ordenamiento
+  static const String _keySortColumnConfig = 'sort_by_column_config_key';
+  static const String _keySortDirectionConfig = 'sort_direction_config_key';
 
   @override
   void initState() {
@@ -145,9 +95,6 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
       }
     });
   }
-
-  static const String _keySortColumnConfig = 'sort_by_column_config_key';
-  static const String _keySortDirectionConfig = 'sort_direction_config_key';
 
   void _initializarFiltros() {
     _configuracionesFiltros = [
@@ -191,6 +138,8 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
     super.dispose();
   }
 
+  // --- MÉTODOS DE DATOS (obtenerGrupos, searchGrupos, etc.) ---
+  // (Se mantienen igual que en tu código original)
   Future<void> obtenerGrupos({int page = 1, bool loadMore = false}) async {
     if (!mounted || (loadMore && _isLoadingMore)) return;
 
@@ -360,7 +309,7 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
     final response = await _apiService.get<List<Usuario>>(
       '/api/v1/usuarios/tipo/campo',
       parser: (json) => (json as List).map((e) => Usuario.fromJson(e)).toList(),
-      showErrorDialog: false, // <--- ¡AÑADE ESTA LÍNEA!
+      showErrorDialog: false,
     );
     if (mounted && response.success) {
       setState(() {
@@ -403,7 +352,6 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
   }
 
   Future<void> _eliminarGrupo(String idGrupo) async {
-    // 1. Diálogo de confirmación (se mantiene igual, es buena práctica)
     bool? confirmado = await showDialog<bool>(
       context: context,
       builder:
@@ -428,20 +376,13 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
           ),
     );
 
-    if (confirmado != true) {
-      return; // El usuario canceló
-    }
-
-    // Muestra un indicador de carga si lo deseas
-    // setState(() => _isDeleting = true);
+    if (confirmado != true) return;
 
     try {
-      // 2. UNA SOLA LLAMADA al servicio para eliminar todo
       final response = await _grupoService.eliminarGrupoCompleto(idGrupo);
 
       if (!mounted) return;
 
-      // 3. Manejar la respuesta
       if (response.success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -449,22 +390,14 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
             backgroundColor: Colors.green,
           ),
         );
-        // Actualiza tu lista de grupos para reflejar el cambio
         obtenerGrupos();
       } else {
-        // El ApiService ya debería mostrar un diálogo de error
-        // con el mensaje que viene del backend.
-        // Pero si quieres un mensaje por defecto, puedes añadirlo aquí.
         _apiService.showErrorDialog(
           response.error ?? "Ocurrió un error al intentar eliminar el grupo.",
         );
       }
     } catch (e) {
-      // Para errores de programación o de red no manejados por ApiService
       _apiService.showErrorDialog("Error de conexión: $e");
-    } finally {
-      // Oculta el indicador de carga
-      // if(mounted) setState(() => _isDeleting = false);
     }
   }
 
@@ -477,15 +410,122 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
       obtenerGrupos();
     }
   }
+  
+  // --- 3. NUEVOS MÉTODOS PARA CONTROL DE LAYOUT (COPIADOS DE CREDITOS) ---
+  
+  Widget _buildLayoutControlButton(BuildContext context, dynamic colors) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final uiProvider = Provider.of<UiProvider>(context); // Leer Provider Global
+    final isDarkMode = themeProvider.isDarkMode;
 
-  // --- EL MÉTODO BUILD AHORA ES SÚPER SIMPLE ---
+    final currentCount = uiProvider.crossAxisCount;
+
+    IconData iconData;
+    if (currentCount == null || currentCount > 1) {
+      iconData = Icons.grid_view_rounded;
+    } else {
+      iconData = Icons.view_list_rounded;
+    }
+
+    final Color backgroundColor = _isButtonHovered
+        ? (isDarkMode ? Colors.white.withOpacity(0.1) : Colors.grey.shade200)
+        : themeProvider.colors.backgroundCard;
+
+    final List<BoxShadow> boxShadow = [
+      BoxShadow(
+        color: (isDarkMode ? Colors.black : Colors.grey).withOpacity(
+          _isButtonHovered ? 0.15 : 0.1,
+        ),
+        blurRadius: _isButtonHovered ? 12 : 8,
+        offset: Offset(0, _isButtonHovered ? 4 : 2),
+      ),
+    ];
+
+    return PopupMenuButton<int>(
+      tooltip: '',
+      offset: const Offset(0, 35),
+      onSelected: (int value) {
+        // Llamamos al método global del Provider
+        uiProvider.setCrossAxisCount(value);
+      },
+      color: colors.backgroundPrimary,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _isButtonHovered = true),
+        onExit: (_) => setState(() => _isButtonHovered = false),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(25),
+            border: Border.all(
+              color:
+                  isDarkMode ? Colors.grey[700]! : Colors.grey.withOpacity(0.3),
+              width: 1.3,
+            ),
+            boxShadow: boxShadow,
+          ),
+          child: Icon(
+            iconData,
+            size: 22,
+            color: isDarkMode ? Colors.white : Colors.black87,
+          ),
+        ),
+      ),
+      itemBuilder: (context) => [
+        _buildPopupMenuItem(1, '1 Columna', Icons.view_list_rounded, colors, currentCount),
+        _buildPopupMenuItem(2, '2 Columnas', Icons.grid_view_rounded, colors, currentCount),
+        _buildPopupMenuItem(3, '3 Columnas', Icons.view_quilt_rounded, colors, currentCount),
+        const PopupMenuDivider(),
+        _buildPopupMenuItem(0, 'Automático', Icons.dynamic_feed_rounded, colors, currentCount),
+      ],
+    );
+  }
+
+  PopupMenuItem<int> _buildPopupMenuItem(
+    int value,
+    String text,
+    IconData icon,
+    dynamic colors,
+    int? currentCount,
+  ) {
+    final bool isSelected = (currentCount == value) || 
+                            (currentCount == null && value == 0);
+
+    return PopupMenuItem<int>(
+      value: value,
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: isSelected ? Colors.blueAccent : colors.textSecondary,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            text,
+            style: TextStyle(
+              color: isSelected ? Colors.blueAccent : colors.textPrimary,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- 4. MÉTODO BUILD ACTUALIZADO ---
   @override
   Widget build(BuildContext context) {
-    final colors = Provider.of<ThemeProvider>(context).colors;
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final colors = themeProvider.colors;
+    // Obtenemos el provider para pasar el valor a la lista
+    final uiProvider = Provider.of<UiProvider>(context);
 
-    // Solo devolvemos nuestro widget reutilizable, pasándole toda la lógica.
     return ResponsiveScaffoldListView<Grupo>(
-      // --- Datos y Estado ---
+      // Datos y Estado
       items: listaGrupos,
       isLoading: isLoading,
       isLoadingMore: _isLoadingMore,
@@ -495,50 +535,49 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
       currentPage: currentPage,
       totalPages: totalPaginas,
       scrollController: _scrollController,
-      // --- ¡AQUÍ PASAMOS LOS WIDGETS FALTANTES! ---
-      actionBarContent: _buildStatusFiltersChips(colors),
-      cardHeight:
-          180, // Ajusta esta altura para que coincida con tu diseño de tarjeta
-      // --- Builders para las tarjetas ---
-      // --- Builders para las tarjetas (ACTUALIZADOS) ---
-      cardBuilder: (context, grupo) => _buildStandardGroupCard(grupo, colors),
-      tableRowCardBuilder:
-          (context, grupo) => _buildTableRowGroupCard(grupo, colors),
+      // ¡Mira qué limpio queda esto!
+  userSelectedCrossAxisCount: Provider.of<UiProvider>(context).crossAxisCount,
+  layoutControlButton: const GlobalLayoutButton(), 
 
-      // --- Callbacks para acciones ---
+      // Resto de la configuración
+      actionBarContent: _buildStatusFiltersChips(colors),
+      cardHeight: 180,
+      
+      // Builders
+      cardBuilder: (context, grupo) => _buildStandardGroupCard(grupo, colors),
+      tableRowCardBuilder: (context, grupo) => _buildTableRowGroupCard(grupo, colors),
+
+      // Acciones
       onRefresh: _onRefresh,
       onLoadMore: _loadMoreData,
       onSearchChanged: _onSearchChanged,
       onAddItem: _agregarGrupo,
 
-      // --- Widgets de la barra de acciones ---
+      // Widgets barra superior
       filterButton: _buildFilterButton(context),
       sortButton: _buildSortButton(context, colors),
 
-      // --- Textos personalizables ---
-      //appBarTitle: 'Grupos',
+      // Textos
       searchHintText: 'Buscar por nombre...',
       addItemText: 'Agregar Grupo',
       loadingText: 'Cargando grupos...',
       emptyStateTitle: 'No se encontraron grupos',
       emptyStateSubtitle: 'Aún no hay grupos registrados. ¡Agrega uno!',
       emptyStateIcon: Icons.group_off_rounded,
-      // 5. PASA LOS CONTROLADORES DE ANIMACIÓN
+      
       animationController: _animationController,
       fadeAnimation: _fadeAnimation,
-      fabHeroTag: 'fab_grupos', // Etiqueta única para grupos
+      fabHeroTag: 'fab_grupos',
     );
   }
 
-  /// Construye la tarjeta vertical estándar para un grupo.
-  /// Construye la tarjeta vertical estándar para un grupo (DISEÑO COMPLETO).
-  // Archivo: lib/screens/grupos_screen_mobile.dart
-
-  // REEMPLAZA ESTE MÉTODO COMPLETO
-  /// Construye la tarjeta vertical estándar para un grupo (CORREGIDA).
+  // ... (El resto de tus métodos: _buildStandardGroupCard, _buildTableRowGroupCard, 
+  // _showModernGrupoDetails, _agregarGrupo, _editarGrupo, etc. se mantienen EXACTAMENTE IGUAL)
+  
+  // SOLO PEGARÉ LOS CARD BUILDERS PARA QUE NO HAYA ERRORES AL COPIAR EL ARCHIVO COMPLETO
+  
   Widget _buildStandardGroupCard(Grupo grupo, dynamic colors) {
     return Container(
-      // El Container y el InkWell se mantienen igual
       decoration: BoxDecoration(
         color: colors.backgroundCard,
         borderRadius: BorderRadius.circular(20),
@@ -554,26 +593,18 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap:
-              () => _showModernGrupoDetails(grupo.idgrupos, grupo.nombreGrupo),
+          onTap: () => _showModernGrupoDetails(grupo.idgrupos, grupo.nombreGrupo),
           child: Padding(
             padding: const EdgeInsets.all(20),
-            // --- ¡AQUÍ ESTÁ EL CAMBIO PRINCIPAL! ---
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              // 1. Usamos `spaceBetween` para distribuir el espacio verticalmente.
-              // Esto empujará el primer hijo hacia arriba y el último hacia abajo.
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // PRIMER HIJO: Fila superior (Tag y Menú)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
                         color: Colors.purple.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -587,14 +618,10 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
                         ),
                       ),
                     ),
-                    const Spacer(), // Spacer en una Row está bien porque el ancho SÍ es finito.
+                    const Spacer(),
                     _buildPopupMenu(grupo, colors),
                   ],
                 ),
-
-                // 2. HEMOS QUITADO EL SPACER DE AQUÍ.
-
-                // ÚLTIMO HIJO: Agrupamos todo el contenido inferior en otra Column.
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -616,9 +643,7 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                DateFormatters.formatearFechaRelativa(
-                                  grupo.fCreacion,
-                                ),
+                                DateFormatters.formatearFechaRelativa(grupo.fCreacion),
                                 style: TextStyle(
                                   color: colors.textSecondary,
                                   fontSize: 11,
@@ -631,45 +656,23 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
                       ],
                     ),
                     const Divider(height: 24),
-                    // CÓDIGO CORREGIDO Y MÁS SIMPLE
                     Row(
                       children: [
-                        // --- Elementos de la Izquierda ---
-                        Icon(
-                          Icons.person_pin_rounded,
-                          color: Colors.teal,
-                          size: 16,
-                        ),
+                        Icon(Icons.person_pin_rounded, color: Colors.teal, size: 16),
                         const SizedBox(width: 6),
                         Expanded(
-                          // <--- ¡LA MAGIA ESTÁ AQUÍ!
                           child: Text(
                             grupo.asesor ?? 'Sin asesor',
-                            style: TextStyle(
-                              color: colors.textPrimary,
-                              fontSize: 13,
-                            ),
-                            overflow:
-                                TextOverflow.ellipsis, // Ahora sí funcionará
-                            maxLines: 1, // Buena práctica añadir esto
+                            style: TextStyle(color: colors.textPrimary, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                           ),
                         ),
-
-                        // --- Elementos de la Derecha ---
-                        Icon(
-                          Icons.info_outline_rounded,
-                          color: Colors.blueGrey,
-                          size: 16,
-                        ),
+                        Icon(Icons.info_outline_rounded, color: Colors.blueGrey, size: 16),
                         const SizedBox(width: 6),
                         Text(
-                          grupo.detalles.isNotEmpty
-                              ? grupo.detalles
-                              : 'Sin detalles',
-                          style: TextStyle(
-                            color: colors.textPrimary,
-                            fontSize: 13,
-                          ),
+                          grupo.detalles.isNotEmpty ? grupo.detalles : 'Sin detalles',
+                          style: TextStyle(color: colors.textPrimary, fontSize: 13),
                         ),
                       ],
                     ),
@@ -683,13 +686,7 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
     );
   }
 
-  // Y como tu _buildTableRowGroupCard llama a este, el error se soluciona en ambos lados.
-  // AÑADE ESTE MÉTODO A TU CLASE _GruposScreenMobileState
-  /// Construye la tarjeta horizontal (fila) para un grupo.
-  /// Construye la tarjeta horizontal (fila) para un grupo.
-  /// Construye la tarjeta horizontal (fila) para un grupo.
   Widget _buildTableRowGroupCard(Grupo grupo, dynamic colors) {
-    // El Container, Material e InkWell se mantienen igual.
     return Container(
       decoration: BoxDecoration(
         color: colors.backgroundCard,
@@ -707,8 +704,7 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: InkWell(
-          onTap:
-              () => _showModernGrupoDetails(grupo.idgrupos, grupo.nombreGrupo),
+          onTap: () => _showModernGrupoDetails(grupo.idgrupos, grupo.nombreGrupo),
           hoverColor: colors.textPrimary.withOpacity(0.04),
           splashColor: colors.textPrimary.withOpacity(0.08),
           highlightColor: colors.textPrimary.withOpacity(0.06),
@@ -717,20 +713,14 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // --- ¡AQUÍ ESTÁ EL CAMBIO! ---
-                // Sección 1: Etiqueta, Nombre y Fecha
                 Expanded(
                   flex: 3,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // AÑADIMOS LA ETIQUETA
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.purple.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
@@ -744,10 +734,7 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
                           ),
                         ),
                       ),
-                      const SizedBox(
-                        height: 8,
-                      ), // Espacio entre etiqueta y nombre
-                      // Nombre y fecha (sin cambios)
+                      const SizedBox(height: 8),
                       Text(
                         grupo.nombreGrupo,
                         maxLines: 1,
@@ -761,17 +748,12 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
                       const SizedBox(height: 2),
                       Text(
                         DateFormatters.formatearFechaRelativa(grupo.fCreacion),
-                        style: TextStyle(
-                          color: colors.textSecondary,
-                          fontSize: 11,
-                        ),
+                        style: TextStyle(color: colors.textSecondary, fontSize: 11),
                       ),
                     ],
                   ),
                 ),
                 const VerticalDivider(indent: 8, endIndent: 8),
-
-                // Sección 2: Asesor y Detalles
                 Expanded(
                   flex: 4,
                   child: Row(
@@ -779,19 +761,12 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
                       Expanded(
                         child: Row(
                           children: [
-                            Icon(
-                              Icons.person_pin_rounded,
-                              color: Colors.teal,
-                              size: 18,
-                            ),
+                            Icon(Icons.person_pin_rounded, color: Colors.teal, size: 18),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 grupo.asesor ?? 'Sin asesor',
-                                style: TextStyle(
-                                  color: colors.textPrimary,
-                                  fontSize: 13,
-                                ),
+                                style: TextStyle(color: colors.textPrimary, fontSize: 13),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -801,21 +776,12 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
                       Expanded(
                         child: Row(
                           children: [
-                            Icon(
-                              Icons.info_outline_rounded,
-                              color: Colors.blueGrey,
-                              size: 18,
-                            ),
+                            Icon(Icons.info_outline_rounded, color: Colors.blueGrey, size: 18),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                grupo.detalles.isNotEmpty
-                                    ? grupo.detalles
-                                    : 'Sin detalles',
-                                style: TextStyle(
-                                  color: colors.textPrimary,
-                                  fontSize: 13,
-                                ),
+                                grupo.detalles.isNotEmpty ? grupo.detalles : 'Sin detalles',
+                                style: TextStyle(color: colors.textPrimary, fontSize: 13),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -826,8 +792,6 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
                   ),
                 ),
                 const Spacer(),
-
-                // Sección 3: Estado y Menú de opciones
                 _buildModernStatusChip(grupo.estado),
                 const SizedBox(width: 10),
                 _buildPopupMenu(grupo, colors),
@@ -839,137 +803,375 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
     );
   }
 
-  // --- ¡ASEGÚRATE DE QUE ESTOS MÉTODOS ESTÉN PRESENTES EN TU CLASE! ---
+  // --- MÉTODOS AUXILIARES Y DIÁLOGOS (Mantener los existentes) ---
 
+  void _showModernGrupoDetails(String idGrupo, String nombreGrupo) {
+    final fullScreenWidth = MediaQuery.of(context).size.width;
+    const double mobileBreakpoint = 600.0;
+    double dialogMaxWidth;
+
+    if (fullScreenWidth < mobileBreakpoint) {
+      dialogMaxWidth = fullScreenWidth;
+    } else {
+      dialogMaxWidth = fullScreenWidth * 0.8;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      constraints: BoxConstraints(maxWidth: dialogMaxWidth),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.92,
+            ),
+            child: GrupoDetalleDialog(
+              idGrupo: idGrupo,
+              nombreGrupo: nombreGrupo,
+              onGrupoRenovado: _onRefresh,
+              onEstadoCambiado: _onRefresh,
+            ),
+          ),
+        );
+      },
+    );
+  }
+  
+  void _agregarGrupo() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      constraints: const BoxConstraints(maxWidth: double.infinity),
+      builder: (context) {
+        return LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final screenWidth = constraints.maxWidth;
+            final screenHeight = MediaQuery.of(context).size.height;
+            const double mobileBreakpoint = 768.0;
+            double dialogMaxWidth;
+            double dialogMaxHeight;
+
+            if (screenWidth < mobileBreakpoint) {
+              dialogMaxWidth = screenWidth;
+              dialogMaxHeight = screenHeight * 0.95;
+            } else {
+              dialogMaxWidth = screenWidth * 0.8;
+              if (dialogMaxWidth > 1200) dialogMaxWidth = 1200;
+              dialogMaxHeight = screenHeight * 0.92;
+            }
+
+            return Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: SizedBox(
+                  width: dialogMaxWidth,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: dialogMaxHeight),
+                    child: nGrupoForm(onGrupoAgregado: _onRefresh),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _editarGrupo(Grupo grupo) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      constraints: const BoxConstraints(maxWidth: double.infinity),
+      builder: (context) {
+        return LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final screenWidth = constraints.maxWidth;
+            final screenHeight = MediaQuery.of(context).size.height;
+            const double mobileBreakpoint = 768.0;
+            double dialogMaxWidth;
+            double dialogMaxHeight;
+
+            if (screenWidth < mobileBreakpoint) {
+              dialogMaxWidth = screenWidth;
+              dialogMaxHeight = screenHeight * 0.95;
+            } else {
+              dialogMaxWidth = screenWidth * 0.8;
+              if (dialogMaxWidth > 1200) dialogMaxWidth = 1200;
+              dialogMaxHeight = screenHeight * 0.92;
+            }
+
+            return Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: SizedBox(
+                  width: dialogMaxWidth,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: dialogMaxHeight),
+                    child: EditarGrupoForm(
+                      idGrupo: grupo.idgrupos,
+                      onGrupoEditado: _onRefresh,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // --- FILTROS Y ORDENAMIENTO (MÉTODOS HELPER) ---
+
+  Widget _buildFilterButton(BuildContext context) => buildFilterButtonMobile(
+    context,
+    _filtrosActivos,
+    _configuracionesFiltros,
+    (filtros) {
+      setState(() => _filtrosActivos = Map.from(filtros));
+      _aplicarFiltrosYOrdenamiento();
+    },
+    () {
+      setState(() => _filtrosActivos.clear());
+      _aplicarFiltrosYOrdenamiento();
+    },
+  );
+
+  void _aplicarFiltrosYOrdenamiento() {
+    if (_isSearching && _currentSearchQuery.isNotEmpty) {
+      searchGrupos(_currentSearchQuery, page: 1);
+    } else {
+      obtenerGrupos(page: 1);
+    }
+  }
+
+  String _buildFilterQuery() {
+    List<String> params = [];
+    if (_estadoGrupoSeleccionadoFiltroAPI != null)
+      params.add('estado=${Uri.encodeComponent(_estadoGrupoSeleccionadoFiltroAPI!)}');
+    _filtrosActivos.forEach((key, value) {
+      if (value != null && value.toString().isNotEmpty)
+        params.add('$key=${Uri.encodeComponent(value.toString())}');
+    });
+    return params.join('&');
+  }
+
+  Widget buildFilterButtonMobile(
+    BuildContext context,
+    Map<String, dynamic> filtrosActivos,
+    List<ConfiguracionFiltro> configuracionesFiltros,
+    Function(Map<String, dynamic>) onAplicarFiltros,
+    VoidCallback onRestablecerFiltros,
+  ) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+    int activeFilterCount = filtrosActivos.entries.where((entry) {
+      return entry.value != null && entry.value.toString().toLowerCase() != 'todos';
+    }).length;
+
+    return HoverableActionButton(
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (modalContext) => DraggableScrollableSheet(
+            initialChildSize: 0.7,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            expand: false,
+            builder: (context, scrollController) {
+              return FiltrosGenericosMobile(
+                configuraciones: configuracionesFiltros,
+                valoresIniciales: Map.from(filtrosActivos),
+                titulo: 'Filtros de Grupos',
+                onAplicar: onAplicarFiltros,
+                onRestablecer: onRestablecerFiltros,
+              );
+            },
+          ),
+        );
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.filter_list_rounded, size: 22, color: isDarkMode ? Colors.white : Colors.black87),
+          if (activeFilterCount > 0)
+            Container(
+              margin: const EdgeInsets.only(left: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.blueAccent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$activeFilterCount',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSortButton(BuildContext context, dynamic colors) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+    final selectedFieldInfo = _getSelectedFieldInfo();
+
+    return HoverableActionButton(
+      onTap: () {
+        _showSortOptionsUsingGenericWidget(context);
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            selectedFieldInfo != null ? selectedFieldInfo['icon'] : Icons.tune,
+            size: 20,
+            color: _sortColumnKey != null
+                ? Colors.blueAccent
+                : (isDarkMode ? Colors.white : Colors.black87),
+          ),
+          if (_sortColumnKey != null) ...[
+            const SizedBox(width: 4),
+            Icon(
+              _sortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              size: 16,
+              color: Colors.blueAccent,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildModernStatusChip(String estado) {
+    final statusConfig = {
+      'Activo': {'color': Colors.green, 'icon': Icons.check_circle_outline_rounded},
+      'Disponible': {'color': Colors.blue, 'icon': Icons.circle_outlined},
+      'Inactivo': {'color': Colors.red, 'icon': Icons.cancel_outlined},
+      'Liquidado': {'color': Colors.purple, 'icon': Icons.paid_outlined},
+      'Finalizado': {'color': Colors.grey[600], 'icon': Icons.flag_circle_outlined},
+      'default': {'color': Colors.grey, 'icon': Icons.info_outline_rounded},
+    };
+    final config = statusConfig[estado] ?? statusConfig['default']!;
+    final color = config['color'] as Color;
+    final icon = config['icon'] as IconData;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 4),
+          Text(
+            estado,
+            style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+  
   Widget _buildStatusFiltersChips(dynamic colors) {
-    final estados = [
-      'Todos',
-      'Activo',
-      'Disponible',
-      'Liquidado',
-      // 'Finalizado',
-      'Inactivo',
-    ];
+    final estados = ['Todos', 'Activo', 'Disponible', 'Liquidado', 'Inactivo'];
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return SizedBox(
       height: 32,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        children:
-            estados.map((estado) {
-              final isSelected =
-                  (_estadoGrupoSeleccionadoFiltroAPI == null &&
-                      estado == 'Todos') ||
-                  (_estadoGrupoSeleccionadoFiltroAPI == estado);
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilterChip(
-                  showCheckmark: false,
-                  label: Text(estado, style: const TextStyle(fontSize: 12)),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    if (selected) {
-                      setState(
-                        () =>
-                            _estadoGrupoSeleccionadoFiltroAPI =
-                                estado == 'Todos' ? null : estado,
-                      );
-                      _aplicarFiltrosYOrdenamiento();
-                    }
-                  },
-                  backgroundColor: themeProvider.colors.backgroundCard,
-                  selectedColor: Colors.blue.withOpacity(0.2),
-                  labelStyle: TextStyle(
-                    color:
-                        isSelected
-                            ? Colors.blue
-                            : (themeProvider.isDarkMode
-                                ? Colors.white70
-                                : Colors.grey[700]),
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(
-                      color:
-                          isSelected
-                              ? Colors.blue
-                              : (themeProvider.isDarkMode
-                                  ? Colors.grey[700]!
-                                  : Colors.grey.withOpacity(0.3)),
-                      width: isSelected ? 1.5 : 1.0,
-                    ),
-                  ),
-                  // --- AQUÍ LA SOLUCIÓN ---
-                  materialTapTargetSize:
-                      MaterialTapTargetSize.shrinkWrap, // <-- AÑADIDO
-                  visualDensity: VisualDensity.compact, // <-- AÑADIDO
+        children: estados.map((estado) {
+          final isSelected = (_estadoGrupoSeleccionadoFiltroAPI == null && estado == 'Todos') ||
+              (_estadoGrupoSeleccionadoFiltroAPI == estado);
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              showCheckmark: false,
+              label: Text(estado, style: const TextStyle(fontSize: 12)),
+              selected: isSelected,
+              onSelected: (selected) {
+                if (selected) {
+                  setState(() => _estadoGrupoSeleccionadoFiltroAPI = estado == 'Todos' ? null : estado);
+                  _aplicarFiltrosYOrdenamiento();
+                }
+              },
+              backgroundColor: themeProvider.colors.backgroundCard,
+              selectedColor: Colors.blue.withOpacity(0.2),
+              labelStyle: TextStyle(
+                color: isSelected ? Colors.blue : (themeProvider.isDarkMode ? Colors.white70 : Colors.grey[700]),
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(
+                  color: isSelected ? Colors.blue : (themeProvider.isDarkMode ? Colors.grey[700]! : Colors.grey.withOpacity(0.3)),
+                  width: isSelected ? 1.5 : 1.0,
                 ),
-              );
-            }).toList(),
+              ),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+            ),
+          );
+        }).toList(),
       ),
     );
   }
-
-  // --- Widgets y métodos de ayuda específicos de la pantalla de Grupos ---
-
-  PopupMenuButton<String> _buildPopupMenu(Grupo grupo, dynamic colors) =>
-      PopupMenuButton<String>(
+  
+  PopupMenuButton<String> _buildPopupMenu(Grupo grupo, dynamic colors) => PopupMenuButton<String>(
         offset: const Offset(0, 40),
         color: colors.backgroundPrimary,
-        icon: Icon(
-          Icons.more_horiz_rounded,
-          color: colors.textSecondary,
-          size: 24,
-        ),
+        icon: Icon(Icons.more_horiz_rounded, color: colors.textSecondary, size: 24),
         onSelected: (value) {
           if (value == 'editar') _editarGrupo(grupo);
           if (value == 'eliminar') _eliminarGrupo(grupo.idgrupos);
         },
-        itemBuilder:
-            (context) => [
-              PopupMenuItem<String>(
-                value: 'editar',
-                child: Row(
-                  children: const [
-                    Icon(Icons.edit_outlined, color: Colors.blue, size: 20),
-                    SizedBox(width: 12),
-                    Text('Editar'),
-                  ],
-                ),
-              ),
-              PopupMenuItem<String>(
-                value: 'eliminar',
-                child: Row(
-                  children: const [
-                    Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                    SizedBox(width: 12),
-                    Text('Eliminar'),
-                  ],
-                ),
-              ),
-            ],
+        itemBuilder: (context) => [
+          PopupMenuItem<String>(
+            value: 'editar',
+            child: Row(children: const [Icon(Icons.edit_outlined, color: Colors.blue, size: 20), SizedBox(width: 12), Text('Editar')]),
+          ),
+          PopupMenuItem<String>(
+            value: 'eliminar',
+            child: Row(children: const [Icon(Icons.delete_outline, color: Colors.red, size: 20), SizedBox(width: 12), Text('Eliminar')]),
+          ),
+        ],
       );
 
   Map<String, dynamic>? _getSelectedFieldInfo() {
     if (_sortColumnKey == null) return null;
-
     for (var entry in _sortableFieldsWithTypes.entries) {
       if (entry.value['api_key'] == _sortColumnKey) {
-        return {
-          'display_name': entry.key,
-
-          'type': entry.value['type'],
-
-          'icon': entry.value['icon'],
-        };
+        return {'display_name': entry.key, 'type': entry.value['type'], 'icon': entry.value['icon']};
       }
     }
     return null;
   }
-
+  
   String? _getCurrentSortFieldDisplayName() {
     if (_sortColumnKey == null) return null;
     for (var entry in _sortableFieldsWithTypes.entries) {
@@ -977,59 +1179,36 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
     }
     return null;
   }
-
+  
   String? _getFieldTypeForSortableField(String? fieldDisplayName) {
     if (fieldDisplayName == null || fieldDisplayName == 'Ninguno') return null;
     return _sortableFieldsWithTypes[fieldDisplayName]?['type'];
   }
-
+  
   Map<String, String> _getDirectionDisplayLabels(String? fieldType) {
     String ascText = 'Ascendente';
     String descText = 'Descendente';
-
     switch (fieldType) {
-      case 'date':
-        ascText += ' (más antiguo primero)';
-        descText += ' (más reciente primero)';
-        break;
-      case 'text':
-        ascText += ' (A-Z)';
-        descText += ' (Z-A)';
-        break;
-      default:
-        ascText += ' (A-Z)';
-        descText += ' (Z-A)';
-        break;
+      case 'date': ascText += ' (más antiguo primero)'; descText += ' (más reciente primero)'; break;
+      case 'text': ascText += ' (A-Z)'; descText += ' (Z-A)'; break;
+      default: ascText += ' (A-Z)'; descText += ' (Z-A)'; break;
     }
     return {'Ascendente': ascText, 'Descendente': descText};
   }
-
+  
   void _showSortOptionsUsingGenericWidget(BuildContext context) {
-    // Este método tampoco necesita cambios, ya que se basa en las configuraciones
-    // que ya hemos adaptado.
-    final List<String> camposOrdenamiento = [
-      'Ninguno',
-      ..._sortableFieldsWithTypes.keys,
-    ];
-    final String? initialSortFieldDisplayName =
-        _getCurrentSortFieldDisplayName();
-    final String? initialFieldType = _getFieldTypeForSortableField(
-      initialSortFieldDisplayName,
-    );
-    final Map<String, String> initialDirectionDisplayLabels =
-        _getDirectionDisplayLabels(initialFieldType);
-    List<String> initialOpcionesDireccionConDescripcion =
-        initialDirectionDisplayLabels.values.toList();
+    final List<String> camposOrdenamiento = ['Ninguno', ..._sortableFieldsWithTypes.keys];
+    final String? initialSortFieldDisplayName = _getCurrentSortFieldDisplayName();
+    final String? initialFieldType = _getFieldTypeForSortableField(initialSortFieldDisplayName);
+    final Map<String, String> initialDirectionDisplayLabels = _getDirectionDisplayLabels(initialFieldType);
+    List<String> initialOpcionesDireccionConDescripcion = initialDirectionDisplayLabels.values.toList();
     String? initialDirectionValue;
 
     if (_sortColumnKey != null) {
-      initialDirectionValue =
-          _sortAscending
-              ? initialDirectionDisplayLabels['Ascendente']
-              : initialDirectionDisplayLabels['Descendente'];
-      if (!initialOpcionesDireccionConDescripcion.contains(
-        initialDirectionValue,
-      )) {
+      initialDirectionValue = _sortAscending
+          ? initialDirectionDisplayLabels['Ascendente']
+          : initialDirectionDisplayLabels['Descendente'];
+      if (!initialOpcionesDireccionConDescripcion.contains(initialDirectionValue)) {
         initialDirectionValue = null;
       }
     } else {
@@ -1062,423 +1241,95 @@ class _GruposScreenMobileState extends State<GruposScreenMobile>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder:
-          (modalContext) => DraggableScrollableSheet(
-            initialChildSize: 0.6,
-            minChildSize: 0.5,
-            maxChildSize: 0.95,
-            expand: false,
-            builder: (BuildContext context, ScrollController scrollController) {
-              return StatefulBuilder(
-                builder: (BuildContext sbfContext, StateSetter modalSetState) {
-                  return OrdenamientoGenericoMobile(
-                    configuraciones: currentConfigsOrdenamiento,
-                    valoresIniciales: currentValoresOrdenamiento,
-                    titulo: 'Opciones de Ordenamiento',
-                    textoBotonAplicar: 'Aplicar',
-                    onValorCambiado: (
-                      String claveCampoCambiado,
-                      dynamic nuevoValor,
-                    ) {
-                      modalSetState(() {
-                        currentValoresOrdenamiento[claveCampoCambiado] =
-                            nuevoValor;
-                        if (claveCampoCambiado == _keySortColumnConfig) {
-                          final String? nuevoCampoOrdenamiento =
-                              nuevoValor as String?;
-                          final String? nuevoTipoCampo =
-                              _getFieldTypeForSortableField(
-                                nuevoCampoOrdenamiento,
-                              );
-                          final Map<String, String> nuevasEtiquetasDireccion =
-                              _getDirectionDisplayLabels(nuevoTipoCampo);
-                          final List<String> nuevasOpcionesDireccion =
-                              nuevasEtiquetasDireccion.values.toList();
-                          int directionConfigIndex = currentConfigsOrdenamiento
-                              .indexWhere(
-                                (c) => c.clave == _keySortDirectionConfig,
-                              );
-                          if (directionConfigIndex != -1) {
-                            currentConfigsOrdenamiento[directionConfigIndex] =
-                                ConfiguracionOrdenamiento(
-                                  clave: _keySortDirectionConfig,
-                                  titulo: "Dirección",
-                                  tipo: TipoOrdenamiento.dropdown,
-                                  opciones: nuevasOpcionesDireccion,
-                                  hintText: 'Selecciona dirección',
-                                );
-                          }
-                          currentValoresOrdenamiento[_keySortDirectionConfig] =
-                              null;
-                        }
-                      });
-                    },
-                    onAplicar: (valoresAplicados) {
-                      final String? nuevoCampoDisplayName =
-                          valoresAplicados[_keySortColumnConfig];
-                      final String? nuevaDireccionConDescripcion =
-                          valoresAplicados[_keySortDirectionConfig];
-                      bool esAscendente = true;
-                      if (nuevaDireccionConDescripcion != null) {
-                        final String? tipoDeCampoActual =
-                            _getFieldTypeForSortableField(
-                              nuevoCampoDisplayName,
-                            );
-                        final Map<String, String> etiquetasDireccionActuales =
-                            _getDirectionDisplayLabels(tipoDeCampoActual);
-                        for (var entry in etiquetasDireccionActuales.entries) {
-                          if (entry.value == nuevaDireccionConDescripcion) {
-                            esAscendente = (entry.key == 'Ascendente');
-                            break;
-                          }
-                        }
-                      } else if (nuevoCampoDisplayName == null ||
-                          nuevoCampoDisplayName == 'Ninguno') {
-                        esAscendente = true;
+      builder: (modalContext) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (BuildContext context, ScrollController scrollController) {
+          return StatefulBuilder(
+            builder: (BuildContext sbfContext, StateSetter modalSetState) {
+              return OrdenamientoGenericoMobile(
+                configuraciones: currentConfigsOrdenamiento,
+                valoresIniciales: currentValoresOrdenamiento,
+                titulo: 'Opciones de Ordenamiento',
+                textoBotonAplicar: 'Aplicar',
+                onValorCambiado: (String claveCampoCambiado, dynamic nuevoValor) {
+                  modalSetState(() {
+                    currentValoresOrdenamiento[claveCampoCambiado] = nuevoValor;
+                    if (claveCampoCambiado == _keySortColumnConfig) {
+                      final String? nuevoCampoOrdenamiento = nuevoValor as String?;
+                      final String? nuevoTipoCampo = _getFieldTypeForSortableField(nuevoCampoOrdenamiento);
+                      final Map<String, String> nuevasEtiquetasDireccion = _getDirectionDisplayLabels(nuevoTipoCampo);
+                      final List<String> nuevasOpcionesDireccion = nuevasEtiquetasDireccion.values.toList();
+                      int directionConfigIndex = currentConfigsOrdenamiento.indexWhere((c) => c.clave == _keySortDirectionConfig);
+                      if (directionConfigIndex != -1) {
+                        currentConfigsOrdenamiento[directionConfigIndex] = ConfiguracionOrdenamiento(
+                          clave: _keySortDirectionConfig,
+                          titulo: "Dirección",
+                          tipo: TipoOrdenamiento.dropdown,
+                          opciones: nuevasOpcionesDireccion,
+                          hintText: 'Selecciona dirección',
+                        );
                       }
-                      _sortAscending = esAscendente;
-                      if (nuevoCampoDisplayName != null &&
-                          nuevoCampoDisplayName != 'Ninguno') {
-                        _sortColumnKey =
-                            _sortableFieldsWithTypes[nuevoCampoDisplayName]!['api_key'];
-                      } else {
-                        _sortColumnKey = null;
-                        _sortAscending = true;
+                      currentValoresOrdenamiento[_keySortDirectionConfig] = null;
+                    }
+                  });
+                },
+                onAplicar: (valoresAplicados) {
+                  final String? nuevoCampoDisplayName = valoresAplicados[_keySortColumnConfig];
+                  final String? nuevaDireccionConDescripcion = valoresAplicados[_keySortDirectionConfig];
+                  bool esAscendente = true;
+                  if (nuevaDireccionConDescripcion != null) {
+                    final String? tipoDeCampoActual = _getFieldTypeForSortableField(nuevoCampoDisplayName);
+                    final Map<String, String> etiquetasDireccionActuales = _getDirectionDisplayLabels(tipoDeCampoActual);
+                    for (var entry in etiquetasDireccionActuales.entries) {
+                      if (entry.value == nuevaDireccionConDescripcion) {
+                        esAscendente = (entry.key == 'Ascendente');
+                        break;
                       }
-                      _aplicarFiltrosYOrdenamiento();
-                      Navigator.pop(context);
-                    },
-                    onRestablecer: () {
-                      modalSetState(() {
-                        _sortColumnKey = null;
-                        _sortAscending = true;
-                        currentValoresOrdenamiento[_keySortColumnConfig] =
-                            'Ninguno';
-                        currentValoresOrdenamiento[_keySortDirectionConfig] =
-                            null;
-                        final String? defaultFieldType =
-                            _getFieldTypeForSortableField('Ninguno');
-                        final Map<String, String> defaultDirectionLabels =
-                            _getDirectionDisplayLabels(defaultFieldType);
-                        final List<String> defaultDirectionOptions =
-                            defaultDirectionLabels.values.toList();
-                        int directionConfigIndex = currentConfigsOrdenamiento
-                            .indexWhere(
-                              (c) => c.clave == _keySortDirectionConfig,
-                            );
-                        if (directionConfigIndex != -1) {
-                          currentConfigsOrdenamiento[directionConfigIndex] =
-                              ConfiguracionOrdenamiento(
-                                clave: _keySortDirectionConfig,
-                                titulo: "Dirección",
-                                tipo: TipoOrdenamiento.dropdown,
-                                opciones: defaultDirectionOptions,
-                                hintText: 'Selecciona dirección',
-                              );
-                        }
-                      });
-                      _aplicarFiltrosYOrdenamiento();
-                      Navigator.pop(context);
-                    },
-                  );
+                    }
+                  } else if (nuevoCampoDisplayName == null || nuevoCampoDisplayName == 'Ninguno') {
+                    esAscendente = true;
+                  }
+                  _sortAscending = esAscendente;
+                  if (nuevoCampoDisplayName != null && nuevoCampoDisplayName != 'Ninguno') {
+                    _sortColumnKey = _sortableFieldsWithTypes[nuevoCampoDisplayName]!['api_key'];
+                  } else {
+                    _sortColumnKey = null;
+                    _sortAscending = true;
+                  }
+                  _aplicarFiltrosYOrdenamiento();
+                  Navigator.pop(context);
+                },
+                onRestablecer: () {
+                  modalSetState(() {
+                    _sortColumnKey = null;
+                    _sortAscending = true;
+                    currentValoresOrdenamiento[_keySortColumnConfig] = 'Ninguno';
+                    currentValoresOrdenamiento[_keySortDirectionConfig] = null;
+                    final String? defaultFieldType = _getFieldTypeForSortableField('Ninguno');
+                    final Map<String, String> defaultDirectionLabels = _getDirectionDisplayLabels(defaultFieldType);
+                    final List<String> defaultDirectionOptions = defaultDirectionLabels.values.toList();
+                    int directionConfigIndex = currentConfigsOrdenamiento.indexWhere((c) => c.clave == _keySortDirectionConfig);
+                    if (directionConfigIndex != -1) {
+                      currentConfigsOrdenamiento[directionConfigIndex] = ConfiguracionOrdenamiento(
+                        clave: _keySortDirectionConfig,
+                        titulo: "Dirección",
+                        tipo: TipoOrdenamiento.dropdown,
+                        opciones: defaultDirectionOptions,
+                        hintText: 'Selecciona dirección',
+                      );
+                    }
+                  });
+                  _aplicarFiltrosYOrdenamiento();
+                  Navigator.pop(context);
                 },
               );
             },
-          ),
-    );
-  }
-
-  Widget _buildSortButton(BuildContext context, dynamic colors) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.isDarkMode;
-    final selectedFieldInfo = _getSelectedFieldInfo();
-
-    // Reemplazamos toda la estructura anterior por nuestro nuevo widget
-    return HoverableActionButton(
-      onTap: () {
-        _showSortOptionsUsingGenericWidget(context);
-      },
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            selectedFieldInfo != null ? selectedFieldInfo['icon'] : Icons.tune,
-            size: 20,
-            color:
-                _sortColumnKey != null
-                    ? Colors.blueAccent
-                    : (isDarkMode ? Colors.white : Colors.black87),
-          ),
-          if (_sortColumnKey != null) ...[
-            const SizedBox(width: 4),
-            Icon(
-              _sortAscending
-                  ? Icons.arrow_upward_rounded
-                  : Icons.arrow_downward_rounded,
-              size: 16,
-              color: Colors.blueAccent,
-            ),
-          ],
-        ],
+          );
+        },
       ),
     );
   }
-
-  Widget _buildModernStatusChip(String estado) {
-    final statusConfig = {
-      'Activo': {
-        'color': Colors.green,
-        'icon': Icons.check_circle_outline_rounded,
-      },
-      'Disponible': {'color': Colors.blue, 'icon': Icons.circle_outlined},
-      'Inactivo': {'color': Colors.red, 'icon': Icons.cancel_outlined},
-      'Liquidado': {'color': Colors.purple, 'icon': Icons.paid_outlined},
-      'Finalizado': {
-        'color': Colors.grey[600],
-        'icon': Icons.flag_circle_outlined,
-      },
-      'default': {'color': Colors.grey, 'icon': Icons.info_outline_rounded},
-    };
-    final config = statusConfig[estado] ?? statusConfig['default']!;
-    final color = config['color'] as Color;
-    final icon = config['icon'] as IconData;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 14),
-          const SizedBox(width: 4),
-          Text(
-            estado,
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- NUEVO MÉTODO PARA AGREGAR GRUPO ---
-  void _agregarGrupo() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      constraints: const BoxConstraints(maxWidth: double.infinity),
-      builder: (context) {
-        return LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final screenWidth = constraints.maxWidth;
-            final screenHeight = MediaQuery.of(context).size.height;
-
-            const double mobileBreakpoint = 768.0;
-
-            double dialogMaxWidth;
-            double dialogMaxHeight;
-
-            if (screenWidth < mobileBreakpoint) {
-              // --- LÓGICA MÓVIL ---
-              dialogMaxWidth = screenWidth;
-              dialogMaxHeight =
-                  screenHeight * 0.95; // Ocupa casi toda la altura
-            } else {
-              // --- LÓGICA DESKTOP ---
-              dialogMaxWidth = screenWidth * 0.8;
-              if (dialogMaxWidth > 1200) {
-                dialogMaxWidth = 1200;
-              }
-              dialogMaxHeight = screenHeight * 0.92;
-            }
-
-            return Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom,
-                ),
-                child: SizedBox(
-                  width: dialogMaxWidth,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxHeight: dialogMaxHeight),
-                    // ¡AQUÍ ESTÁ LA MAGIA! Llamamos a tu formulario de nuevo grupo.
-                    child: nGrupoForm(onGrupoAgregado: _onRefresh),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // --- NUEVO MÉTODO PARA EDITAR GRUPO ---
-  void _editarGrupo(Grupo grupo) {
-    // Copiamos la misma lógica para mantener la coherencia visual.
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      constraints: const BoxConstraints(maxWidth: double.infinity),
-      builder: (context) {
-        return LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final screenWidth = constraints.maxWidth;
-            final screenHeight = MediaQuery.of(context).size.height;
-            const double mobileBreakpoint = 768.0;
-
-            double dialogMaxWidth;
-            double dialogMaxHeight;
-
-            if (screenWidth < mobileBreakpoint) {
-              dialogMaxWidth = screenWidth;
-              dialogMaxHeight = screenHeight * 0.95;
-            } else {
-              dialogMaxWidth = screenWidth * 0.8;
-              if (dialogMaxWidth > 1200) {
-                dialogMaxWidth = 1200;
-              }
-              dialogMaxHeight = screenHeight * 0.92;
-            }
-
-            return Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom,
-                ),
-                child: SizedBox(
-                  width: dialogMaxWidth,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxHeight: dialogMaxHeight),
-                    // ¡AQUÍ ESTÁ LA MAGIA! Llamamos a tu formulario de edición.
-                    child: EditarGrupoForm(
-                      idGrupo: grupo.idgrupos,
-                      onGrupoEditado: _onRefresh,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildFilterButton(BuildContext context) => buildFilterButtonMobile(
-    context,
-    _filtrosActivos,
-    _configuracionesFiltros,
-    (filtros) {
-      setState(() => _filtrosActivos = Map.from(filtros));
-      _aplicarFiltrosYOrdenamiento();
-    },
-    () {
-      setState(() => _filtrosActivos.clear());
-      _aplicarFiltrosYOrdenamiento();
-    },
-  );
-  void _aplicarFiltrosYOrdenamiento() {
-    if (_isSearching && _currentSearchQuery.isNotEmpty) {
-      searchGrupos(_currentSearchQuery, page: 1);
-    } else {
-      obtenerGrupos(page: 1);
-    }
-  }
-
-  String _buildFilterQuery() {
-    List<String> params = [];
-    if (_estadoGrupoSeleccionadoFiltroAPI != null)
-      params.add(
-        'estado=${Uri.encodeComponent(_estadoGrupoSeleccionadoFiltroAPI!)}',
-      );
-    _filtrosActivos.forEach((key, value) {
-      if (value != null && value.toString().isNotEmpty)
-        params.add('$key=${Uri.encodeComponent(value.toString())}');
-    });
-    return params.join('&');
-  }
-
-  Widget buildFilterButtonMobile(
-    BuildContext context,
-    Map<String, dynamic> filtrosActivos,
-    List<ConfiguracionFiltro> configuracionesFiltros,
-    Function(Map<String, dynamic>) onAplicarFiltros,
-    VoidCallback onRestablecerFiltros,
-  ) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.isDarkMode;
-
-    int activeFilterCount =
-        filtrosActivos.entries.where((entry) {
-          return entry.value != null &&
-              entry.value.toString().toLowerCase() != 'todos';
-        }).length;
-
-    return HoverableActionButton(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder:
-              (modalContext) => DraggableScrollableSheet(
-                initialChildSize: 0.7,
-                minChildSize: 0.5,
-                maxChildSize: 0.95,
-                expand: false,
-                builder: (context, scrollController) {
-                  return FiltrosGenericosMobile(
-                    configuraciones: configuracionesFiltros,
-                    valoresIniciales: Map.from(filtrosActivos),
-                    // ADAPTADO: Título del modal de filtros.
-                    titulo: 'Filtros de Grupos',
-                    onAplicar: onAplicarFiltros,
-                    onRestablecer: onRestablecerFiltros,
-                  );
-                },
-              ),
-        );
-      },
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.filter_list_rounded,
-            size: 22,
-            color: isDarkMode ? Colors.white : Colors.black87,
-          ),
-          if (activeFilterCount > 0)
-            Container(
-              margin: const EdgeInsets.only(left: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.blueAccent,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '$activeFilterCount',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  //</editor-fold>
 }
