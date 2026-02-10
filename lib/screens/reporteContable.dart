@@ -392,214 +392,100 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
 
   // REEMPLAZA ESTA FUNCIÓN COMPLETA EN TU ARCHIVO
   Widget _buildDesktopTotalesCard(BuildContext context) {
-    final double totalCapital = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.capitalsemanal,
-    );
-    final double totalInteres = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.interessemanal,
-    );
-    final double totalFicha = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.montoficha,
-    );
+    final double totalCapIdeal = _filteredGrupos.fold(0.0, (sum, g) => sum + g.capitalsemanal);
+    final double totalIntIdeal = _filteredGrupos.fold(0.0, (sum, g) => sum + g.interessemanal);
+    final double totalFichaIdeal = _filteredGrupos.fold(0.0, (sum, g) => sum + g.montoficha);
 
-    // === CÁLCULO SIN GARANTÍA (EXISTENTE) ===
-    final double totalPagoficha = _filteredGrupos.fold(0.0, (sum, g) {
-      final depositosSinGarantia = g.pagoficha.depositos
-          .where((d) => d.garantia != 'Si')
-          .fold(0.0, (depSum, d) => depSum + d.deposito);
-      return sum + depositosSinGarantia + g.pagoficha.favorUtilizado;
+    final double totalPagoEf = _filteredGrupos.fold(0.0, (sum, g) {
+      final dEf = g.pagoficha.depositos.where((d) => d.garantia != 'Si').fold(0.0, (s, d) => s + d.deposito);
+      return sum + dEf + g.pagoficha.favorUtilizado;
     });
+    final double totalPagoConGarantia = _filteredGrupos.fold(0.0, (sum, g) => sum + g.pagoficha.sumaDeposito + g.pagoficha.favorUtilizado);
 
-    double totalCapitalRecaudadoPeriodo = 0;
-    double totalInteresRecaudadoPeriodo = 0;
+    double tCapAmortEf = 0; double tIntAmortEf = 0;
+    double tCapAmortTot = 0; double tIntAmortTot = 0;
+    double tCapRecupEf = 0; double tIntRecupEf = 0;
+    double tCapRecupTot = 0; double tIntRecupTot = 0;
 
     for (var g in _filteredGrupos) {
-      final pagoDepositosSinGarantia = g.pagoficha.depositos
-          .where((d) => d.garantia != 'Si')
-          .fold(0.0, (depSum, d) => depSum + d.deposito);
-      final pagoActual = pagoDepositosSinGarantia + g.pagoficha.favorUtilizado;
+      final ef = g.pagoficha.depositos.where((d) => d.garantia != 'Si').fold(0.0, (s, d) => s + d.deposito) + g.pagoficha.favorUtilizado;
+      final tot = g.pagoficha.sumaDeposito + g.pagoficha.favorUtilizado;
 
-      if (pagoActual > 0) {
-        final saldoGlobalAnterior = g.saldoGlobal - pagoActual;
-        final capitalPendienteAnterior = max(
-          0,
-          g.montoDesembolsado - saldoGlobalAnterior,
-        );
-        final capitalPendienteActual = max(
-          0,
-          g.montoDesembolsado - g.saldoGlobal,
-        );
-        final capitalRecaudadoEsteGrupo =
-            (capitalPendienteAnterior - capitalPendienteActual);
-        totalCapitalRecaudadoPeriodo += capitalRecaudadoEsteGrupo;
-        totalInteresRecaudadoPeriodo +=
-            (pagoActual - capitalRecaudadoEsteGrupo);
+      if (tot > 0) {
+        // Lógica Ficha (Gaviotas: Prioridad Capital)
+        final cAmortEf = min(ef, g.capitalsemanal);
+        tCapAmortEf += cAmortEf;
+        tIntAmortEf += (ef - cAmortEf);
+
+        final cAmortTot = min(tot, g.capitalsemanal);
+        tCapAmortTot += cAmortTot;
+        tIntAmortTot += (tot - cAmortTot);
+
+        // Lógica Inversión (Desembolso Real)
+        final saldoAnt = g.saldoGlobal - tot;
+        final cPendAnt = max(0.0, g.montoDesembolsado - saldoAnt);
+        final cPendAct = max(0.0, g.montoDesembolsado - g.saldoGlobal);
+        
+        final rCapTot = (cPendAnt - cPendAct).toDouble();
+        tCapRecupTot += rCapTot;
+        tIntRecupTot += (tot - rCapTot);
+
+        final rCapEf = min(ef, rCapTot);
+        tCapRecupEf += rCapEf;
+        tIntRecupEf += (ef - rCapEf);
       }
     }
 
-    // === INICIO: NUEVOS CÁLCULOS CON GARANTÍA PARA TOOLTIPS ===
-    final double totalPagofichaConGarantia = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.pagoficha.sumaDeposito + g.pagoficha.favorUtilizado,
-    );
-
-    double totalCapitalRecaudadoConGarantia = 0;
-    double totalInteresRecaudadoConGarantia = 0;
-
-    for (var g in _filteredGrupos) {
-      final pagoActualConGarantia =
-          g.pagoficha.sumaDeposito + g.pagoficha.favorUtilizado;
-      if (pagoActualConGarantia > 0) {
-        final saldoGlobalAnterior = g.saldoGlobal - pagoActualConGarantia;
-        final capitalPendienteAnterior = max(
-          0,
-          g.montoDesembolsado - saldoGlobalAnterior,
-        );
-        final capitalPendienteActual = max(
-          0,
-          g.montoDesembolsado - g.saldoGlobal,
-        );
-        final capitalRecaudado =
-            (capitalPendienteAnterior - capitalPendienteActual);
-        totalCapitalRecaudadoConGarantia += capitalRecaudado;
-        totalInteresRecaudadoConGarantia +=
-            (pagoActualConGarantia - capitalRecaudado);
-      }
-    }
-    // === FIN: NUEVOS CÁLCULOS CON GARANTÍA ===
-
-    final double totalSaldoDisponible = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.pagoficha.saldoDisponible,
-    );
-    final double totalMoratoriosPagados = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.pagoficha.sumaMoratorio,
-    );
-    final double totalTotal = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.montoficha,
-    );
-    final double restante = totalTotal - totalPagoficha;
-    final double nuevoTotalBruto =
-        totalPagoficha + totalSaldoDisponible + totalMoratoriosPagados;
-
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDarkMode = themeProvider.isDarkMode;
+    final double totalSaldoDisp = _filteredGrupos.fold(0.0, (sum, g) => sum + g.pagoficha.saldoDisponible);
+    final double totalMorPagados = _filteredGrupos.fold(0.0, (sum, g) => sum + g.pagoficha.sumaMoratorio);
+    final double nuevoTotalBruto = totalPagoEf + totalSaldoDisp + totalMorPagados;
+    final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
 
     return SizedBox(
       width: double.infinity,
       child: Card(
-        elevation: 1,
-        color: isDarkMode ? Colors.grey[800] : Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
-          side: BorderSide(
-            color: isDarkMode ? Colors.grey[700]! : Colors.grey[400]!,
-            width: 1,
-          ),
-        ),
+        elevation: 1, color: isDarkMode ? Colors.grey[800] : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6), side: BorderSide(color: isDarkMode ? Colors.grey[700]! : Colors.grey[400]!)),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           child: Row(
             children: [
-              const Text(
-                'Totales',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: primaryColor,
-                ),
-              ),
+              const Text('Totales', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: primaryColor)),
               const SizedBox(width: 16),
               Expanded(
                 child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  controller: widget.horizontalScrollController,
+                  scrollDirection: Axis.horizontal, controller: widget.horizontalScrollController,
                   child: Row(
                     children: [
-                      Container(
-                        height: 24,
-                        width: 1,
-                        color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
-                        margin: const EdgeInsets.only(right: 16),
-                      ),
-                      _buildDesktopSummaryItem(
-                        context,
-                        'Capital (Período)',
-                        totalCapital,
-                      ),
+                      Container(height: 24, width: 1, color: isDarkMode ? Colors.grey[700] : Colors.grey[300], margin: const EdgeInsets.only(right: 16)),
+                      _buildDesktopSummaryItem(context, 'Capital (Período)', totalCapIdeal),
                       const SizedBox(width: 24),
-                      _buildDesktopSummaryItem(
-                        context,
-                        'Interés (Período)',
-                        totalInteres,
-                      ),
+                      _buildDesktopSummaryItem(context, 'Interés (Período)', totalIntIdeal),
                       const SizedBox(width: 24),
-                      _buildDesktopSummaryItem(
-                        context,
-                        'Monto Fichas',
-                        totalFicha,
-                      ),
+                      _buildDesktopSummaryItem(context, 'Monto Fichas', totalFichaIdeal),
                       const SizedBox(width: 24),
-                      _buildDesktopSummaryItem(
-                        context,
-                        'Pago Fichas',
-                        totalPagoficha, // Valor sin garantía
-                        tooltipMessage:
-                            'Con Garantía: ${widget.currencyFormat.format(totalPagofichaConGarantia)}',
-                      ),
+                      _buildDesktopSummaryItem(context, 'Pago Fichas', totalPagoEf, 
+                          tooltipMessage: 'Con Garantía: ${widget.currencyFormat.format(totalPagoConGarantia)}'),
                       const SizedBox(width: 24),
-                      _buildDesktopSummaryItem(
-                        context,
-                        'Cap. Rec. (Período)',
-                        totalCapitalRecaudadoPeriodo, // Valor sin garantía
-                        tooltipMessage:
-                            'Con Garantía: ${widget.currencyFormat.format(totalCapitalRecaudadoConGarantia)}',
-                      ),
+                      _buildDesktopSummaryItem(context, 'Cap. Rec. (Período)', tCapAmortEf,
+                          tooltipMessage: 'Con Garantía: ${widget.currencyFormat.format(tCapAmortTot)}\n\n'
+                                         'Recup. Inversión: ${widget.currencyFormat.format(tCapRecupEf)}\n'
+                                         'Recup. Inversión (C. Garantía): ${widget.currencyFormat.format(tCapRecupTot)}'),
                       const SizedBox(width: 24),
-                      _buildDesktopSummaryItem(
-                        context,
-                        'Interés Rec. (Período)',
-                        totalInteresRecaudadoPeriodo, // Valor sin garantía
-                        tooltipMessage:
-                            'Con Garantía: ${widget.currencyFormat.format(totalInteresRecaudadoConGarantia)}',
-                      ),
+                      _buildDesktopSummaryItem(context, 'Interés Rec. (Período)', tIntAmortEf,
+                          tooltipMessage: 'Con Garantía: ${widget.currencyFormat.format(tIntAmortTot)}\n\n'
+                                         'Int. Inversión: ${widget.currencyFormat.format(tIntRecupEf)}\n'
+                                         'Int. Inversión (C. Garantía): ${widget.currencyFormat.format(tIntRecupTot)}'),
                       const SizedBox(width: 24),
-                      _buildDesktopSaldoFavorTotalItem(
-                        context,
-                        totalSaldoDisponible,
-                      ),
+                      _buildDesktopSaldoFavorTotalItem(context, totalSaldoDisp),
                       const SizedBox(width: 24),
-                      _buildDesktopSummaryItem(
-                        context,
-                        'Mor. Pag.',
-                        totalMoratoriosPagados,
-                      ),
+                      _buildDesktopSummaryItem(context, 'Mor. Pag.', totalMorPagados),
                       const SizedBox(width: 24),
-                      _buildDesktopSummaryItem(
-                        context,
-                        'Total Ideal',
-                        totalTotal,
-                        isPrimary: true,
-                      ),
+                      _buildDesktopSummaryItem(context, 'Total Ideal', totalFichaIdeal, isPrimary: true),
                       const SizedBox(width: 24),
-                      _buildDesktopSummaryItem(
-                        context,
-                        'Diferencia',
-                        restante,
-                        isPrimary: true,
-                      ),
+                      _buildDesktopSummaryItem(context, 'Diferencia', totalFichaIdeal - totalPagoEf, isPrimary: true),
                       const SizedBox(width: 24),
-                      _buildDesktopSummaryItem(
-                        context,
-                        'Total Bruto',
-                        nuevoTotalBruto,
-                        isPrimary: true,
-                      ),
+                      _buildDesktopSummaryItem(context, 'Total Bruto', nuevoTotalBruto, isPrimary: true),
                     ],
                   ),
                 ),
@@ -619,218 +505,138 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
 
   // REEMPLAZA ESTA FUNCIÓN COMPLETA EN TU ARCHIVO
   Widget _buildMobileTotalsSummary(BuildContext context) {
-    final double totalCapitalPeriodo = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.capitalsemanal,
-    );
-    final double totalInteresPeriodo = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.interessemanal,
-    );
+  // --- LÓGICA DE CÁLCULO (Sincronizada con Desktop) ---
+  final double totalCapIdeal = _filteredGrupos.fold(0.0, (sum, g) => sum + g.capitalsemanal);
+  final double totalIntIdeal = _filteredGrupos.fold(0.0, (sum, g) => sum + g.interessemanal);
+  final double totalFichaIdeal = _filteredGrupos.fold(0.0, (sum, g) => sum + g.montoficha);
 
-    // === CÁLCULO SIN GARANTÍA (EXISTENTE) ===
-    final double totalPagoficha = _filteredGrupos.fold(0.0, (sum, g) {
-      final depositosSinGarantia = g.pagoficha.depositos
-          .where((d) => d.garantia != 'Si')
-          .fold(0.0, (depSum, d) => depSum + d.deposito);
-      return sum + depositosSinGarantia + g.pagoficha.favorUtilizado;
-    });
+  final double totalPagoEf = _filteredGrupos.fold(0.0, (sum, g) {
+    final dEf = g.pagoficha.depositos.where((d) => d.garantia != 'Si').fold(0.0, (s, d) => s + d.deposito);
+    return sum + dEf + g.pagoficha.favorUtilizado;
+  });
+  
+  final double totalPagoConGarantia = _filteredGrupos.fold(0.0, (sum, g) => sum + g.pagoficha.sumaDeposito + g.pagoficha.favorUtilizado);
 
-    double totalCapitalRecaudadoPeriodo = 0;
-    double totalInteresRecaudadoPeriodo = 0;
-    for (var g in _filteredGrupos) {
-      final pagoDepositosSinGarantia = g.pagoficha.depositos
-          .where((d) => d.garantia != 'Si')
-          .fold(0.0, (depSum, d) => depSum + d.deposito);
-      final pagoActual = pagoDepositosSinGarantia + g.pagoficha.favorUtilizado;
-      if (pagoActual > 0) {
-        final saldoGlobalAnterior = g.saldoGlobal - pagoActual;
-        final capitalPendienteAnterior = max(
-          0,
-          g.montoDesembolsado - saldoGlobalAnterior,
-        );
-        final capitalPendienteActual = max(
-          0,
-          g.montoDesembolsado - g.saldoGlobal,
-        );
-        final capitalRecaudadoEsteGrupo =
-            (capitalPendienteAnterior - capitalPendienteActual);
-        totalCapitalRecaudadoPeriodo += capitalRecaudadoEsteGrupo;
-        totalInteresRecaudadoPeriodo +=
-            (pagoActual - capitalRecaudadoEsteGrupo);
-      }
+  double tCapAmortEf = 0;   double tIntAmortEf = 0;
+  double tCapAmortTot = 0;  double tIntAmortTot = 0;
+  double tCapRecupEf = 0;   double tIntRecupEf = 0;
+  double tCapRecupTot = 0;  double tIntRecupTot = 0;
+
+  for (var g in _filteredGrupos) {
+    final ef = g.pagoficha.depositos.where((d) => d.garantia != 'Si').fold(0.0, (s, d) => s + d.deposito) + g.pagoficha.favorUtilizado;
+    final tot = g.pagoficha.sumaDeposito + g.pagoficha.favorUtilizado;
+
+    if (tot > 0) {
+      // Lógica Ficha (Prioridad Capital Semanal)
+      final cAmortEf = min(ef, g.capitalsemanal);
+      tCapAmortEf += cAmortEf;
+      tIntAmortEf += (ef - cAmortEf);
+
+      final cAmortTot = min(tot, g.capitalsemanal);
+      tCapAmortTot += cAmortTot;
+      tIntAmortTot += (tot - cAmortTot);
+
+      // Lógica Inversión (Desembolso Real) - IGUAL A DESKTOP
+      final saldoAnt = g.saldoGlobal - tot;
+      final cPendAnt = max(0.0, g.montoDesembolsado - saldoAnt);
+      final cPendAct = max(0.0, g.montoDesembolsado - g.saldoGlobal);
+      
+      final rCapTot = (cPendAnt - cPendAct).toDouble();
+      tCapRecupTot += rCapTot;
+      tIntRecupTot += (tot - rCapTot);
+
+      final rCapEf = min(ef, rCapTot);
+      tCapRecupEf += rCapEf;
+      tIntRecupEf += (ef - rCapEf);
     }
-
-    // === INICIO: NUEVOS CÁLCULOS CON GARANTÍA PARA TOOLTIPS ===
-    final double totalPagofichaConGarantia = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.pagoficha.sumaDeposito + g.pagoficha.favorUtilizado,
-    );
-
-    double totalCapitalRecaudadoConGarantia = 0;
-    double totalInteresRecaudadoConGarantia = 0;
-
-    for (var g in _filteredGrupos) {
-      final pagoActualConGarantia =
-          g.pagoficha.sumaDeposito + g.pagoficha.favorUtilizado;
-      if (pagoActualConGarantia > 0) {
-        final saldoGlobalAnterior = g.saldoGlobal - pagoActualConGarantia;
-        final capitalPendienteAnterior = max(
-          0,
-          g.montoDesembolsado - saldoGlobalAnterior,
-        );
-        final capitalPendienteActual = max(
-          0,
-          g.montoDesembolsado - g.saldoGlobal,
-        );
-        final capitalRecaudado =
-            (capitalPendienteAnterior - capitalPendienteActual);
-        totalCapitalRecaudadoConGarantia += capitalRecaudado;
-        totalInteresRecaudadoConGarantia +=
-            (pagoActualConGarantia - capitalRecaudado);
-      }
-    }
-    // === FIN: NUEVOS CÁLCULOS CON GARANTÍA ===
-
-    final double totalSaldoDisponible = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.pagoficha.saldoDisponible,
-    );
-    final double totalMoratoriosPagados = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.pagoficha.sumaMoratorio,
-    );
-    final double totalFicha = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.montoficha,
-    );
-    final double totalTotal = _filteredGrupos.fold(
-      0.0,
-      (sum, g) => sum + g.montoficha,
-    );
-    final double restante = totalTotal - totalPagoficha;
-    final double nuevoTotalBruto =
-        totalPagoficha + totalSaldoDisponible + totalMoratoriosPagados;
-
-    final colors = Provider.of<ThemeProvider>(context).colors;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colors.backgroundCard,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
-        ],
-      ),
-      child: Column(
-        children: [
-          const Text(
-            'Resumen Financiero Total',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: primaryColor,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Desglose Ideal del Período',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: analysisColor,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _buildMobileDetailRow(
-            context,
-            'Capital Total (Período)',
-            widget.currencyFormat.format(totalCapitalPeriodo),
-          ),
-          _buildMobileDetailRow(
-            context,
-            'Interés Total (Período)',
-            widget.currencyFormat.format(totalInteresPeriodo),
-          ),
-          const Divider(height: 16),
-          _buildMobileDetailRow(
-            context,
-            'Monto Total Fichas',
-            widget.currencyFormat.format(totalFicha),
-          ),
-          _buildMobileDetailRow(
-            context,
-            'Pago Total Fichas',
-            widget.currencyFormat.format(totalPagoficha), // Valor sin garantía
-            tooltipMessage:
-                'Con Garantía: ${widget.currencyFormat.format(totalPagofichaConGarantia)}',
-          ),
-          const Divider(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4.0),
-            child: Text(
-              'Desglose de Pagos del Período',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: analysisColor,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          _buildMobileDetailRow(
-            context,
-            'Capital Recaudado (Período)',
-            widget.currencyFormat.format(
-              totalCapitalRecaudadoPeriodo,
-            ), // Valor sin garantía
-            tooltipMessage:
-                'Con Garantía: ${widget.currencyFormat.format(totalCapitalRecaudadoConGarantia)}',
-          ),
-          _buildMobileDetailRow(
-            context,
-            'Interés Recaudado (Período)',
-            widget.currencyFormat.format(
-              totalInteresRecaudadoPeriodo,
-            ), // Valor sin garantía
-            valueColor:
-                totalInteresRecaudadoPeriodo > 0 ? Colors.green.shade700 : null,
-            tooltipMessage:
-                'Con Garantía: ${widget.currencyFormat.format(totalInteresRecaudadoConGarantia)}',
-          ),
-          const Divider(height: 16),
-          _buildMobileDetailRow(
-            context,
-            'Moratorios Pag.',
-            widget.currencyFormat.format(totalMoratoriosPagados),
-            valueColor:
-                totalMoratoriosPagados > 0 ? Colors.green.shade600 : null,
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            decoration: BoxDecoration(
-              color: primaryColor,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildMobileTotalItem('Total Ideal', totalTotal),
-                    _buildMobileTotalItem('Diferencia', restante),
-                  ],
-                ),
-                const Divider(color: Colors.white30, height: 20),
-                _buildMobileTotalItem('Total Bruto', nuevoTotalBruto),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
+
+  final double totalSaldoDisp = _filteredGrupos.fold(0.0, (sum, g) => sum + g.pagoficha.saldoDisponible);
+  final double totalMorPagados = _filteredGrupos.fold(0.0, (sum, g) => sum + g.pagoficha.sumaMoratorio);
+  final double nuevoTotalBruto = totalPagoEf + totalSaldoDisp + totalMorPagados;
+  
+  final colors = Provider.of<ThemeProvider>(context).colors;
+
+  // --- DISEÑO DE LA INTERFAZ ---
+  return Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: colors.backgroundCard, 
+      borderRadius: BorderRadius.circular(12), 
+      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)]
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Center(
+          child: Text('Resumen Financiero Total', 
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: primaryColor)),
+        ),
+        const SizedBox(height: 16),
+        
+        // SECCIÓN: IDEAL
+        _buildSectionTitle('Desglose Ideal del Período', analysisColor),
+        _buildMobileDetailRow(context, 'Capital (Período)', widget.currencyFormat.format(totalCapIdeal)),
+        _buildMobileDetailRow(context, 'Interés (Período)', widget.currencyFormat.format(totalIntIdeal)),
+        _buildMobileDetailRow(context, 'Monto Total Fichas', widget.currencyFormat.format(totalFichaIdeal)),
+        
+        const Divider(height: 24),
+
+        // SECCIÓN: RECAUDADO
+        _buildSectionTitle('Desglose de Pagos (Recaudado)', analysisColor),
+        _buildMobileDetailRow(context, 'Pago Fichas (Efec)', widget.currencyFormat.format(totalPagoEf), 
+            tooltipMessage: 'Con Garantía: ${widget.currencyFormat.format(totalPagoConGarantia)}'),
+        
+        _buildMobileDetailRow(context, 'Cap. Rec. (Período)', widget.currencyFormat.format(tCapAmortEf),
+            tooltipMessage: 'Con Garantía: ${widget.currencyFormat.format(tCapAmortTot)}\n\n'
+                           'Recup. Inversión: ${widget.currencyFormat.format(tCapRecupEf)}\n'
+                           'Recup. Inversión (C. Garantía): ${widget.currencyFormat.format(tCapRecupTot)}'),
+        
+        _buildMobileDetailRow(context, 'Int. Rec. (Período)', widget.currencyFormat.format(tIntAmortEf), 
+            valueColor: tIntAmortEf > 0 ? Colors.green.shade700 : null,
+            tooltipMessage: 'Con Garantía: ${widget.currencyFormat.format(tIntAmortTot)}\n\n'
+                           'Int. Inversión: ${widget.currencyFormat.format(tIntRecupEf)}\n'
+                           'Int. Inversión (C. Garantía): ${widget.currencyFormat.format(tIntRecupTot)}'),
+        
+        const Divider(height: 24),
+
+        // SECCIÓN: OTROS
+        _buildSectionTitle('Otros Conceptos', analysisColor),
+        _buildMobileDetailRow(context, 'Saldo a Favor Total', widget.currencyFormat.format(totalSaldoDisp)),
+        _buildMobileDetailRow(context, 'Moratorios Pag.', widget.currencyFormat.format(totalMorPagados)),
+        
+        const SizedBox(height: 16),
+
+        // SECCIÓN: TOTALES RESALTADOS
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(color: primaryColor, borderRadius: BorderRadius.circular(8)),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround, 
+                children: [
+                  _buildMobileTotalItem('Ideal', totalFichaIdeal),
+                  _buildMobileTotalItem('Diferencia', totalFichaIdeal - totalPagoEf),
+                ],
+              ),
+              const Divider(color: Colors.white30, height: 20),
+              _buildMobileTotalItem('Total Bruto (Efectivo)', nuevoTotalBruto),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+// Helper para títulos de sección internos
+Widget _buildSectionTitle(String title, Color color) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 8.0),
+    child: Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+  );
+}
 
   // =========================================================================
   // === RESTO DE WIDGETS AUXILIARES (SIN CAMBIOS FUNCIONALES) ===============
@@ -931,14 +737,342 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
                 const SizedBox(height: 12),
                 _buildMobileDetailSection(
                   context,
-                  'Análisis de Recuperación',
+                  'Recuperación de Inversión',
                   Icons.insights,
                   _buildMobileAnalysisSection(context, grupo),
+                ),
+
+                // NUEVA SECCIÓN VISIÓN 2
+                const SizedBox(height: 12),
+                _buildMobileDetailSection(
+                  context,
+                  'Desglose Capital e Interés',
+                  Icons.account_balance_wallet,
+                  _buildMobileAmortizationSection(context, grupo),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // VISIÓN 2 MÓVIL: ESTADO DE CUENTA PROPORCIONAL
+  // VISIÓN 2 MÓVIL: COMBINADA
+  // VISIÓN 2 MÓVIL: CORREGIDA
+  // VISIÓN 2 MÓVIL (FINAL)
+// REEMPLAZA ESTA FUNCIÓN COMPLETA EN TU ARCHIVO
+// FUNCIÓN PARA LA VISTA MÓVIL
+Widget _buildMobileAmortizationSection(
+  BuildContext context,
+  ReporteContableGrupo grupo,
+) {
+  final colors = Provider.of<ThemeProvider>(context).colors;
+  final interesSinRedondear = grupo.interessemanal * grupo.plazo;
+  // 1. CÁLCULOS BASE
+  final double interesSinRedondearTotal = grupo.interessemanal * grupo.plazo;
+  final double capSemanal = grupo.capitalsemanal;
+  final double intSemanal = grupo.interessemanal;
+  final double montoFichaReal = grupo.montoficha;
+
+  final double pagoActualTotal =
+      grupo.pagoficha.sumaDeposito + grupo.pagoficha.favorUtilizado;
+  final double pagoGlobalTotal = grupo.saldoGlobal;
+  final double deudaTotalCap = grupo.montoSolicitado;
+  final double deudaTotalInt =
+      grupo.interesCredito; // Este ya incluye redondeo
+
+  // 2. CÁLCULOS DE REDONDEO
+  final double diferenciaRedondeoSemanal = max(
+    0,
+    grupo.montoficha - (capSemanal + intSemanal),
+  );
+  final double totalRedondeoAcumulado =
+      diferenciaRedondeoSemanal * grupo.plazo;
+
+  // Determinamos en qué semana va el grupo (Progreso)
+  // Si el grupo ya terminó o se pasó, topamos al plazo máximo
+  double semanasPagadas = 0;
+  if (montoFichaReal > 0) {
+    semanasPagadas = pagoGlobalTotal / montoFichaReal;
+  }
+
+  final double redondeoPagado = diferenciaRedondeoSemanal * semanasPagadas;
+  final double redondeoRestante = max(
+    0,
+    totalRedondeoAcumulado - redondeoPagado,
+  );
+
+  // 3. DISTRIBUCIÓN DE PAGOS (Proporcional)
+  double capActual = 0;
+  double intActual = 0;
+  double capAcumulado = 0;
+  double intAcumulado = 0;
+
+  // =======================================================================
+  // === INICIO DE LA CORRECCIÓN LÓGICA ====================================
+  // =======================================================================
+  // La distribución del pago actual ahora prioriza el capital.
+  if (pagoActualTotal > 0) {
+    // 1. El abono a capital es el pago total, pero sin exceder el capital semanal.
+    capActual = min(pagoActualTotal, capSemanal);
+    // 2. El abono a interés es el resto del pago después de cubrir el capital.
+    intActual = pagoActualTotal - capActual;
+  }
+  // =======================================================================
+  // === FIN DE LA CORRECCIÓN LÓGICA =======================================
+  // =======================================================================
+
+  // El cálculo del acumulado se mantiene proporcional como una estimación histórica.
+  if (montoFichaReal > 0) {
+    final double ratioCap = capSemanal / montoFichaReal;
+    if (pagoGlobalTotal > 0) {
+      capAcumulado = pagoGlobalTotal * ratioCap;
+      intAcumulado = pagoGlobalTotal - capAcumulado;
+    }
+  }
+
+  final double capRestante = max(0, deudaTotalCap - capAcumulado);
+  final double intRestante = max(0, deudaTotalInt - intAcumulado);
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4.0),
+        child: Text(
+          'Distribución del Pago Actual',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: colors.textPrimary,
+          ),
+        ),
+      ),
+      SizedBox(height: 8),
+      _buildMobileDetailRow(
+        context,
+        'Abono a Capital',
+        widget.currencyFormat.format(capActual),
+        subValue: "S/Redondeo: ${widget.currencyFormat.format(capSemanal)}",
+      ),
+      _buildMobileDetailRow(
+        context,
+        'Abono a Interés',
+        widget.currencyFormat.format(intActual),
+        subValue: "S/Redondeo: ${widget.currencyFormat.format(intSemanal)}",
+        valueColor: Colors.teal.shade700,
+      ),
+      const SizedBox(height: 16),
+      Divider(color: Colors.grey.withOpacity(0.2)),
+      const SizedBox(height: 8),
+
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4.0),
+        child: Text(
+          'Estado de Cuenta Global (Acumulado)',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: colors.textPrimary,
+          ),
+        ),
+      ),
+      const SizedBox(height: 8),
+
+      _buildSectionHeader(context, "PAGADO HASTA LA FECHA", Colors.teal),
+      _buildMobileDetailRow(
+        context,
+        'Capital Pagado',
+        widget.currencyFormat.format(capAcumulado),
+        valueColor: Colors.teal.shade700,
+      ),
+      _buildMobileDetailRow(
+        context,
+        'Interés Pagado',
+        widget.currencyFormat.format(intAcumulado),
+        subValue:
+            "Incluye redondeo: ${widget.currencyFormat.format(redondeoPagado)}", // <--- AGREGADO
+        valueColor: Colors.teal.shade700,
+      ),
+
+      const SizedBox(height: 12),
+
+      _buildSectionHeader(
+        context,
+        "PENDIENTE POR PAGAR",
+        Colors.orange.shade800,
+      ),
+      _buildMobileDetailRow(
+        context,
+        'Capital Restante',
+        widget.currencyFormat.format(capRestante),
+      ),
+      _buildMobileDetailRow(
+        context,
+        'Interés Restante',
+        widget.currencyFormat.format(intRestante),
+        subValue:
+            "Falta por redondeo: ${widget.currencyFormat.format(redondeoRestante)}", // <--- AGREGADO
+      ),
+
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colors.backgroundCardDark.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.withOpacity(0.1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "DESGLOSE DEUDA ORIGINAL (TOTAL)",
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: colors.textSecondary,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Capital
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "Capital Base",
+                  style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                ),
+                Text(
+                  widget.currencyFormat.format(deudaTotalCap),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colors.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+
+            // Interés Base
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Interés Base (Sin redondear)",
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                  Text(
+                    widget.currencyFormat.format(interesSinRedondear),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.textPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Redondeo
+            if (totalRedondeoAcumulado > 0.01) ...[
+              Divider(color: Colors.grey.withOpacity(0.2)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.add_circle_outline,
+                        size: 12,
+                        color: Colors.orange.shade700,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        "Redondeo Acumulado",
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: colors.textSecondary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    widget.currencyFormat.format(totalRedondeoAcumulado),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.orange.shade700,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 2.0),
+                child: Text(
+                  "(${widget.currencyFormat.format(diferenciaRedondeoSemanal)} x ${grupo.plazo} pagos)",
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: colors.textSecondary.withOpacity(0.7),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 6),
+              // Total Cobrable
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Total a Cobrar en Fichas",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: primaryColor,
+                    ),
+                  ),
+                  Text(
+                    widget.currencyFormat.format(
+                      deudaTotalCap + deudaTotalInt,
+                    ),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: primaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+  // Helper para títulos pequeños en móvil (si no lo tienes definido)
+  Widget _buildSectionHeader(BuildContext context, String title, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6.0),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: color,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }
@@ -986,6 +1120,7 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
     BuildContext context,
     ReporteContableGrupo grupo,
   ) {
+    final interesSinRedondear = grupo.interessemanal * grupo.plazo;
     final periodoText = grupo.tipopago == "SEMANAL" ? "Semanal" : "Quincenal";
     return Column(
       children: [
@@ -1009,7 +1144,7 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
                   _buildMobileFinancialItem(
                     context,
                     'Interés Total',
-                    widget.currencyFormat.format(grupo.interesCredito),
+                    widget.currencyFormat.format(interesSinRedondear),
                   ),
                   _buildMobileFinancialItem(
                     context,
@@ -1820,13 +1955,16 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
     BuildContext context,
     String label,
     String value, {
+    String? subValue, // <--- Nuevo parámetro
     Color? valueColor,
     String? tooltipMessage,
   }) {
     final colors = Provider.of<ThemeProvider>(context).colors;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start, // Alinea arriba si hay dos líneas
         children: [
           Expanded(
             child: Text(
@@ -1835,35 +1973,42 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: valueColor ?? colors.textPrimary,
-            ),
+          Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.end, // Alinea montos a la derecha
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: valueColor ?? colors.textPrimary,
+                ),
+              ),
+              if (subValue != null)
+                Text(
+                  subValue,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: colors.textSecondary.withOpacity(0.8),
+                    //fontStyle: FontStyle.italic,
+                  ),
+                ),
+            ],
           ),
-          // === INICIO DEL CAMBIO: Ícono condicional con Tooltip ===
           if (tooltipMessage != null)
             Padding(
               padding: const EdgeInsets.only(left: 6.0),
               child: Tooltip(
                 message: tooltipMessage,
-                triggerMode: TooltipTriggerMode.longPress,
-                waitDuration: const Duration(milliseconds: 300),
-                decoration: BoxDecoration(
-                  color: Colors.black87,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+                // ... resto de tu configuración de tooltip
                 child: Icon(
                   Icons.info_outline,
-                  size: 16,
+                  size: 14,
                   color: colors.textSecondary,
                 ),
               ),
             ),
-          // === FIN DEL CAMBIO ===
         ],
       ),
     );
@@ -2023,12 +2168,14 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
 
   // REEMPLAZA ESTA FUNCIÓN COMPLETA
 
+  // Reemplaza esta función completa en tu archivo
   Widget _buildDesktopGrupoCard(
     BuildContext context,
     ReporteContableGrupo grupo,
   ) {
     final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
     final colors = Provider.of<ThemeProvider>(context).colors;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 1,
@@ -2045,6 +2192,7 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // --- HEADER DEL CARD ---
             Row(
               children: [
                 Expanded(
@@ -2088,21 +2236,33 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
               thickness: 0.5,
               color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
             ),
+            
+            // --- CUERPO DEL CARD (CORREGIDO) ---
+            // 1. Eliminamos SingleChildScrollView (para que ocupe todo el ancho).
+            // 2. Eliminamos IntrinsicHeight (para evitar el error con el ListView).
+            // 3. Usamos Expanded con flex para distribuir el espacio.
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // COLUMNA 1: CLIENTES
-                Expanded(child: _buildDesktopClientesSection(grupo, context)),
-                const SizedBox(width: 20),
+                // Flex 4: Le damos más prioridad de ancho (aprox 25%)
+                Expanded(
+                  flex: 4, 
+                  child: _buildDesktopClientesSection(grupo, context),
+                ),
+                const SizedBox(width: 12),
+
                 // COLUMNA 2: INFORMACIÓN FINANCIERA
-                SizedBox(
-                  width: 270,
+                // Flex 3: Un poco menos de ancho que clientes
+                Expanded(
+                  flex: 3,
                   child: _buildDesktopFinancialColumn(context, grupo),
                 ),
-                const SizedBox(width: 20),
+                const SizedBox(width: 12),
+
                 // COLUMNA 3: DEPÓSITOS
-                SizedBox(
-                  width: 270,
+                Expanded(
+                  flex: 3,
                   child: _buildDesktopDepositosSection(
                     context,
                     grupo.pagoficha,
@@ -2110,11 +2270,19 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
                     grupo,
                   ),
                 ),
-                const SizedBox(width: 20),
-                // === NUEVA COLUMNA 4: ANÁLISIS DE RECUPERACIÓN ===
-                SizedBox(
-                  width: 270,
+                const SizedBox(width: 12),
+
+                // COLUMNA 4: RECUPERACIÓN DE INVERSIÓN
+                Expanded(
+                  flex: 3,
                   child: _buildCapitalRecoverySection(context, grupo),
+                ),
+                const SizedBox(width: 12),
+
+                // COLUMNA 5: Desglose Capital e Interés
+                Expanded(
+                  flex: 3,
+                  child: _buildAccountingAmortizationSection(context, grupo),
                 ),
               ],
             ),
@@ -2123,6 +2291,526 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
       ),
     );
   }
+
+  // NUEVA SECCIÓN: VISIÓN 2 (DISTRIBUCIÓN CAPITAL/INTERÉS POR CALENDARIO)
+// REEMPLAZA ESTA FUNCIÓN COMPLETA EN TU ARCHIVO
+// FUNCIÓN PARA LA VISTA DE ESCRITORIO
+Widget _buildAccountingAmortizationSection(
+  BuildContext context,
+  ReporteContableGrupo grupo,
+) {
+  final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
+  final accountingColor = Colors.teal.shade700;
+  final colors = Provider.of<ThemeProvider>(context).colors;
+
+  // --- CÁLCULOS BASE ---
+  final double capSemanal = grupo.capitalsemanal;
+  final double intSemanal = grupo.interessemanal;
+  final double montoFichaReal = grupo.montoficha;
+
+  // Deuda Total
+  final double deudaTotalCap = grupo.montoSolicitado;
+  final double deudaTotalInt = grupo.interesCredito;
+
+  // Pagos
+  final double pagoActualTotal =
+      grupo.pagoficha.sumaDeposito + grupo.pagoficha.favorUtilizado;
+  final double pagoGlobalTotal = grupo.saldoGlobal;
+
+  // --- CÁLCULOS DE REDONDEO ---
+  final double pagoTeoricoSemanal = capSemanal + intSemanal;
+  final double diferenciaRedondeoSemanal = max(
+    0,
+    montoFichaReal - pagoTeoricoSemanal,
+  );
+  final double totalRedondeoAcumulado =
+      diferenciaRedondeoSemanal * grupo.plazo;
+
+  double semanasPagadas = 0;
+  if (montoFichaReal > 0) {
+    semanasPagadas = pagoGlobalTotal / montoFichaReal;
+  }
+
+  final double redondeoPagado = diferenciaRedondeoSemanal * semanasPagadas;
+  final double redondeoRestante = max(
+    0,
+    totalRedondeoAcumulado - redondeoPagado,
+  );
+
+  // --- CÁLCULOS DE AMORTIZACIÓN ---
+  double capActual = 0;
+  double intActual = 0;
+  double capAcumulado = 0;
+  double intAcumulado = 0;
+
+  // =======================================================================
+  // === INICIO DE LA CORRECCIÓN LÓGICA ====================================
+  // =======================================================================
+  // La distribución del pago actual ahora prioriza el capital.
+  if (pagoActualTotal > 0) {
+    // 1. El abono a capital es el pago total, pero sin exceder el capital semanal.
+    capActual = min(pagoActualTotal, capSemanal);
+    // 2. El abono a interés es el resto del pago después de cubrir el capital.
+    intActual = pagoActualTotal - capActual;
+  }
+  // =======================================================================
+  // === FIN DE LA CORRECCIÓN LÓGICA =======================================
+  // =======================================================================
+
+  // El cálculo del acumulado se mantiene proporcional como una estimación histórica.
+  if (montoFichaReal > 0) {
+    if (pagoGlobalTotal > 0) {
+      final double ratioCap = capSemanal / montoFichaReal;
+      capAcumulado = pagoGlobalTotal * ratioCap;
+      intAcumulado = pagoGlobalTotal - capAcumulado;
+    }
+  }
+
+  final double capRestante = max(0, deudaTotalCap - capAcumulado);
+  final double intRestante = max(0, deudaTotalInt - intAcumulado);
+
+  // --- HELPER LOCAL PARA CONSTRUIR LA CAJA PERSONALIZADA ---
+  Widget _buildBoxWithBase(
+    String label,
+    double realValue,
+    double baseValue,
+    Color valueColor,
+  ) {
+    // ... (El resto de esta función se mantiene sin cambios)
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      decoration: BoxDecoration(
+        color:
+            isDarkMode ? Colors.grey[800]!.withOpacity(0.5) : Colors.grey[50],
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Etiqueta
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+
+          // Valor Real (Grande)
+          Text(
+            widget.currencyFormat.format(realValue),
+            style: TextStyle(
+              fontSize: 11, // Un poco más grande para destacar
+              fontWeight: FontWeight.bold,
+              color: valueColor,
+            ),
+          ),
+
+          // Línea divisoria sutil
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0),
+            child: Divider(
+              height: 1,
+              color: isDarkMode ? Colors.grey[600] : Colors.grey[300],
+            ),
+          ),
+
+          // Valor Base (Pequeño - DENTRO de la caja)
+          Row(
+            children: [
+              Text(
+                "Base: ",
+                style: TextStyle(
+                  fontSize: 9,
+                  color: colors.textSecondary.withOpacity(0.7),
+                ),
+              ),
+              Text(
+                widget.currencyFormat.format(baseValue),
+                style: TextStyle(
+                  fontSize: 9,
+                  color: colors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(8),
+    decoration: BoxDecoration(
+      color: isDarkMode ? Colors.transparent : Colors.white,
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(
+        color:
+            isDarkMode
+                ? accountingColor.withOpacity(0.6)
+                : accountingColor.withOpacity(0.4),
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // CABECERA
+        Row(
+          children: [
+            Icon(
+              Icons.account_balance_wallet,
+              size: 14,
+              color: accountingColor,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Desglose Capital e Interés',
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 11,
+                color: accountingColor,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // --- SECCIÓN 1: PAGO ACTUAL ---
+        Text(
+          "Distribución Pago Actual",
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 6),
+
+        // AQUÍ USAMOS EL NUEVO BUILDER PERSONALIZADO
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // CAJA CAPITAL
+            Expanded(
+              child: _buildBoxWithBase(
+                'Abono Cap. (Real)',
+                capActual,
+                capSemanal, // Valor Base
+                isDarkMode ? Colors.white : Colors.black87,
+              ),
+            ),
+            const SizedBox(width: 8), // Espacio entre cajas
+            // CAJA INTERÉS
+            Expanded(
+              child: _buildBoxWithBase(
+                'Abono Int. (Real)',
+                intActual,
+                intSemanal, // Valor Base
+                accountingColor,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 12),
+        Divider(
+          height: 1,
+          color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
+        ),
+        const SizedBox(height: 12),
+
+        // --- SECCIÓN 2: ACUMULADO ---
+        Text(
+          "Estado Global (Acumulado)",
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 6),
+
+        // FILA DE PAGADOS (Igual que antes)
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _buildFinancialColumnItem(
+                context,
+                "Cap. Pagado",
+                capAcumulado,
+                color: accountingColor,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Column(
+                children: [
+                  _buildFinancialColumnItem(
+                    context,
+                    "Int. Pagado",
+                    intAcumulado,
+                    color: accountingColor,
+                  ),
+                  if (redondeoPagado > 0.01)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2.0),
+                      child: Text(
+                        "+ Redondeo: ${widget.currencyFormat.format(redondeoPagado)}",
+                        style: TextStyle(
+                          fontSize: 8.5,
+                          color: Colors.orange.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 8),
+
+        // FILA DE RESTANTES (Igual que antes)
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _buildFinancialColumnItem(
+                context,
+                "Cap. Restante",
+                capRestante,
+                isWarning: true,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Column(
+                children: [
+                  _buildFinancialColumnItem(
+                    context,
+                    "Int. Restante",
+                    intRestante,
+                    isWarning: true,
+                  ),
+                  if (redondeoRestante > 0.01)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2.0),
+                      child: Text(
+                        "+ Redondeo: ${widget.currencyFormat.format(redondeoRestante)}",
+                        style: TextStyle(
+                          fontSize: 8.5,
+                          color: Colors.orange.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 8),
+
+        // --- SECCIÓN 3: TOTALES ORIGINALES ---
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: isDarkMode ? Colors.grey[800] : Colors.grey[100],
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+               Text(
+              "Desglose Deuda Original (Total)",
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                color: colors.textSecondary,
+              ),
+            ),
+              const SizedBox(height: 8),
+              _buildMiniRow(
+                context,
+                "Capital Base:",
+                deudaTotalCap,
+                isBold: true,
+              ),
+              _buildMiniRow(
+                context,
+                "Interés Base:",
+                deudaTotalInt,
+                isBold: true,
+              ),
+              if (totalRedondeoAcumulado > 0.01) ...[
+                Divider(height: 6, color: Colors.grey.withOpacity(0.3)),
+                _buildMiniRowRedondeo(
+                  context,
+                  "Redondeo Total:",
+                  totalRedondeoAcumulado,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+  // Helpers pequeños al final para limpiar el código
+  Widget _buildMiniRow(
+    BuildContext context,
+    String label,
+    double value, {
+    bool isBold = false,
+  }) {
+    final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9,
+            color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+          ),
+        ),
+        Text(
+          widget.currencyFormat.format(value),
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            color: isDarkMode ? Colors.grey[300] : Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMiniRowRedondeo(
+    BuildContext context,
+    String label,
+    double value,
+  ) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9,
+            color: Colors.grey[600],
+          ),
+        ),
+        Text(
+          widget.currencyFormat.format(value),
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w500,
+            color: Colors.orange.shade700,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Helper actualizado para usar color personalizado
+  Widget _buildFinancialColumnItem(
+    BuildContext context,
+    String label,
+    double value, {
+    bool isWarning = false,
+    Color? color,
+  }) {
+    final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
+    Color textColor;
+    if (isWarning) {
+      textColor = Colors.orange.shade700;
+    } else if (color != null) {
+      textColor = color;
+    } else {
+      textColor = isDarkMode ? Colors.grey[300]! : Colors.black87;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9,
+            color: isDarkMode ? Colors.grey[500] : Colors.grey[500],
+          ),
+        ),
+        Text(
+          widget.currencyFormat.format(value),
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
+  // Helper pequeño para mostrar valores simples con color
+  Widget _buildSimpleValue(BuildContext context, double value, {Color? color}) {
+    return Text(
+      widget.currencyFormat.format(value),
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+        color:
+            color ??
+            (Provider.of<ThemeProvider>(context).isDarkMode
+                ? Colors.white
+                : Colors.black),
+      ),
+    );
+  }
+
+  /* // Helper para mostrar etiqueta y valor verticalmente
+  Widget _buildFinancialColumnItem(BuildContext context, String label, double value, {bool isWarning = false}) {
+    final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9,
+            color: isDarkMode ? Colors.grey[500] : Colors.grey[500],
+          ),
+        ),
+        Text(
+          widget.currencyFormat.format(value),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: isWarning ? Colors.orange.shade700 : (isDarkMode ? Colors.grey[300] : Colors.black87),
+          ),
+        ),
+      ],
+    );
+  } */
 
   // REEMPLAZA ESTA FUNCIÓN COMPLETA
 
@@ -2369,6 +3057,7 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
     BuildContext context,
     ReporteContableGrupo grupo,
   ) {
+    final interesSinRedondear = grupo.interessemanal * grupo.plazo;
     final isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2450,7 +3139,7 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
                     child: _buildDesktopFinancialInfoCompact(
                       context,
                       'Interés Total',
-                      grupo.interesCredito,
+                      interesSinRedondear,
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -2960,7 +3649,7 @@ class _ReporteContableWidgetState extends State<ReporteContableWidget> {
               Icon(Icons.insights, size: 14, color: analysisColor),
               const SizedBox(width: 6),
               Text(
-                'Análisis de Recuperación',
+                'Recuperación de Inversión',
                 style: TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 11,
