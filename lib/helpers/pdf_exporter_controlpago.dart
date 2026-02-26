@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:finora_app/models/cliente_monto.dart';
 import 'package:finora_app/models/creditos.dart';
+import 'package:finora_app/models/pago.dart'; // <--- IMPORTANTE: Importar modelo Pago
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -14,7 +15,6 @@ import 'package:finora_app/providers/user_data_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:finora_app/ip.dart';
 import '../utils/app_logger.dart';
-
 
 class PDFControlPagos {
   static final PdfColor primaryColor = PdfColors.indigo700;
@@ -42,12 +42,14 @@ class PDFControlPagos {
   }
 
   // =========================================================================
-  // AQUÍ ESTÁN LOS CAMBIOS PRINCIPALES
+  // FUNCIÓN GENERAR ACTUALIZADA
+  // Recibe la lista de pagos reales para respetar fechas quincenales/mensuales
   // =========================================================================
-  // <-- CAMBIO 1: La función ahora devuelve 'Future<Uint8List>'.
-  // <-- CAMBIO 2: Se eliminó el parámetro 'String savePath'.
   static Future<Uint8List> generar(
-      BuildContext context, Credito credito) async {
+      BuildContext context, 
+      Credito credito, 
+      List<Pago> listaPagos // <--- NUEVO PARÁMETRO
+      ) async {
     try {
       final currencyFormat =
           NumberFormat.currency(locale: 'es_MX', symbol: '\$');
@@ -67,9 +69,34 @@ class PDFControlPagos {
       final fechaFin = formatEntrada.parse(partes[1].trim());
       final fechaInicioFormateada = formatSalida.format(fechaInicio);
       final fechaFinFormateada = formatSalida.format(fechaFin);
-      
+
+      // --- LÓGICA DE FECHAS CORREGIDA ---
+      List<DateTime> fechas = [];
+
+      // 1. Filtramos la semana 0 (desembolso) si existe, y ordenamos por semana
+      final pagosReales = listaPagos
+          .where((p) => p.semana > 0)
+          .toList()
+        ..sort((a, b) => a.semana.compareTo(b.semana));
+
+      // 2. Si tenemos pagos reales, usamos sus fechas exactas (API)
+      if (pagosReales.isNotEmpty) {
+        fechas = pagosReales.map((p) {
+          // El modelo Pago a veces trae fechaPago como String o DateTime, aseguramos conversión
+          if (p.fechaPago is String) {
+            return DateTime.parse(p.fechaPago);
+          } else {
+            return p.fechaPago as DateTime;
+          }
+        }).toList();
+      } else {
+        // Fallback: Si la lista viene vacía, calculamos semanalmente como antes
+        fechas = _generarFechas(fechaInicio, credito.plazo);
+      }
+      // ----------------------------------
+
       final pdf = pw.Document();
-      final fechas = _generarFechas(fechaInicio, credito.plazo);
+      
       final titleStyle = pw.TextStyle(
         fontSize: 20,
         fontWeight: pw.FontWeight.bold,
@@ -114,6 +141,7 @@ class PDFControlPagos {
             _buildLoanInfo(credito, sectionTitleStyle, fechaInicioFormateada,
                 fechaFinFormateada, currencyFormat),
             pw.SizedBox(height: 25),
+            // Pasamos las fechas corregidas aquí
             ..._buildPaymentTables(fechas, credito, currencyFormat),
             pw.SizedBox(height: 30),
             _buildSignatures(credito),
@@ -121,7 +149,6 @@ class PDFControlPagos {
         ),
       );
 
-      // <-- CAMBIO 3: En lugar de guardar en un archivo, devolvemos los bytes del PDF.
       return await pdf.save();
 
     } on FormatException catch (e) {
@@ -131,9 +158,7 @@ class PDFControlPagos {
     }
   }
 
-  // --- El resto del código de la clase no necesita ningún cambio ---
-  // --- Es idéntico a lo que ya tienes ---
-
+  // Se mantiene como fallback por si acaso
   static List<DateTime> _generarFechas(DateTime startDate, int weeks) {
     return List.generate(
       weeks,
@@ -142,67 +167,65 @@ class PDFControlPagos {
   }
 
   static pw.Widget _buildDocumentHeader(
-    //... (tu código aquí, sin cambios)
-    Credito credito,
-    pw.TextStyle titleStyle,
-    Uint8List finora_appLogo,
-    Uint8List? financieraLogo) {
-      return pw.Container(
-        padding: const pw.EdgeInsets.only(bottom: 10),
-        decoration: pw.BoxDecoration(
-          border: pw.Border(bottom: pw.BorderSide(color: mediumGrey, width: 0.5)),
-        ),
-        child: pw.Column(
-          children: [
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                if (financieraLogo != null)
-                  pw.Image(
-                    pw.MemoryImage(financieraLogo),
-                    width: 120,
-                    height: 40,
-                    fit: pw.BoxFit.contain,
-                  )
-                else
-                  pw.Container(),
+      Credito credito,
+      pw.TextStyle titleStyle,
+      Uint8List finora_appLogo,
+      Uint8List? financieraLogo) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.only(bottom: 10),
+      decoration: pw.BoxDecoration(
+        border: pw.Border(bottom: pw.BorderSide(color: mediumGrey, width: 0.5)),
+      ),
+      child: pw.Column(
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              if (financieraLogo != null)
                 pw.Image(
-                  pw.MemoryImage(finora_appLogo),
+                  pw.MemoryImage(financieraLogo),
                   width: 120,
                   height: 40,
                   fit: pw.BoxFit.contain,
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 20),
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('Control de pago',
-                    style: pw.TextStyle(
-                      fontSize: 16,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColor.fromHex('#5162F6'),
-                    )),
-                pw.Text(
-                  'Generado: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
-                  style: pw.TextStyle(fontSize: 8),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
+                )
+              else
+                pw.Container(),
+              pw.Image(
+                pw.MemoryImage(finora_appLogo),
+                width: 120,
+                height: 40,
+                fit: pw.BoxFit.contain,
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 20),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('Control de pago',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColor.fromHex('#5162F6'),
+                  )),
+              pw.Text(
+                'Generado: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
+                style: pw.TextStyle(fontSize: 8),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   static pw.Widget _buildGroupInfo(
       Credito credito,
       pw.TextStyle sectionTitleStyle,
-      String fechaInicioFormateada, // <- Añadir parámetros
-      String fechaFinFormateada, // <- aquí
+      String fechaInicioFormateada,
+      String fechaFinFormateada,
       final currencyFormat) {
-    final format = NumberFormat("#,##0.00");
-
+    
     return pw.Container(
       padding: const pw.EdgeInsets.all(15),
       decoration: pw.BoxDecoration(
@@ -239,38 +262,31 @@ class PDFControlPagos {
     );
   }
 
-  // Helper functions to get specific roles
   static String _getPresidenta(List<ClienteMonto> clientes) {
-    // Find the client with the "Presidenta" cargo (role)
     for (var cliente in clientes) {
       if (cliente.cargo == "Presidente/a") {
         return cliente.nombreCompleto;
       }
     }
-    // If not found, return empty string or default message
     return "No asignada";
   }
 
   static String _getTesorera(List<ClienteMonto> clientes) {
-    // Find the client with the "Tesorera" cargo (role)
     for (var cliente in clientes) {
       if (cliente.cargo == "Tesorero/a") {
         return cliente.nombreCompleto;
       }
     }
-    // If not found, return empty string or default message
     return "No asignada";
   }
 
   static pw.Widget _buildLoanInfo(
       Credito credito,
       pw.TextStyle sectionTitleStyle,
-      String fechaInicioFormateada, // <- Añadir parámetros
-      String fechaFinFormateada, // <- aquí
+      String fechaInicioFormateada,
+      String fechaFinFormateada,
       final currencyFormat) {
-    final format = NumberFormat("#,##0.00");
-    final partesFecha = credito.fechasIniciofin.split(' - ');
-
+    
     return pw.Container(
       padding: const pw.EdgeInsets.all(15),
       decoration: pw.BoxDecoration(
@@ -355,22 +371,9 @@ class PDFControlPagos {
 
   static List<pw.Widget> _buildPaymentTables(
       List<DateTime> dates, Credito credito, final currencyFormat) {
+    // Dividimos las fechas en bloques de 4 para que quepan en la hoja
     final blocks = _splitDates(dates, 4);
     final widgets = <pw.Widget>[];
-
-    /*  widgets.add(pw.Container(
-      padding: const pw.EdgeInsets.symmetric(vertical: 10, horizontal: 0),
-      child: pw.Text(
-        'REGISTRO DE PAGOS SEMANALES',
-        style: pw.TextStyle(
-          fontSize: 14,
-          fontWeight: pw.FontWeight.bold,
-          color: darkGrey,
-        ),
-      ),
-    )); */
-
-    //widgets.add(pw.SizedBox(height: 15));
 
     for (var i = 0; i < blocks.length; i++) {
       // Calcular el número de semana inicial para este bloque
@@ -390,7 +393,7 @@ class PDFControlPagos {
           child: pw.Column(
             children: [
               _paymentTable(blocks[i], credito, startWeek, currencyFormat),
-              if (i < blocks.length - 1) pw.SizedBox(height: 15), // Espaciado
+              if (i < blocks.length - 1) pw.SizedBox(height: 15),
             ],
           ),
         ),
@@ -400,20 +403,16 @@ class PDFControlPagos {
     return widgets;
   }
 
-  // Modify the _paymentTable function to split "PAGO SOLIDARIO" into two columns
   static pw.Widget _paymentTable(
       List<DateTime> dates, Credito credito, int startWeek,
       final currencyFormat
       ) {
     // Calcular totales
     double totalMontoAutorizado = 0;
-    //double totalPagoSemanal = 0;
 
     for (var member in credito.clientesMontosInd) {
       totalMontoAutorizado += member.capitalIndividual;
     }
-
-    //totalPagoSemanal += credito.pagoCuota;
 
     // Definir colores para la tabla
     final headerColor = PdfColor.fromHex('f2f7fa');
@@ -492,7 +491,7 @@ class PDFControlPagos {
                 ),
               ),
             ),
-            // Columna PAGO SEMANAL
+            // Columna PAGO SEMANAL (o Quincenal, según el texto)
             pw.Expanded(
               flex: 50,
               child: pw.Container(
@@ -503,7 +502,7 @@ class PDFControlPagos {
                 ),
                 child: pw.Center(
                   child: pw.Text(
-                    'PAGO\nSEMANAL',
+                    'PAGO\nCUOTA',
                     textAlign: pw.TextAlign.center,
                     style: pw.TextStyle(
                       fontSize: 6,
@@ -514,13 +513,13 @@ class PDFControlPagos {
                 ),
               ),
             ),
-            // Celdas de semanas
+            // Celdas de fechas
             for (var i = 0; i < dates.length; i++)
               pw.Expanded(
                 flex: 70,
                 child: pw.Column(
                   children: [
-                    // Primera fila - Encabezado de semana
+                    // Primera fila - Encabezado de fecha
                     pw.Container(
                       height: 20,
                       decoration: pw.BoxDecoration(
@@ -529,7 +528,7 @@ class PDFControlPagos {
                       ),
                       child: pw.Center(
                         child: pw.Text(
-                          'SEMANA ${startWeek + i}\nFECHA: ${DateFormat('dd/MM/yyyy').format(dates[i])}',
+                          'PAGO ${startWeek + i}\nFECHA: ${DateFormat('dd/MM/yyyy').format(dates[i])}',
                           textAlign: pw.TextAlign.center,
                           style: pw.TextStyle(
                             fontSize: 5,
@@ -596,7 +595,7 @@ class PDFControlPagos {
           ],
         ),
 
-        // Filas de datos - usando el loop original en lugar del método _buildMemberRow
+        // Filas de datos
         for (var memberIndex = 0;
             memberIndex < credito.clientesMontosInd.length;
             memberIndex++)
@@ -653,7 +652,7 @@ class PDFControlPagos {
                   ),
                 ),
               ),
-              // Pago Semanal
+              // Pago Semanal/Cuota
               pw.Expanded(
                 flex: 50,
                 child: pw.Container(
@@ -779,7 +778,7 @@ class PDFControlPagos {
                 ),
               ),
             ),
-            // Total Pago Semanal
+            // Total Pago Cuota
             pw.Expanded(
               flex: 50,
               child: pw.Container(
@@ -867,45 +866,6 @@ class PDFControlPagos {
     );
   }
 
-  static pw.Widget _buildCell(
-    String text, {
-    bool isHeader = false,
-    bool isDateCell = false,
-    int rowSpan = 1,
-    pw.TextStyle? style,
-    pw.TextAlign textAlign = pw.TextAlign.left,
-  }) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(4),
-      child: pw.Center(
-        child: pw.Text(
-          text,
-          textAlign: isDateCell ? pw.TextAlign.center : textAlign,
-          style: style ??
-              pw.TextStyle(
-                fontSize: 6,
-                fontWeight:
-                    isHeader ? pw.FontWeight.bold : pw.FontWeight.normal,
-              ),
-        ),
-      ),
-    );
-  }
-
-  static pw.Widget _buildEmptyPaymentCell() {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.all(6),
-      child: pw.Container(
-        height: 18,
-        decoration: pw.BoxDecoration(
-          borderRadius: pw.BorderRadius.circular(4),
-          border: pw.Border.all(color: mediumGrey.shade(0.3), width: 0.5),
-          color: PdfColors.white,
-        ),
-      ),
-    );
-  }
-
   static pw.Widget _buildSignatures(Credito credito) {
     // Get names for each role
     final presidentaName = _getPresidenta(credito.clientesMontosInd);
@@ -916,9 +876,7 @@ class PDFControlPagos {
       padding: const pw.EdgeInsets.all(20),
       child: pw.Column(
         children: [
-          // Add significant space to push everything down
           pw.SizedBox(height: 70),
-          // First add the signature lines
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
             children: [
@@ -927,7 +885,6 @@ class PDFControlPagos {
               _signatureLine('ASESOR', asesorName),
             ],
           ),
-          // Add the text below the signatures
           pw.SizedBox(height: 30),
           pw.Text(
             'FIRMAN DE CONFORMIDAD',

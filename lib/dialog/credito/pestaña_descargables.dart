@@ -2,6 +2,11 @@
 
 import 'dart:typed_data';
 import 'dart:io';
+// 1. IMPORTS NUEVOS NECESARIOS
+import 'package:finora_app/services/pago_service.dart'; // <--- Para bajar los pagos
+import 'package:finora_app/models/pago.dart'; // <--- Modelo Pago
+import 'package:finora_app/models/calendario_response.dart'; // <--- Respuesta API
+
 import 'package:finora_app/helpers/pdf_exporter_controlpago.dart';
 import 'package:finora_app/helpers/pdf_exporter_cuentaspago.dart';
 import 'package:finora_app/helpers/pdf_resumen_credito.dart';
@@ -16,14 +21,6 @@ import 'package:finora_app/models/creditos.dart';
 import 'package:finora_app/providers/theme_provider.dart';
 import '../../utils/app_logger.dart';
 import 'package:finora_app/helpers/save_file.dart';
-
-
-
-// ----- NUEVOS IMPORTS PARA LA COMPATIBILIDAD WEB -----
-//import 'package:flutter/foundation.dart' show kIsWeb;
-// dart:html solo se importará en web, evitando errores de compilación en móvil.
-//import 'dart:html' as html;
-// --------------------------------------------------------
 
 class PaginaDescargablesMobile extends StatefulWidget {
   final Credito credito;
@@ -40,33 +37,9 @@ class PaginaDescargablesMobile extends StatefulWidget {
 class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
   String? _documentoDescargando;
   bool _isGenerating = false;
-
-  /// NUEVA FUNCIÓN UNIVERSAL PARA GUARDAR/DESCARGAR ARCHIVOS
-  /// Recibe los bytes del archivo y el nombre, y decide qué hacer
-  /// según la plataforma (web o nativa).
- /*  Future<void> _guardarYProcesarArchivo(Uint8List bytes, String fileName) async {
-    if (kIsWeb) {
-      // --- LÓGICA PARA WEB ---
-      // Creamos un "ancla" <a> en el HTML para iniciar la descarga.
-      final anchor = html.AnchorElement(
-          href: Uri.dataFromBytes(bytes, mimeType: 'application/octet-stream')
-              .toString())
-        ..setAttribute("download", fileName)
-        ..click(); // Simula un clic para descargar
-    } else {
-      // --- LÓGICA PARA NATIVO (MÓVIL/ESCRITORIO) ---
-      // 1. Obtener la ruta para guardar el archivo
-      final directory = await getApplicationDocumentsDirectory();
-      final savePath = '${directory.path}/$fileName';
-
-      // 2. Escribir los bytes en un archivo
-      final file = File(savePath);
-      await file.writeAsBytes(bytes);
-
-      // 3. Abrir el archivo con una app externa
-      await _abrirArchivoGuardado(savePath);
-    }
-  } */
+  
+  // 2. INSTANCIA DEL SERVICIO
+  final PagoService _pagoService = PagoService(); 
 
   /// Función para descargar documentos (DOCX) desde el servidor.
   Future<void> _descargarDocumento(String documento) async {
@@ -90,7 +63,6 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
 
       if (response.statusCode == 200) {
         final fileName = '${documento}_${widget.credito.folio}.docx';
-        // Usamos nuestra nueva función universal para manejar la descarga/guardado.
         await saveFilePlatform(response.bodyBytes, fileName);
       } else {
         _mostrarError('Error del servidor: ${response.statusCode}. Inténtalo de nuevo.');
@@ -104,10 +76,9 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
     }
   }
 
-  /// Función para generar PDFs localmente.
-  Future<void> _generarPdf(
+  /// Función GENÉRICA para generar PDFs simples (Resumen, Ficha)
+  Future<void> _generarPdfSimple(
     String tipoDocumento,
-    // La función generadora ahora debe devolver Future<Uint8List>
     Future<Uint8List> Function(BuildContext, Credito) generador,
   ) async {
     if (_isGenerating) return;
@@ -115,41 +86,54 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
     setState(() => _documentoDescargando = tipoDocumento);
 
     try {
-      // 1. Llama al generador para obtener los bytes del PDF.
       final Uint8List pdfBytes = await generador(context, widget.credito);
       final fileName = '${tipoDocumento}_${widget.credito.folio}.pdf';
-
-      // 2. Usa nuestra función universal para manejar la descarga/guardado.
       await saveFilePlatform(pdfBytes, fileName);
-
     } catch (e, s) {
-      AppLogger.log('<<<<< ERROR AL GENERAR PDF: $tipoDocumento >>>>>\n$e\n$s');
-      if (mounted) {
-        _mostrarError('Error al generar el documento: $tipoDocumento.');
-      }
+      AppLogger.log('ERROR PDF SIMPLE: $e\n$s');
+      if (mounted) _mostrarError('Error al generar $tipoDocumento.');
     } finally {
-      if (mounted) {
-        setState(() => _documentoDescargando = null);
-      }
+      if (mounted) setState(() => _documentoDescargando = null);
       _isGenerating = false;
     }
   }
 
-  // --- HELPERS (Ayudantes) ---
+  // 3. NUEVA FUNCIÓN ESPECÍFICA PARA CONTROL DE PAGOS
+  // Esta función descarga los datos actualizados y luego genera el PDF
+  Future<void> _descargarControlPagos() async {
+    if (_isGenerating) return;
+    _isGenerating = true;
+    setState(() => _documentoDescargando = 'control_pagos');
 
-  // Esta función solo se usa en nativo, por lo que no necesita cambios.
-  Future<void> _abrirArchivoGuardado(String path) async {
     try {
-      final result = await OpenFile.open(path);
-      if (result.type != ResultType.done) {
-        _mostrarError('No se pudo abrir el archivo: ${result.message}');
+      // A. Descargar los pagos desde la API para tener las fechas correctas
+      final response = await _pagoService.getCalendarioPagos(widget.credito.idcredito);
+      
+      if (!response.success || response.data == null) {
+        throw 'No se pudieron obtener los datos del calendario.';
       }
+
+      final List<Pago> listaPagos = response.data!.pagos;
+
+      // B. Generar el PDF pasando la lista de pagos
+      final Uint8List pdfBytes = await PDFControlPagos.generar(
+        context, 
+        widget.credito, 
+        listaPagos // <--- Aquí pasamos la lista que acabamos de descargar
+      );
+
+      final fileName = 'control_pagos_${widget.credito.folio}.pdf';
+      await saveFilePlatform(pdfBytes, fileName);
+
     } catch (e) {
-      _mostrarError('Error al intentar abrir el archivo. Asegúrate de tener una app para leer este formato.');
+      AppLogger.log('ERROR PDF CONTROL PAGOS: $e');
+      if (mounted) _mostrarError('Error: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _documentoDescargando = null);
+      _isGenerating = false;
     }
   }
 
-  // Sin cambios aquí.
   void _mostrarError(String mensaje) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -163,8 +147,6 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
     );
   }
 
-  // --- UI (Interfaz de Usuario) ---
-
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -174,7 +156,7 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
           _buildBotonDescarga(
             titulo: 'Contrato',
             icono: Icons.description_outlined,
-            color: const Color(0xFF2962FF), // Azul
+            color: const Color(0xFF2962FF),
             documento: 'contrato',
             onTap: () => _descargarDocumento('contrato'),
           ),
@@ -182,117 +164,107 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
           _buildBotonDescarga(
             titulo: 'Pagaré',
             icono: Icons.monetization_on_outlined,
-            color: const Color(0xFF00C853), // Verde
+            color: const Color(0xFF00C853),
             documento: 'pagare',
             onTap: () => _descargarDocumento('pagare'),
           ),
           const SizedBox(height: 16),
+          
+          // --- AQUÍ ESTÁ EL CAMBIO EN EL BOTÓN ---
           _buildBotonDescarga(
             titulo: 'Control de Pagos',
             icono: Icons.table_chart_outlined,
-            color: const Color(0xFFAA00FF), // Morado
+            color: const Color(0xFFAA00FF),
             documento: 'control_pagos',
-            // La llamada a _generarPdf ahora pasa la referencia a la función.
-            onTap: () => _generarPdf('control_pagos', PDFControlPagos.generar),
+            // Ahora llamamos a la función específica
+            onTap: _descargarControlPagos, 
           ),
+          
           const SizedBox(height: 16),
           _buildBotonDescarga(
             titulo: 'Ficha de Pago',
             icono: Icons.receipt_long_outlined,
-            color: const Color(0xFFFF6D00), // Naranja
+            color: const Color(0xFFFF6D00),
             documento: 'ficha_pago',
-            onTap: () => _generarPdf('ficha_pago', PDFCuentasPago.generar),
+            // Usamos la función simple para los que no cambiaron
+            onTap: () => _generarPdfSimple('ficha_pago', PDFCuentasPago.generar),
           ),
           const SizedBox(height: 16),
           _buildBotonDescarga(
             titulo: 'Resumen de Crédito',
             icono: Icons.picture_as_pdf_outlined,
-            color: const Color(0xFF00BFA5), // Teal
+            color: const Color(0xFF00BFA5),
             documento: 'resumen_credito',
-            onTap: () => _generarPdf('resumen_credito', PDFResumenCredito.generar),
+            onTap: () => _generarPdfSimple('resumen_credito', PDFResumenCredito.generar),
           ),
         ],
       ),
     );
   }
 
-  // Sin cambios aquí.
   Widget _buildBotonDescarga({
-  required String titulo,
-  required IconData icono,
-  required Color color,
-  required String documento,
-  required VoidCallback onTap,
-}) {
-  final theme = Provider.of<ThemeProvider>(context).colors;
-  final estaDescargando = _documentoDescargando == documento;
+    required String titulo,
+    required IconData icono,
+    required Color color,
+    required String documento,
+    required VoidCallback onTap,
+  }) {
+    final theme = Provider.of<ThemeProvider>(context).colors;
+    final estaDescargando = _documentoDescargando == documento;
 
-  // MouseRegion sigue siendo el padre de todo para controlar el cursor.
-  return MouseRegion(
-    cursor: SystemMouseCursors.click,
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      // La decoración se queda en el Container.
-      decoration: BoxDecoration(
-        color: theme.backgroundCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.divider),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      // Usamos `clipBehavior` para asegurarnos de que el InkWell no se "salga" de los bordes redondeados.
-      clipBehavior: Clip.antiAlias, 
-      child: Material( // IMPORTANTE: El Material es necesario para que el InkWell se dibuje correctamente.
-        color: Colors.transparent, // El color es transparente para que se vea el fondo del AnimatedContainer.
-        child: InkWell(
-          // El InkWell ahora está DENTRO del contenedor.
-          onTap: estaDescargando ? null : onTap,
-        /*   hoverColor: color.withOpacity(0.1), // Ahora el hover sí será visible.
-          splashColor: color.withOpacity(0.2), // Y el splash también. */
-          hoverColor: Color(0xFF2962FF).withOpacity(0.1), // Color de hover
-          splashColor: Color(0xFF2962FF).withOpacity(0.2), // Color de splash
-          
-          child: Padding(
-            // Movemos el padding aquí, al hijo del InkWell.
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Row(
-              children: [
-                Icon(icono, color: color, size: 24),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    titulo,
-                    style: TextStyle(
-                      color: theme.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: theme.backgroundCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: theme.divider),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        clipBehavior: Clip.antiAlias, 
+        child: Material( 
+          color: Colors.transparent, 
+          child: InkWell(
+            onTap: estaDescargando ? null : onTap,
+            hoverColor: Color(0xFF2962FF).withOpacity(0.1),
+            splashColor: Color(0xFF2962FF).withOpacity(0.2),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Row(
+                children: [
+                  Icon(icono, color: color, size: 24),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      titulo,
+                      style: TextStyle(
+                        color: theme.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
-                if (estaDescargando)
-                  SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2.5, color: color),
-                  )
-                else
-                  Icon(Icons.download_for_offline_outlined, color: theme.textSecondary, size: 24),
-              ],
+                  if (estaDescargando)
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2.5, color: color),
+                    )
+                  else
+                    Icon(Icons.download_for_offline_outlined, color: theme.textSecondary, size: 24),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
-}
-
-
-/*
-otra duda, tengo esto y funciona bien para descargar archivos para   windows, Mac, iOS, etc, pero para web me da error:
-*/
