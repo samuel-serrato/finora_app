@@ -118,9 +118,12 @@ class PdfExporterCreditosActivos {
             ? '$baseUrl/imagenes/subidas/${logoColor.rutaImagen}'
             : null;
 
-   final financieraBytes = await _loadNetworkImage(logoUrl); // <-- Cambiamos el nombre a financieraBytes
+    final financieraBytes = await _loadNetworkImage(
+      logoUrl,
+    ); // <-- Cambiamos el nombre a financieraBytes
     // Convertimos a MemoryImage aquí afuera (UNA SOLA VEZ)
-    final pw.MemoryImage? financieraLogo = financieraBytes != null ? pw.MemoryImage(financieraBytes) : null;
+    final pw.MemoryImage? financieraLogo =
+        financieraBytes != null ? pw.MemoryImage(financieraBytes) : null;
 
     final ByteData data = await rootBundle.load('assets/finora.png');
     // Convertimos a MemoryImage aquí afuera (UNA SOLA VEZ)
@@ -189,13 +192,17 @@ class PdfExporterCreditosActivos {
   //      COMPONENTES VISUALES
   // ==========================================
 
-  pw.Widget _buildHeader(pw.MemoryImage? financieraLogo, pw.MemoryImage finoraLogo) { // <-- Cambiamos los tipos aquí
+  pw.Widget _buildHeader(
+    pw.MemoryImage? financieraLogo,
+    pw.MemoryImage finoraLogo,
+  ) {
+    // <-- Cambiamos los tipos aquí
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children:[
+      children: [
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children:[
+          children: [
             if (financieraLogo != null)
               pw.Image(
                 financieraLogo, // <-- Ya no usamos pw.MemoryImage(...) aquí
@@ -240,7 +247,7 @@ class PdfExporterCreditosActivos {
 
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children:[
+          children: [
             pw.Text(
               'Estado: Créditos Activos',
               style: const pw.TextStyle(fontSize: 8),
@@ -348,16 +355,23 @@ class PdfExporterCreditosActivos {
             ? (tiempoInfo.current / tiempoInfo.total).clamp(0.0, 1.0)
             : 0.0;
 
+    // --- TU LÓGICA EXISTENTE (Texto completo) ---
     String textoPeriodo = "Semanal";
+    String prefijo = "Sem"; // <--- AGREGAMOS ESTA VARIABLE PARA EL PREFIJO
+
     final String tipoPlazoLower = credito.tipoPlazo.toLowerCase();
     if (tipoPlazoLower.contains('quincenal')) {
       textoPeriodo = "Quincenal";
+      prefijo = "Quin";
     } else if (tipoPlazoLower.contains('mensual')) {
       textoPeriodo = "Mensual";
+      prefijo = "Mes";
     } else if (tipoPlazoLower.contains('catorcenal')) {
       textoPeriodo = "Catorcenal";
+      prefijo = "Cat";
     } else if (tipoPlazoLower.contains('diario')) {
       textoPeriodo = "Diario";
+      prefijo = "Día";
     }
 
     // --- 2. ESTRUCTURA VISUAL CORREGIDA ---
@@ -443,6 +457,7 @@ class PdfExporterCreditosActivos {
                       pagosInfo.total,
                       porcentajePagos,
                       porcentajeTiempo,
+                      prefijo, // <--- PASAMOS EL PREFIJO AQUÍ
                     ),
                   ),
                 ),
@@ -587,99 +602,99 @@ class PdfExporterCreditosActivos {
     return pw.Wrap(
       spacing: 4,
       runSpacing: 4,
-      children: fechas.map((fecha) {
-        PdfColor color;
-        String statusShort; // Aquí guardaremos las siglas personalizadas
-        String label = fecha.numPago.toString();
-        
-        // Convertimos a minúsculas y limpiamos acentos para comparar fácil
-        String lower = _limpiarTexto(fecha.estado.toLowerCase());
+      children:
+          fechas.map((fecha) {
+            PdfColor color;
+            String statusShort; // Aquí guardaremos las siglas personalizadas
+            String label = fecha.numPago.toString();
 
-        // --- LÓGICA PERSONALIZADA DE COLORES Y SIGLAS ---
-        
-        if (lower.contains('desembolso')) {
-          color = PdfColors.blue;
-          statusShort = "DES";
-        } 
-        else if (lower.contains('pagado') || lower.contains('garantia') || lower.contains('liquidado')) {
-          color = colorGreen;
-          statusShort = "OK";
-        } 
-        else if (lower.contains('atraso') || lower.contains('mora') || lower.contains('vencido')) {
-          color = colorRed;
-          statusShort = "ATR";
-        } 
-        else if (lower.contains('pendiente')) {
-          color = colorOrange;
-          statusShort = "PEND";
-        } 
-        else if (lower.contains('proximo')) {
-          color = PdfColors.grey;
-          statusShort = "PRO";
-        }
-        // AQUÍ AGREGAMOS TUS CASOS ESPECÍFICOS PARA EL "EN"
-        else if (lower.contains('abono') || lower.contains('parcial')) {
-          color = PdfColors.blueGrey;
-          statusShort = "ABONO"; // Ahora dirá ABO en vez de EN
-        }
-        else if (lower.contains('curso')) {
-          color = PdfColors.blueGrey;
-          statusShort = "CUR"; // Ahora dirá CUR en vez de EN
-        }
-        else {
-          // CASO POR DEFECTO (Si no encuentra ninguna palabra clave arriba)
-          color = PdfColors.blueGrey;
-          // Toma las primeras 3 letras automáticamente si no sabemos qué es
-          statusShort = lower.length > 3 
-              ? lower.substring(0, 3).toUpperCase() 
-              : lower.toUpperCase();
-        }
+            // Convertimos a minúsculas y limpiamos acentos para comparar fácil
+            String lower = _limpiarTexto(fecha.estado.toLowerCase());
 
-        // --- FORMATEO DE FECHA ---
-        String dateStr = "";
-        try {
-          final d = DateTime.parse(fecha.fechaPago);
-          dateStr = "${d.day}/${d.month}";
-        } catch (_) {}
+            // --- LÓGICA PERSONALIZADA DE COLORES Y SIGLAS ---
 
-        return pw.Column(
-          children: [
-            pw.Container(
-              width: 16,
-              height: 16,
-              alignment: pw.Alignment.center,
-              decoration: pw.BoxDecoration(
-                color: color,
-                shape: pw.BoxShape.circle,
-              ),
-              child: pw.Text(
-                label,
-                style: pw.TextStyle(
-                  color: PdfColors.white,
-                  fontSize: 6,
-                  fontWeight: pw.FontWeight.bold,
+            if (lower.contains('desembolso')) {
+              color = PdfColors.blue;
+              statusShort = "DES";
+            } else if (lower.contains('pagado') ||
+                lower.contains('garantia') ||
+                lower.contains('liquidado')) {
+              color = colorGreen;
+              statusShort = "OK";
+            } else if (lower.contains('atraso') ||
+                lower.contains('mora') ||
+                lower.contains('vencido')) {
+              color = colorRed;
+              statusShort = "ATR";
+            } else if (lower.contains('pendiente')) {
+              color = colorOrange;
+              statusShort = "PEND";
+            } else if (lower.contains('proximo')) {
+              color = PdfColors.grey;
+              statusShort = "PRO";
+            }
+            // AQUÍ AGREGAMOS TUS CASOS ESPECÍFICOS PARA EL "EN"
+            else if (lower.contains('abono') || lower.contains('parcial')) {
+              color = PdfColors.blueGrey;
+              statusShort = "ABONO"; // Ahora dirá ABO en vez de EN
+            } else if (lower.contains('curso')) {
+              color = PdfColors.blueGrey;
+              statusShort = "CUR"; // Ahora dirá CUR en vez de EN
+            } else {
+              // CASO POR DEFECTO (Si no encuentra ninguna palabra clave arriba)
+              color = PdfColors.blueGrey;
+              // Toma las primeras 3 letras automáticamente si no sabemos qué es
+              statusShort =
+                  lower.length > 3
+                      ? lower.substring(0, 3).toUpperCase()
+                      : lower.toUpperCase();
+            }
+
+            // --- FORMATEO DE FECHA ---
+            String dateStr = "";
+            try {
+              final d = DateTime.parse(fecha.fechaPago);
+              dateStr = "${d.day}/${d.month}";
+            } catch (_) {}
+
+            return pw.Column(
+              children: [
+                pw.Container(
+                  width: 16,
+                  height: 16,
+                  alignment: pw.Alignment.center,
+                  decoration: pw.BoxDecoration(
+                    color: color,
+                    shape: pw.BoxShape.circle,
+                  ),
+                  child: pw.Text(
+                    label,
+                    style: pw.TextStyle(
+                      color: PdfColors.white,
+                      fontSize: 6,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            pw.SizedBox(height: 1),
-            pw.Text(
-              dateStr,
-              style: const pw.TextStyle(
-                fontSize: 5,
-                color: colorTextSecondary,
-              ),
-            ),
-            pw.Text(
-              statusShort,
-              style: pw.TextStyle(
-                fontSize: 5,
-                color: color,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-          ],
-        );
-      }).toList(),
+                pw.SizedBox(height: 1),
+                pw.Text(
+                  dateStr,
+                  style: const pw.TextStyle(
+                    fontSize: 5,
+                    color: colorTextSecondary,
+                  ),
+                ),
+                pw.Text(
+                  statusShort,
+                  style: pw.TextStyle(
+                    fontSize: 5,
+                    color: color,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
     );
   }
 
@@ -821,6 +836,7 @@ class PdfExporterCreditosActivos {
     int total,
     double pPagos,
     double pTiempo,
+    String label, // <--- 1. AGREGAR ESTO
   ) {
     bool hayAtraso = tiempo > pagos;
     int atraso = tiempo - pagos;
@@ -835,8 +851,9 @@ class PdfExporterCreditosActivos {
               "Pag: $pagos/$total",
               style: const pw.TextStyle(fontSize: 6, color: colorGreen),
             ),
+            // 2. CAMBIAR "Sem:" POR LA VARIABLE label
             pw.Text(
-              "Sem: $tiempo/$total",
+              "$label: $tiempo/$total",
               style: const pw.TextStyle(fontSize: 6, color: colorBarTime),
             ),
           ],

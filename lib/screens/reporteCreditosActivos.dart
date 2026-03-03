@@ -384,6 +384,7 @@ class _ReporteCard extends StatelessWidget {
             final bool isDesktop = constraints.maxWidth > 700;
 
             final progressBar = _UnifiedProgressBar(
+              credito: credito, 
               pagosText: "${pagosInfo.current}",
               tiempoText: "${tiempoInfo.current}",
               totalText: "${pagosInfo.total}",
@@ -904,6 +905,7 @@ class _ReporteCard extends StatelessWidget {
 // === WIDGETS AUXILIARES (Sin cambios) ===
 
 class _UnifiedProgressBar extends StatelessWidget {
+  final ReporteCreditoActivo credito; // <--- 1. AGREGAR ESTA LÍNEA
   final String pagosText;
   final String tiempoText;
   final String totalText;
@@ -912,6 +914,8 @@ class _UnifiedProgressBar extends StatelessWidget {
   final dynamic colors;
 
   const _UnifiedProgressBar({
+    required this.credito, // <--- 2. AGREGAR ESTA LÍNEA
+
     required this.pagosText,
     required this.tiempoText,
     required this.totalText,
@@ -926,6 +930,23 @@ class _UnifiedProgressBar extends StatelessWidget {
     final Color colorPagos = Colors.green[500]!;
     final Color colorTiempo = const Color(0xFF0D668F);
 
+    // --- NUEVO: Validar periodo para las etiquetas ---
+    String textoPeriodo = "Semana"; // Valor base
+    final String tipoPlazoLower = credito.tipoPlazo.toLowerCase();
+
+    if (tipoPlazoLower.contains('quincenal')) {
+      textoPeriodo = "Quincena";
+    } else if (tipoPlazoLower.contains('mensual')) {
+      textoPeriodo = "Mes";
+    } else if (tipoPlazoLower.contains('catorcenal')) {
+      textoPeriodo = "Catorcena";
+    } else if (tipoPlazoLower.contains('diario')) {
+      textoPeriodo = "Día";
+    } else if (tipoPlazoLower.contains('semanal')) {
+      textoPeriodo = "Semana";
+    }
+    // -------------------------------------------------
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
@@ -934,7 +955,12 @@ class _UnifiedProgressBar extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             _legendItem("Pagados: $pagosText/$totalText", colorPagos, colors),
-            _legendItem("Semana: $tiempoText/$totalText", colorTiempo, colors),
+            // AQUÍ SE APLICA EL CAMBIO:
+            _legendItem(
+              "$textoPeriodo: $tiempoText/$totalText",
+              colorTiempo,
+              colors,
+            ),
           ],
         ),
         const SizedBox(height: 4),
@@ -1112,48 +1138,47 @@ class _PaymentWeekBadge extends StatelessWidget {
     Color color;
     String statusShort; // Variable para las siglas
     String label = fecha.numPago.toString();
-    
+
     // Normalizamos el texto
-    String lower = fecha.estado.toLowerCase(); 
+    String lower = fecha.estado.toLowerCase();
 
     // --- LÓGICA IGUALADA AL PDF ---
-    
+
     if (lower.contains('desembolso')) {
       color = Colors.blue;
       label = "D"; // Caso especial para el círculo
       statusShort = "DES";
-    } 
-    else if (lower.contains('pagado') || lower.contains('garantia') || lower.contains('liquidado')) {
+    } else if (lower.contains('pagado') ||
+        lower.contains('garantia') ||
+        lower.contains('liquidado')) {
       color = Colors.green;
       statusShort = "OK";
-    } 
-    else if (lower.contains('atraso') || lower.contains('mora') || lower.contains('vencido')) {
+    } else if (lower.contains('atraso') ||
+        lower.contains('mora') ||
+        lower.contains('vencido')) {
       color = Colors.red;
       statusShort = "ATR";
-    } 
-    else if (lower.contains('pendiente')) {
+    } else if (lower.contains('pendiente')) {
       color = Colors.orange;
       statusShort = "PEND";
-    } 
-    else if (lower.contains('proximo')) {
+    } else if (lower.contains('proximo')) {
       color = Colors.grey;
       statusShort = "PRO";
-    } 
+    }
     // CASOS ESPECÍFICOS (ABONO, CURSO, ETC.)
     else if (lower.contains('abono') || lower.contains('parcial')) {
       color = Colors.blueGrey;
-      statusShort = "ABONO"; 
-    }
-    else if (lower.contains('curso')) {
+      statusShort = "ABONO";
+    } else if (lower.contains('curso')) {
       color = Colors.blueGrey;
-      statusShort = "CUR"; 
-    } 
-    else {
+      statusShort = "CUR";
+    } else {
       // DEFAULT
       color = Colors.blueGrey;
-      statusShort = lower.length > 3 
-          ? lower.substring(0, 3).toUpperCase() 
-          : lower.toUpperCase();
+      statusShort =
+          lower.length > 3
+              ? lower.substring(0, 3).toUpperCase()
+              : lower.toUpperCase();
     }
 
     // --- FORMATO DE FECHA ---
@@ -1184,15 +1209,15 @@ class _PaymentWeekBadge extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           // FECHA
-          Text(
-            dateStr, 
-            style: TextStyle(fontSize: 9, color: Colors.grey[600])
-          ),
+          Text(dateStr, style: TextStyle(fontSize: 9, color: Colors.grey[600])),
           // SIGLAS (statusShort)
           Text(
             statusShort,
             style: TextStyle(
-              fontSize: statusShort.length > 3 ? 7 : 8, // Ajuste automático si el texto es largo (ej. ABONO)
+              fontSize:
+                  statusShort.length > 3
+                      ? 7
+                      : 8, // Ajuste automático si el texto es largo (ej. ABONO)
               color: color,
               fontWeight: FontWeight.w600,
             ),
