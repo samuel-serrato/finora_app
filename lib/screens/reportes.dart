@@ -9,14 +9,17 @@ import 'dart:typed_data';
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:finora_app/helpers/pdf_exporter_contable.dart';
+import 'package:finora_app/helpers/pdf_exporter_creditos_activos.dart';
 import 'package:finora_app/helpers/pdf_exporter_general.dart';
 import 'package:finora_app/helpers/responsive_helpers.dart';
 import 'package:finora_app/ip.dart';
 import 'package:finora_app/models/reporte_contable.dart';
+import 'package:finora_app/models/reporte_creditos_activos.dart';
 import 'package:finora_app/models/reporte_general.dart';
 import 'package:finora_app/models/usuarios.dart';
 import 'package:finora_app/providers/theme_provider.dart';
 import 'package:finora_app/screens/reporteContable.dart';
+import 'package:finora_app/screens/reporteCreditosActivos.dart';
 import 'package:finora_app/screens/reporteGeneral.dart';
 import 'package:finora_app/services/reportes_service.dart';
 import 'package:flutter/material.dart';
@@ -65,6 +68,7 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
   // <<< ADAPTACIÓN: Variables de datos del escritorio
   List<ReporteGeneral> listaReportes = [];
   List<ReporteContableData> listaReportesContable = [];
+  List<ReporteCreditoActivo> listaReportesActivos = []; // <--- NUEVA LISTA
   ReporteGeneralData? reporteData;
 
   final NumberFormat currencyFormat = NumberFormat('\$#,##0.00', 'en_US');
@@ -115,7 +119,9 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
   // <<< ADAPTACIÓN: Lógica de obtención de reportes de la versión de escritorio ---
   // Reemplaza tu método obtenerReportes() completo por este:
   Future<void> obtenerReportes() async {
-    if (selectedReportType == null || selectedDateRange == null) {
+    // 1. Validación condicional
+    if (selectedReportType != 'Créditos Activos' &&
+        (selectedReportType == null || selectedDateRange == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Selecciona tipo de reporte y rango de fechas'),
@@ -129,8 +135,10 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
       hasGenerated = false;
       hasError = false;
       errorMessage = null;
+      // Limpiamos todas las listas
       listaReportes = [];
       listaReportesContable = [];
+      listaReportesActivos = []; // <--- Limpiar nueva lista
       reporteData = null;
     });
 
@@ -160,7 +168,30 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
             hasGenerated = true;
           });
         }
-      } else {
+      } // === NUEVA LÓGICA PARA CRÉDITOS ACTIVOS ===
+      else if (selectedReportType == 'Créditos Activos') {
+        // No mandamos fechas, solo usuario si existe
+        final response = await _reportesService.obtenerReporteCreditosActivos(
+          idUsuario: _selectedUsuarioId,
+        );
+
+        if (!mounted) return;
+
+        if (response.success && response.data != null) {
+          setState(() {
+            listaReportesActivos = response.data!;
+            hasGenerated = true;
+          });
+        } else {
+          setState(() {
+            hasError = true;
+            errorMessage =
+                response.error ?? 'No se pudieron cargar los créditos activos.';
+          });
+        }
+      }
+      // ===========================================
+      else {
         // Esta parte para el Reporte General ya funcionaba perfectamente
         final response = await _reportesService.obtenerReporteGeneral(
           fechaInicio: selectedDateRange!.start,
@@ -235,7 +266,7 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
       },
     );
 
-     try {
+    try {
       await Future.delayed(const Duration(milliseconds: 500));
 
       // 1. OBTENEMOS EL NOMBRE DEL USUARIO ANTES DE CUALQUIER OTRA COSA
@@ -244,10 +275,34 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
         final usuarioEncontrado = _usuarios.firstWhereOrNull(
           (u) => u.idusuarios == _selectedUsuarioId,
         );
-        nombreUsuarioSeleccionado = usuarioEncontrado?.nombreCompleto ?? "Todos los usuarios";
+        nombreUsuarioSeleccionado =
+            usuarioEncontrado?.nombreCompleto ?? "Todos los usuarios";
       }
 
-      if (selectedReportType == 'Contable') {
+      // --- INICIO DE LA MODIFICACIÓN ---
+
+      if (selectedReportType == 'Créditos Activos') {
+        if (listaReportesActivos.isEmpty) {
+          Navigator.pop(context);
+          mostrarDialogoError('No hay datos de créditos activos para exportar');
+          return;
+        }
+
+        // Creamos una instancia de nuestro nuevo exportador
+        final pdfExporter = PdfExporterCreditosActivos(
+          context:
+              context, // <-- Asegúrate de agregar esta línea al instanciarlo
+          listaCreditos: listaReportesActivos,
+          currencyFormat: currencyFormat,
+          nombreUsuario: nombreUsuarioSeleccionado,
+        );
+
+        // Llamamos a su método para generar y abrir el PDF
+        await pdfExporter.exportToPdf();
+
+        if (mounted)
+          Navigator.pop(context); // Cerramos el diálogo de "Exportando..."
+      } else if (selectedReportType == 'Contable') {
         if (listaReportesContable.isEmpty) {
           Navigator.pop(context);
           mostrarDialogoError('No hay datos contables para exportar');
@@ -267,7 +322,6 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
         await pdfHelper.exportToPdf();
 
         if (mounted) Navigator.pop(context);
-
       } else {
         // Esta parte para el reporte General ya estaba bien
         if (reporteData == null || listaReportes.isEmpty) {
@@ -279,7 +333,7 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
         }
 
         if (mounted) Navigator.pop(context);
-        
+
         await ExportHelperGeneral.exportToPdf(
           context: context,
           reporteData: reporteData,
@@ -367,8 +421,13 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final colors = themeProvider.colors;
+    // LÓGICA MODIFICADA:
+    // Si es 'Créditos Activos', solo necesitamos el tipo seleccionado.
+    // Si es otro, necesitamos tipo Y fechas.
     final bool sePuedeGenerar =
-        selectedReportType != null && selectedDateRange != null;
+        selectedReportType == 'Créditos Activos'
+            ? true
+            : (selectedReportType != null && selectedDateRange != null);
 
     // <<< CAMBIO 2: Usa tu helper para determinar el layout
     final bool isMobileLayout = context.isMobile;
@@ -402,8 +461,6 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
   // Contenido de la AppBar para el diseño móvil (en columna)
   // --- 1. MODIFICAMOS EL LAYOUT MÓVIL ---
   Widget _buildMobileAppBarContent(dynamic colors, bool sePuedeGenerar) {
-    // Eliminamos la variable showUserFilter
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -411,12 +468,15 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
         Row(
           children: [
             Expanded(flex: 1, child: _buildDropdownTipoReporte(colors)),
-            const SizedBox(width: 12),
-            Expanded(flex: 1, child: _buildDateRangePickerButton(colors)),
+
+            // --- CAMBIO AQUÍ: Condición para ocultar fecha ---
+            if (selectedReportType != 'Créditos Activos') ...[
+              const SizedBox(width: 12),
+              Expanded(flex: 1, child: _buildDateRangePickerButton(colors)),
+            ],
           ],
         ),
 
-        // SIEMPRE MOSTRAMOS EL FILTRO DE USUARIOS
         const SizedBox(height: 12),
         _buildDropdownUsuarios(colors),
 
@@ -428,16 +488,17 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
 
   // --- 2. MODIFICAMOS EL LAYOUT ESCRITORIO ---
   Widget _buildDesktopAppBarContent(dynamic colors, bool sePuedeGenerar) {
-    // Eliminamos la variable showUserFilter
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         SizedBox(width: 250, child: _buildDropdownTipoReporte(colors)),
-        const SizedBox(width: 12),
-        SizedBox(width: 250, child: _buildDateRangePickerButton(colors)),
 
-        // SIEMPRE MOSTRAMOS EL FILTRO DE USUARIOS
+        // --- CAMBIO AQUÍ: Condición para ocultar fecha ---
+        if (selectedReportType != 'Créditos Activos') ...[
+          const SizedBox(width: 12),
+          SizedBox(width: 250, child: _buildDateRangePickerButton(colors)),
+        ],
+
         const SizedBox(width: 12),
         SizedBox(width: 250, child: _buildDropdownUsuarios(colors)),
 
@@ -610,7 +671,9 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
               ),
               isExpanded: true,
               items:
-                  ['General', 'Contable'].map((String item) {
+                  ['General', 'Contable', 'Créditos Activos'].map((
+                    String item,
+                  ) {
                     return DropdownMenuItem<String>(
                       value: item,
                       child: Text(
@@ -860,49 +923,50 @@ class _ReportesScreenMobileState extends State<ReportesScreenMobile> {
     }
 
     if (hasGenerated) {
-      // Muestra el widget del reporte correspondiente.
+      // 1. Caso Contable
       if (selectedReportType == 'Contable' &&
           listaReportesContable.isNotEmpty) {
-        // ASUMCIÓN: Tienes un widget `ReporteContableWidget` adaptado para móvil.
         return ReporteContableWidget(
           reporteData: listaReportesContable.first,
           currencyFormat: currencyFormat,
-          horizontalScrollController:
-              _horizontalScrollController, // ✅ Parámetro correcto
-          verticalScrollController:
-              _verticalScrollController, // ✅ Parámetro correcto
-          //scrollController: _verticalScrollController,
+          horizontalScrollController: _horizontalScrollController,
+          verticalScrollController: _verticalScrollController,
         );
-      } else if (selectedReportType == 'General' && reporteData != null) {
-        // Widget ReporteGeneralMobileWidget corregido para móvil
+      }
+      // 2. NUEVO CASO: Créditos Activos
+      else if (selectedReportType == 'Créditos Activos' &&
+          listaReportesActivos.isNotEmpty) {
+        return ReporteCreditosActivosWidget(
+          listaCreditos: listaReportesActivos,
+          currencyFormat: currencyFormat,
+        );
+      }
+      // 3. Caso General
+      else if (selectedReportType == 'General' && reporteData != null) {
         return ReporteGeneralWidget(
           listaReportes: listaReportes,
           reporteData: reporteData,
           currencyFormat: currencyFormat,
-          verticalScrollController:
-              _verticalScrollController, // ✅ Parámetro correcto
-          horizontalScrollController:
-              _horizontalScrollController, // ✅ Parámetro correcto
+          verticalScrollController: _verticalScrollController,
+          horizontalScrollController: _horizontalScrollController,
         );
       } else {
-        // Caso raro: generado pero sin datos.
         return _buildMensajeConIcono(
           icon: Icons.search_off_rounded,
           colorIcono: Colors.orange,
           titulo: 'Sin Resultados',
-          mensaje: 'No se encontraron datos para los filtros seleccionados.',
+          mensaje: 'No se encontraron datos.',
           colors: colors,
         );
       }
     }
 
-    // Estado inicial: mensaje para que el usuario seleccione filtros.
+    // Estado inicial
     return _buildMensajeConIcono(
       icon: Icons.description_outlined,
       colorIcono: Colors.grey[400]!,
       titulo: 'Listo para generar',
-      mensaje:
-          'Por favor, selecciona el tipo de reporte y el período de fechas para comenzar.',
+      mensaje: 'Selecciona el tipo de reporte para comenzar.',
       colors: colors,
     );
   }

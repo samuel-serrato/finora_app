@@ -190,6 +190,9 @@ class AppColors {
 
   Color get blacBlack => _isDarkMode ? Colors.black : Colors.black;
 
+
+  Color get backgroundbar => _isDarkMode ? _grey500 : _grey300;
+
   Color get error => accent;
 
   Color get iconColor => _isDarkMode ? _lightBackground : _darkBackground;
