@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/material.dart'; // Necesario para el BuildContext
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:open_file/open_file.dart';
@@ -7,7 +7,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-// Nuevos imports para la carga de logos y providers
+// --- NUEVOS IMPORTS PARA EVITAR EL ERROR EN WEB ---
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:printing/printing.dart';
+
 import 'package:provider/provider.dart';
 import 'package:collection/collection.dart';
 import 'package:http/http.dart' as http;
@@ -16,13 +19,13 @@ import 'package:finora_app/providers/user_data_provider.dart';
 import 'package:finora_app/models/reporte_creditos_activos.dart';
 
 class PdfExporterCreditosActivos {
-  final BuildContext context; // <--- Agregamos el BuildContext
+  final BuildContext context;
   final List<ReporteCreditoActivo> listaCreditos;
   final NumberFormat currencyFormat;
   final String nombreUsuario;
 
   PdfExporterCreditosActivos({
-    required this.context, // <--- Requerido en el constructor
+    required this.context,
     required this.listaCreditos,
     required this.currencyFormat,
     required this.nombreUsuario,
@@ -115,10 +118,13 @@ class PdfExporterCreditosActivos {
             ? '$baseUrl/imagenes/subidas/${logoColor.rutaImagen}'
             : null;
 
-    final financieraLogo = await _loadNetworkImage(logoUrl);
+   final financieraBytes = await _loadNetworkImage(logoUrl); // <-- Cambiamos el nombre a financieraBytes
+    // Convertimos a MemoryImage aquí afuera (UNA SOLA VEZ)
+    final pw.MemoryImage? financieraLogo = financieraBytes != null ? pw.MemoryImage(financieraBytes) : null;
 
     final ByteData data = await rootBundle.load('assets/finora.png');
-    final finoraLogo = data.buffer.asUint8List();
+    // Convertimos a MemoryImage aquí afuera (UNA SOLA VEZ)
+    final pw.MemoryImage finoraLogo = pw.MemoryImage(data.buffer.asUint8List());
 
     // 2. CREACIÓN DEL PDF
     final pdf = pw.Document();
@@ -141,17 +147,13 @@ class PdfExporterCreditosActivos {
     pdf.addPage(
       pw.MultiPage(
         pageTheme: pageTheme,
-        header:
-            (context) =>
-                _buildHeader(financieraLogo, finoraLogo), // Pasamos los logos
+        header: (context) => _buildHeader(financieraLogo, finoraLogo),
         footer: (context) => _buildFooter(context),
         build:
             (context) => [
-              // Títulos de columnas
               _buildColumnLegend(),
               pw.SizedBox(height: 10),
 
-              // Iteramos sobre los créditos
               ...listaCreditos.asMap().entries.map((entry) {
                 return pw.Wrap(
                   children: [_buildExpandedCard(entry.value, entry.key + 1)],
@@ -163,39 +165,48 @@ class PdfExporterCreditosActivos {
       ),
     );
 
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/reporte_creditos_completo.pdf');
-    await file.writeAsBytes(await pdf.save());
-    OpenFile.open(file.path);
+    // ==========================================
+    // ¡AQUÍ ESTÁ LA CORRECCIÓN PRINCIPAL!
+    // ==========================================
+    final bytes = await pdf.save();
+
+    if (kIsWeb) {
+      // SI ESTAMOS EN WEB: Usamos printing para descargar/visualizar el PDF
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'reporte_creditos_activos.pdf',
+      );
+    } else {
+      // SI ESTAMOS EN MÓVIL (Android/iOS): Guardamos y abrimos con open_file
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/reporte_creditos_activos.pdf');
+      await file.writeAsBytes(bytes);
+      await OpenFile.open(file.path);
+    }
   }
 
   // ==========================================
   //      COMPONENTES VISUALES
   // ==========================================
 
-  // --- NUEVO HEADER ESTILO "REPORTE CONTABLE" ---
-  pw.Widget _buildHeader(Uint8List? financieraLogo, Uint8List finoraLogo) {
+  pw.Widget _buildHeader(pw.MemoryImage? financieraLogo, pw.MemoryImage finoraLogo) { // <-- Cambiamos los tipos aquí
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        // --- LOGOS ---
+      children:[
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children: [
+          children:[
             if (financieraLogo != null)
               pw.Image(
-                pw.MemoryImage(financieraLogo),
+                financieraLogo, // <-- Ya no usamos pw.MemoryImage(...) aquí
                 width: 120,
                 height: 40,
                 fit: pw.BoxFit.contain,
               )
             else
-              pw.SizedBox(
-                width: 120,
-                height: 40,
-              ), // Espacio por si no hay logo de financiera
+              pw.SizedBox(width: 120, height: 40),
             pw.Image(
-              pw.MemoryImage(finoraLogo),
+              finoraLogo, // <-- Ya no usamos pw.MemoryImage(...) aquí
               width: 120,
               height: 40,
               fit: pw.BoxFit.contain,
@@ -205,7 +216,6 @@ class PdfExporterCreditosActivos {
 
         pw.SizedBox(height: 10),
 
-        // --- TÍTULO ---
         pw.Text(
           'Reporte de Créditos Activos',
           style: pw.TextStyle(
@@ -217,7 +227,6 @@ class PdfExporterCreditosActivos {
 
         pw.SizedBox(height: 10),
 
-        // --- ASESOR ---
         if (nombreUsuario.isNotEmpty && nombreUsuario != 'Todos los usuarios')
           pw.Padding(
             padding: const pw.EdgeInsets.only(top: 4),
@@ -229,12 +238,11 @@ class PdfExporterCreditosActivos {
 
         pw.SizedBox(height: 5),
 
-        // --- FECHAS ---
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children: [
+          children:[
             pw.Text(
-              'Estado: Créditos Activos', // Opcionalmente puedes poner un período si lo tuvieras
+              'Estado: Créditos Activos',
               style: const pw.TextStyle(fontSize: 8),
             ),
             pw.Text(
@@ -318,9 +326,7 @@ class PdfExporterCreditosActivos {
     color: colorPrimary,
   );
 
-  // --- LA TARJETA PRINCIPAL (ESTILO EXPANDIDO) ---
   pw.Widget _buildExpandedCard(ReporteCreditoActivo credito, int index) {
-    // Cálculos Financieros
     final double restanteCredito = credito.montoMasInteres - credito.totalPagos;
     final double moraGenerada = credito.estadoCredito?.acumulado ?? 0.0;
     final double moraPagada = credito.totalMora;
@@ -341,7 +347,6 @@ class PdfExporterCreditosActivos {
             ? (tiempoInfo.current / tiempoInfo.total).clamp(0.0, 1.0)
             : 0.0;
 
-    // Validar si es semanal, quincenal o mensual para las etiquetas
     String textoPeriodo = "Semanal";
     final String tipoPlazoLower = credito.tipoPlazo.toLowerCase();
     if (tipoPlazoLower.contains('quincenal')) {
@@ -359,23 +364,14 @@ class PdfExporterCreditosActivos {
       decoration: pw.BoxDecoration(
         color: colorCard,
         borderRadius: pw.BorderRadius.circular(6),
-        boxShadow: const [
-          pw.BoxShadow(
-            color: PdfColors.grey300,
-            blurRadius: 3,
-            spreadRadius: 0,
-          ),
-        ],
       ),
       child: pw.Column(
         children: [
-          // 1. ENCABEZADO DE LA TARJETA
           pw.Padding(
             padding: const pw.EdgeInsets.all(8),
             child: pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
-                // Col 1: Nombre
                 pw.Expanded(
                   flex: 3,
                   child: pw.Row(
@@ -407,7 +403,6 @@ class PdfExporterCreditosActivos {
                     ],
                   ),
                 ),
-                // Col 2: Tipo
                 pw.Expanded(
                   flex: 2,
                   child: pw.Column(
@@ -431,7 +426,6 @@ class PdfExporterCreditosActivos {
                     ],
                   ),
                 ),
-                // Col 3: Progreso
                 pw.Expanded(
                   flex: 3,
                   child: pw.Padding(
@@ -446,7 +440,6 @@ class PdfExporterCreditosActivos {
                   ),
                 ),
 
-                // Col 4, 5, 6, 7: VALORES FINANCIEROS
                 _buildFinancialColumn(
                   "de ${currencyFormat.format(credito.montoMasInteres)}",
                   credito.totalPagos,
@@ -469,7 +462,6 @@ class PdfExporterCreditosActivos {
                   isBold: true,
                 ),
 
-                // Col 8: Estado
                 pw.Expanded(
                   flex: 2,
                   child: pw.Center(
@@ -480,10 +472,8 @@ class PdfExporterCreditosActivos {
             ),
           ),
 
-          // LÍNEA DIVISORIA
           pw.Divider(height: 1, color: PdfColors.grey200),
 
-          // 2. CONTENIDO EXPANDIDO (Detalles)
           pw.Container(
             width: double.infinity,
             padding: const pw.EdgeInsets.symmetric(
@@ -491,7 +481,7 @@ class PdfExporterCreditosActivos {
               horizontal: 12,
             ),
             decoration: const pw.BoxDecoration(
-              color: PdfColor.fromInt(0xFFFAFAFA),
+              color: PdfColor.fromInt(0xFFFFFFFF),
               borderRadius: pw.BorderRadius.only(
                 bottomLeft: pw.Radius.circular(6),
                 bottomRight: pw.Radius.circular(6),
@@ -548,8 +538,6 @@ class PdfExporterCreditosActivos {
       ),
     );
   }
-
-  // --- SUB-COMPONENTES ---
 
   pw.Widget _buildSectionTitle(String title) {
     return pw.Row(
