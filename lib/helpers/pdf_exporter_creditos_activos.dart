@@ -584,75 +584,99 @@ class PdfExporterCreditosActivos {
     return pw.Wrap(
       spacing: 4,
       runSpacing: 4,
-      children:
-          fechas.map((fecha) {
-            PdfColor color;
-            String label = fecha.numPago.toString();
-            String lower = _limpiarTexto(fecha.estado.toLowerCase());
-            String statusShort = "";
+      children: fechas.map((fecha) {
+        PdfColor color;
+        String statusShort; // Aquí guardaremos las siglas personalizadas
+        String label = fecha.numPago.toString();
+        
+        // Convertimos a minúsculas y limpiamos acentos para comparar fácil
+        String lower = _limpiarTexto(fecha.estado.toLowerCase());
 
-            if (lower.contains('desembolso')) {
-              color = PdfColors.blue;
-              label = "D";
-              statusShort = "DES";
-            } else if (lower.contains('pagado') || lower.contains('garantia')) {
-              color = colorGreen;
-              statusShort = "OK";
-            } else if (lower.contains('atraso')) {
-              color = colorRed;
-              statusShort = "ATR";
-            } else if (lower.contains('pendiente')) {
-              color = colorOrange;
-              statusShort = "PEN";
-            } else {
-              color = PdfColors.grey;
-              statusShort = "-";
-            }
+        // --- LÓGICA PERSONALIZADA DE COLORES Y SIGLAS ---
+        
+        if (lower.contains('desembolso')) {
+          color = PdfColors.blue;
+          statusShort = "DES";
+        } 
+        else if (lower.contains('pagado') || lower.contains('garantia') || lower.contains('liquidado')) {
+          color = colorGreen;
+          statusShort = "OK";
+        } 
+        else if (lower.contains('atraso') || lower.contains('mora') || lower.contains('vencido')) {
+          color = colorRed;
+          statusShort = "ATR";
+        } 
+        else if (lower.contains('pendiente')) {
+          color = colorOrange;
+          statusShort = "PEND";
+        } 
+        else if (lower.contains('proximo')) {
+          color = PdfColors.grey;
+          statusShort = "PRO";
+        }
+        // AQUÍ AGREGAMOS TUS CASOS ESPECÍFICOS PARA EL "EN"
+        else if (lower.contains('abono') || lower.contains('parcial')) {
+          color = PdfColors.blueGrey;
+          statusShort = "ABONO"; // Ahora dirá ABO en vez de EN
+        }
+        else if (lower.contains('curso')) {
+          color = PdfColors.blueGrey;
+          statusShort = "CUR"; // Ahora dirá CUR en vez de EN
+        }
+        else {
+          // CASO POR DEFECTO (Si no encuentra ninguna palabra clave arriba)
+          color = PdfColors.blueGrey;
+          // Toma las primeras 3 letras automáticamente si no sabemos qué es
+          statusShort = lower.length > 3 
+              ? lower.substring(0, 3).toUpperCase() 
+              : lower.toUpperCase();
+        }
 
-            String dateStr = "";
-            try {
-              final d = DateTime.parse(fecha.fechaPago);
-              dateStr = "${d.day}/${d.month}";
-            } catch (_) {}
+        // --- FORMATEO DE FECHA ---
+        String dateStr = "";
+        try {
+          final d = DateTime.parse(fecha.fechaPago);
+          dateStr = "${d.day}/${d.month}";
+        } catch (_) {}
 
-            return pw.Column(
-              children: [
-                pw.Container(
-                  width: 16,
-                  height: 16,
-                  alignment: pw.Alignment.center,
-                  decoration: pw.BoxDecoration(
-                    color: color,
-                    shape: pw.BoxShape.circle,
-                  ),
-                  child: pw.Text(
-                    label,
-                    style: pw.TextStyle(
-                      color: PdfColors.white,
-                      fontSize: 6,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
+        return pw.Column(
+          children: [
+            pw.Container(
+              width: 16,
+              height: 16,
+              alignment: pw.Alignment.center,
+              decoration: pw.BoxDecoration(
+                color: color,
+                shape: pw.BoxShape.circle,
+              ),
+              child: pw.Text(
+                label,
+                style: pw.TextStyle(
+                  color: PdfColors.white,
+                  fontSize: 6,
+                  fontWeight: pw.FontWeight.bold,
                 ),
-                pw.SizedBox(height: 1),
-                pw.Text(
-                  dateStr,
-                  style: const pw.TextStyle(
-                    fontSize: 5,
-                    color: colorTextSecondary,
-                  ),
-                ),
-                pw.Text(
-                  statusShort,
-                  style: pw.TextStyle(
-                    fontSize: 5,
-                    color: color,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-              ],
-            );
-          }).toList(),
+              ),
+            ),
+            pw.SizedBox(height: 1),
+            pw.Text(
+              dateStr,
+              style: const pw.TextStyle(
+                fontSize: 5,
+                color: colorTextSecondary,
+              ),
+            ),
+            pw.Text(
+              statusShort,
+              style: pw.TextStyle(
+                fontSize: 5,
+                color: color,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+          ],
+        );
+      }).toList(),
     );
   }
 

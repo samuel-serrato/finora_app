@@ -1106,25 +1106,57 @@ class _InfoBox extends StatelessWidget {
 class _PaymentWeekBadge extends StatelessWidget {
   final FechaPagoCredito fecha;
   const _PaymentWeekBadge({required this.fecha});
+
   @override
   Widget build(BuildContext context) {
     Color color;
+    String statusShort; // Variable para las siglas
     String label = fecha.numPago.toString();
-    String lower = fecha.estado.toLowerCase();
+    
+    // Normalizamos el texto
+    String lower = fecha.estado.toLowerCase(); 
+
+    // --- LÓGICA IGUALADA AL PDF ---
+    
     if (lower.contains('desembolso')) {
       color = Colors.blue;
-      label = "D";
-    } else if (lower.contains('pagado') || lower.contains('garantia')) {
+      label = "D"; // Caso especial para el círculo
+      statusShort = "DES";
+    } 
+    else if (lower.contains('pagado') || lower.contains('garantia') || lower.contains('liquidado')) {
       color = Colors.green;
-    } else if (lower.contains('atraso')) {
+      statusShort = "OK";
+    } 
+    else if (lower.contains('atraso') || lower.contains('mora') || lower.contains('vencido')) {
       color = Colors.red;
-    } else if (lower.contains('proximo')) {
-      color = Colors.grey;
-    } else if (lower.contains('pendiente')) {
+      statusShort = "ATR";
+    } 
+    else if (lower.contains('pendiente')) {
       color = Colors.orange;
-    } else {
+      statusShort = "PEND";
+    } 
+    else if (lower.contains('proximo')) {
+      color = Colors.grey;
+      statusShort = "PRO";
+    } 
+    // CASOS ESPECÍFICOS (ABONO, CURSO, ETC.)
+    else if (lower.contains('abono') || lower.contains('parcial')) {
       color = Colors.blueGrey;
+      statusShort = "ABONO"; 
     }
+    else if (lower.contains('curso')) {
+      color = Colors.blueGrey;
+      statusShort = "CUR"; 
+    } 
+    else {
+      // DEFAULT
+      color = Colors.blueGrey;
+      statusShort = lower.length > 3 
+          ? lower.substring(0, 3).toUpperCase() 
+          : lower.toUpperCase();
+    }
+
+    // --- FORMATO DE FECHA ---
     String dateStr = "?";
     try {
       final date = DateTime.parse(fecha.fechaPago);
@@ -1135,6 +1167,7 @@ class _PaymentWeekBadge extends StatelessWidget {
       padding: const EdgeInsets.only(right: 8.0),
       child: Column(
         children: [
+          // CÍRCULO CON NÚMERO
           Container(
             width: 32,
             height: 32,
@@ -1150,15 +1183,16 @@ class _PaymentWeekBadge extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Text(dateStr, style: TextStyle(fontSize: 9, color: Colors.grey[600])),
+          // FECHA
           Text(
-            lower == 'pagado'
-                ? 'OK'
-                : lower
-                    .substring(0, lower.length > 3 ? 3 : lower.length)
-                    .toUpperCase(),
+            dateStr, 
+            style: TextStyle(fontSize: 9, color: Colors.grey[600])
+          ),
+          // SIGLAS (statusShort)
+          Text(
+            statusShort,
             style: TextStyle(
-              fontSize: 8,
+              fontSize: statusShort.length > 3 ? 7 : 8, // Ajuste automático si el texto es largo (ej. ABONO)
               color: color,
               fontWeight: FontWeight.w600,
             ),
