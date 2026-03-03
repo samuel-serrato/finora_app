@@ -34,7 +34,7 @@ class PdfExporterCreditosActivos {
   // --- PALETA DE COLORES ---
   static const PdfColor colorPrimary = PdfColor.fromInt(0xFF5162F6);
   static const PdfColor colorHeaderBg = PdfColor.fromInt(0xFFE8EAF6);
-  static const PdfColor colorBackground = PdfColor.fromInt(0xFFF5F5F5);
+  static const PdfColor colorBackground = PdfColor.fromInt(0xFFFFFFFF);
   static const PdfColor colorCard = PdfColor.fromInt(0xFFFFFFFF);
   static const PdfColor colorTextPrimary = PdfColor.fromInt(0xFF333333);
   static const PdfColor colorTextSecondary = PdfColor.fromInt(0xFF757575);
@@ -327,6 +327,7 @@ class PdfExporterCreditosActivos {
   );
 
   pw.Widget _buildExpandedCard(ReporteCreditoActivo credito, int index) {
+    // --- 1. CÁLCULOS (Se mantienen igual) ---
     final double restanteCredito = credito.montoMasInteres - credito.totalPagos;
     final double moraGenerada = credito.estadoCredito?.acumulado ?? 0.0;
     final double moraPagada = credito.totalMora;
@@ -359,14 +360,20 @@ class PdfExporterCreditosActivos {
       textoPeriodo = "Diario";
     }
 
+    // --- 2. ESTRUCTURA VISUAL CORREGIDA ---
     return pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 12),
       decoration: pw.BoxDecoration(
-        color: colorCard,
+        color: colorCard, // El color blanco general
         borderRadius: pw.BorderRadius.circular(6),
+        border: pw.Border.all(
+          color: PdfColors.grey200,
+          width: 1, // Aseguramos un ancho uniforme
+        ),
       ),
       child: pw.Column(
         children: [
+          // PARTE SUPERIOR (Sin cambios)
           pw.Padding(
             padding: const pw.EdgeInsets.all(8),
             child: pw.Row(
@@ -472,21 +479,17 @@ class PdfExporterCreditosActivos {
             ),
           ),
 
-          pw.Divider(height: 1, color: PdfColors.grey200),
+          // LÍNEA DIVISORIA
+          pw.Divider(height: 1, thickness: 1, color: PdfColors.grey200),
 
+          // PARTE INFERIOR (CORREGIDA: Sin 'decoration')
           pw.Container(
             width: double.infinity,
             padding: const pw.EdgeInsets.symmetric(
               vertical: 10,
               horizontal: 12,
             ),
-            decoration: const pw.BoxDecoration(
-              color: PdfColor.fromInt(0xFFFFFFFF),
-              borderRadius: pw.BorderRadius.only(
-                bottomLeft: pw.Radius.circular(6),
-                bottomRight: pw.Radius.circular(6),
-              ),
-            ),
+            // AQUÍ QUITAMOS EL BOXDECORATION QUE CAUSABA EL PROBLEMA
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
