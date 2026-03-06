@@ -1362,6 +1362,8 @@ class _ControlPagosTabState extends State<ControlPagosTab>
     final double totalMoratoriosPendientes = (totalMoratoriosGenerados -
             totalMoratoriosPagados)
         .clamp(0, double.infinity);
+    
+    // ▼▼▼ MODIFICACIÓN AQUÍ ▼▼▼
     final double saldoContraCombinado =
         totalSaldoContra + totalMoratoriosPendientes;
 
@@ -1381,21 +1383,18 @@ class _ControlPagosTabState extends State<ControlPagosTab>
       totalRealIngresado: totalRealIngresado,
       totalSaldoFavor: totalSaldoFavor,
       saldoFavorHistoricoTotal: saldoFavorHistoricoTotal,
-      totalSaldoContraActivo: saldoContraCombinado,
-      totalSaldoContraPotencial: saldoContraCombinado,
+      // Solo el saldo en contra puro (sin moratorios)
+      totalSaldoContraActivo: totalSaldoContra, 
+      // El total combinado (en contra + moratorios)
+      totalSaldoContraPotencial: saldoContraCombinado, 
       totalDeudaPendiente: totalDeudaPendiente,
       hayGarantiaAplicada: totalGarantiasAplicadas > 0,
       totalMoratoriosGenerados: totalMoratoriosGenerados,
       totalMoratoriosPagados: totalMoratoriosPagados,
       totalMoratorios: totalMoratoriosPendientes,
     );
+    // ▲▲▲ FIN DE LA MODIFICACIÓN ▲▲▲
   }
-
-  // (Aquí continúa el resto de tu código sin cambios...)
-  // ...
-  // ... Pega aquí todo desde _mostrarDetallesCompletos hasta el final de la clase
-  // ...
-  // En: tu clase _ControlPagosTabState
 
   void _mostrarDetallesCompletos(
     BuildContext context,
@@ -1495,20 +1494,22 @@ class _ControlPagosTabState extends State<ControlPagosTab>
 
                 Divider(height: 24),
 
+                // ▼▼▼ MODIFICACIÓN DE LOS DETALLES EN CONTRA ▼▼▼
                 _buildDetalleRow(
-                  'Saldo en Contra (deuda):',
+                  'Saldo en Contra (solo capital/interés):',
                   '\$${formatearNumero(totales.totalSaldoContraActivo)}',
                   isDarkMode,
-                  valueColor: Colors.red,
+                  valueColor: Colors.red.shade400,
                 ),
                 _buildDetalleRow(
-                  '  ↳ Deuda Potencial Total:',
+                  '  ↳ En Contra + Moratorios:',
                   '\$${formatearNumero(totales.totalSaldoContraPotencial)}',
                   isDarkMode,
-                  valueColor: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                  valueColor: totales.totalSaldoContraPotencial > 0 ? Colors.red.shade800 : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
                 ),
+                // ▲▲▲ FIN DE LA MODIFICACIÓN ▲▲▲
 
-                // ▼▼▼ CAMBIO: DESGLOSE DE MORATORIOS ▼▼▼
+                // ▼▼▼ DESGLOSE DE MORATORIOS ▼▼▼
                 Divider(height: 24, indent: 20, endIndent: 20),
 
                 _buildDetalleRow(
@@ -1649,8 +1650,9 @@ class _ControlPagosTabState extends State<ControlPagosTab>
                         : Colors.grey,
               ),
               _buildDivisor(),
+              // ▼▼▼ MODIFICACIÓN PARA LA BARRA FLOTANTE ▼▼▼
               _buildItemFlotante(
-                label: 'En Contra',
+                label: 'En Contra', // Este ahora solo tiene la deuda base
                 valor: totales.totalSaldoContraActivo,
                 color:
                     totales.totalSaldoContraActivo > 0
@@ -1658,6 +1660,16 @@ class _ControlPagosTabState extends State<ControlPagosTab>
                         : Colors.grey,
               ),
               _buildDivisor(),
+              _buildItemFlotante(
+                label: 'Contra + Mora', // Nuevo indicador combinado
+                valor: totales.totalSaldoContraPotencial,
+                color:
+                    totales.totalSaldoContraPotencial > 0
+                        ? Colors.red.shade400 
+                        : Colors.grey,
+              ),
+              _buildDivisor(),
+              // ▲▲▲ FIN DE LA MODIFICACIÓN ▲▲▲
 
               // ▼▼▼ CAMBIO: SE REEMPLAZA EL TOTAL DE MORATORIOS ▼▼▼
               _buildItemFlotante(

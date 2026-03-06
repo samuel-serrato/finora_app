@@ -1,10 +1,16 @@
 // lib/services/update_service_web.dart
 
+// ignore_for_file: avoid_web_libraries_in_flutter
+// ignore_for_file: uri_does_not_exist
+
+// lib/services/update_service_web.dart
 import 'package:finora_app/ip.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:package_info_plus/package_info_plus.dart';
+
+// ... el resto sigue exactamente igual
 
 // Importa 'dart:js' para la interoperabilidad con JavaScript.
 import 'dart:js' as js;

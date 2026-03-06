@@ -1,22 +1,26 @@
+// ignore_for_file: avoid_web_libraries_in_flutter
 // Archivo: about_logic_web.dart
 
+// ignore_for_file: avoid_web_libraries_in_flutter
+// ignore_for_file: uri_does_not_exist  <-- ¡AÑADE ESTA LÍNEA!
+
+// Archivo: about_logic_web.dart
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'dart:js_util';
+import 'dart:js_util' as js_util;
 import 'dart:html' as html;
 
-// Versión WEB para obtener la versión (¡AHORA ES MÁS FÁCIL!)
+// ... resto de tu código
+
+// Versión WEB para obtener la versión
 Future<String> getPlatformSpecificVersion() async {
-  // package_info_plus se encarga de todo.
-  // Lee el archivo version.json que Flutter crea automáticamente.
   final packageInfo = await PackageInfo.fromPlatform();
   return packageInfo.version;
 }
 
-// La lógica para buscar actualizaciones sigue siendo específica de la web,
-// así que la mantenemos como estaba.
 Future<void> checkPlatformSpecificVersion(BuildContext context) async {
-  final result = await callMethod<String>(html.window, 'checkForUpdates', []);
+  final jsPromise = js_util.callMethod(html.window, 'checkForUpdates', []);
+  final result = await js_util.promiseToFuture<String>(jsPromise);
 
   if (!context.mounted) return;
 

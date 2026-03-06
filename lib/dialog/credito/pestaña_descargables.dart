@@ -13,6 +13,7 @@ import 'package:finora_app/helpers/pdf_resumen_credito.dart';
 import 'package:finora_app/ip.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:open_file/open_file.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -76,7 +77,7 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
     }
   }
 
-  /// Función GENÉRICA para generar PDFs simples (Resumen, Ficha)
+   /// Función GENÉRICA para generar PDFs simples (Resumen, Ficha)
   Future<void> _generarPdfSimple(
     String tipoDocumento,
     Future<Uint8List> Function(BuildContext, Credito) generador,
@@ -87,7 +88,16 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
 
     try {
       final Uint8List pdfBytes = await generador(context, widget.credito);
-      final fileName = '${tipoDocumento}_${widget.credito.folio}.pdf';
+      
+      // 1. Obtener la fecha actual formateada (ej. 24-10-2023)
+      final String fecha = DateFormat('dd-MM-yyyy').format(DateTime.now());
+      
+      // 2. Construir el nombre base con la fecha
+      final String nombreBase = '${tipoDocumento}_${widget.credito.nombreGrupo}_$fecha';
+      
+      // 3. Convertir todo a mayúsculas y concatenar la extensión en minúscula (recomendado)
+      final String fileName = '${nombreBase.toUpperCase()}.pdf';
+      
       await saveFilePlatform(pdfBytes, fileName);
     } catch (e, s) {
       AppLogger.log('ERROR PDF SIMPLE: $e\n$s');
