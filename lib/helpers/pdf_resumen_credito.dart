@@ -1219,13 +1219,14 @@ class PDFResumenCredito {
   // En: lib/pdf/pdf_resumen_credito.dart
 
   // ▼▼▼ REEMPLAZA ESTA FUNCIÓN COMPLETA (VERSIÓN SOLO PARA PDF) ▼▼▼
+  // ▼▼▼ REEMPLAZA ESTA FUNCIÓN COMPLETA ▼▼▼
   static pw.Widget _buildPagosSection(List<Pago> pagos, final currencyFormat) {
     final headerColor = PdfColor.fromHex('f2f7fa');
     final rowEvenColor = PdfColors.white;
     final rowOddColor = PdfColors.grey100;
     final borderColor = PdfColors.blueGrey300;
     final headerTextStyle = pw.TextStyle(
-      fontSize: 6,
+      fontSize: 5.5, // Reducido un poco para que quepan las 13 columnas
       fontWeight: pw.FontWeight.bold,
       color: PdfColors.blueGrey900,
     );
@@ -1239,62 +1240,18 @@ class PDFResumenCredito {
         decoration: pw.BoxDecoration(color: headerColor),
         children: [
           _paddedCell('SEM.', headerTextStyle, alignment: pw.Alignment.center),
-          _paddedCell(
-            'F. PROGRAMADA',
-            headerTextStyle,
-            alignment: pw.Alignment.center,
-          ),
-          _paddedCell(
-            'MONTO FICHA',
-            headerTextStyle,
-            alignment: pw.Alignment.centerRight,
-          ),
-          _paddedCell(
-            'F. REALIZADO',
-            headerTextStyle,
-            alignment: pw.Alignment.center,
-          ),
-          _paddedCell(
-            'PAGOS',
-            headerTextStyle,
-            alignment: pw.Alignment.centerRight,
-          ),
-          // --- CAMBIO: Encabezados actualizados ---
-          _paddedCell(
-            'S. FAVOR GENERADO',
-            headerTextStyle, // Renombrado para claridad
-            alignment: pw.Alignment.centerRight,
-          ),
-          _paddedCell(
-            'S. FAVOR UTILIZADO',
-            headerTextStyle, // <-- NUEVA COLUMNA
-            alignment: pw.Alignment.centerRight,
-          ),
-          _paddedCell(
-            'S. EN CONTRA',
-            headerTextStyle,
-            alignment: pw.Alignment.centerRight,
-          ),
-          _paddedCell(
-            'MORAT. GENERADOS',
-            headerTextStyle,
-            alignment: pw.Alignment.centerRight,
-          ),
-          _paddedCell(
-            'MORAT. PAGADOS',
-            headerTextStyle,
-            alignment: pw.Alignment.centerRight,
-          ),
-          _paddedCell(
-            'TIPO PAGO',
-            headerTextStyle,
-            alignment: pw.Alignment.center,
-          ),
-          _paddedCell(
-            'ESTADO',
-            headerTextStyle,
-            alignment: pw.Alignment.center,
-          ),
+          _paddedCell('F. PROGRAMADA', headerTextStyle, alignment: pw.Alignment.center),
+          _paddedCell('MONTO FICHA', headerTextStyle, alignment: pw.Alignment.centerRight),
+          _paddedCell('F. REALIZADO', headerTextStyle, alignment: pw.Alignment.center),
+          _paddedCell('PAGOS', headerTextStyle, alignment: pw.Alignment.centerRight),
+          _paddedCell('S. FAVOR\nGENERADO', headerTextStyle, alignment: pw.Alignment.centerRight),
+          _paddedCell('S. FAVOR\nUTILIZADO', headerTextStyle, alignment: pw.Alignment.centerRight),
+          _paddedCell('S. CONTRA\n(CAP/INT)', headerTextStyle, alignment: pw.Alignment.centerRight), // <-- Modificado
+          _paddedCell('CONTRA\n+ MORA', headerTextStyle, alignment: pw.Alignment.centerRight), // <-- NUEVA COLUMNA
+          _paddedCell('MORAT.\nGENERADOS', headerTextStyle, alignment: pw.Alignment.centerRight),
+          _paddedCell('MORAT.\nPAGADOS', headerTextStyle, alignment: pw.Alignment.centerRight),
+          _paddedCell('TIPO PAGO', headerTextStyle, alignment: pw.Alignment.center),
+          _paddedCell('ESTADO', headerTextStyle, alignment: pw.Alignment.center),
         ],
       ),
     );
@@ -1303,8 +1260,9 @@ class PDFResumenCredito {
     double totalCuotas = 0.0;
     double totalAbonos = 0.0;
     double totalSaldoFavorGenerado = 0.0;
-    double totalFavorUtilizado = 0.0; // <-- NUEVO ACUMULADOR
+    double totalFavorUtilizado = 0.0;
     double totalSaldoContra = 0.0;
+    double totalSaldoContraCombinado = 0.0; // <-- NUEVO ACUMULADOR
     double totalMoratoriosGenerados = 0.0;
     double totalMoratoriosPagados = 0.0;
 
@@ -1360,20 +1318,7 @@ class PDFResumenCredito {
         pagosDetallados = detalles.join('\n');
       }
 
-      // Calcular saldo en contra
-      double saldoContra = 0.0;
-      if (pago.semana != 0) {
-        // La deuda de la semana incluye capital, interés y moratorios generados
-        double montoDebe =
-            pago.capitalMasInteres + (pago.moratorios?.moratorios ?? 0);
-        // Lo que se ha cubierto son los abonos + el saldo a favor que se haya utilizado
-        double totalCubierto = totalAbonosPago + (pago.favorUtilizado ?? 0.0);
-        if (totalCubierto < montoDebe) {
-          saldoContra = montoDebe - totalCubierto;
-        }
-      }
-
-      // Procesar moratorios (ya lo tenías bien)
+      // --- CÁLCULO DE MORATORIOS ---
       double moratoriosGenerados = 0.0;
       double moratoriosPagados = 0.0;
       if (pago.pagosMoratorios.isNotEmpty) {
@@ -1383,6 +1328,28 @@ class PDFResumenCredito {
           moratoriosPagados +=
               (moratorio['sumaMoratorios'] as num?)?.toDouble() ?? 0.0;
         }
+      } else {
+        // Fallback por si acaso
+        moratoriosGenerados = pago.moratorios?.moratorios ?? 0.0;
+        moratoriosPagados = pago.moratoriosPagados;
+      }
+      double moratoriosPendientes = (moratoriosGenerados - moratoriosPagados).clamp(0.0, double.infinity);
+
+      // --- CÁLCULO DE SALDOS EN CONTRA ---
+      double saldoContra = 0.0;
+      double saldoContraCombinado = 0.0;
+      
+      if (pago.semana != 0) {
+        // 1. Deuda pura de capital (excluyendo moratorios)
+        double deudaCapital = pago.capitalMasInteres;
+        double totalCubierto = totalAbonosPago + (pago.favorUtilizado ?? 0.0);
+        
+        if (totalCubierto < deudaCapital) {
+          saldoContra = deudaCapital - totalCubierto;
+        }
+
+        // 2. Deuda combinada (Capital + Moratorios pendientes)
+        saldoContraCombinado = saldoContra + moratoriosPendientes;
       }
 
       // Acumuladores solo si no es semana 0
@@ -1390,8 +1357,9 @@ class PDFResumenCredito {
         totalCuotas += pago.capitalMasInteres;
         totalAbonos += totalAbonosPago;
         totalSaldoFavorGenerado += pago.saldoFavorOriginalGenerado ?? 0.0;
-        totalFavorUtilizado += pago.favorUtilizado ?? 0.0; // <-- AÑADIDO
+        totalFavorUtilizado += pago.favorUtilizado ?? 0.0;
         totalSaldoContra += saldoContra;
+        totalSaldoContraCombinado += saldoContraCombinado; // <-- AÑADIDO
         totalMoratoriosGenerados += moratoriosGenerados;
         totalMoratoriosPagados += moratoriosPagados;
       }
@@ -1400,133 +1368,84 @@ class PDFResumenCredito {
         pw.TableRow(
           decoration: pw.BoxDecoration(color: bgColor),
           children: [
+            _paddedCell(pago.semana.toString(), cellTextStyle, alignment: pw.Alignment.center),
+            _paddedCell(fechaProgramadaFormateada, cellTextStyle, alignment: pw.Alignment.center),
             _paddedCell(
-              pago.semana.toString(),
-              cellTextStyle,
-              alignment: pw.Alignment.center,
+              pago.semana == 0 ? 'N/A' : '${currencyFormat.format(pago.capitalMasInteres)}',
+              cellTextStyle, alignment: pw.Alignment.centerRight,
             ),
-            _paddedCell(
-              fechaProgramadaFormateada,
-              cellTextStyle,
-              alignment: pw.Alignment.center,
-            ),
-            _paddedCell(
-              pago.semana == 0
-                  ? 'N/A'
-                  : '${currencyFormat.format(pago.capitalMasInteres)}',
-              cellTextStyle,
-              alignment: pw.Alignment.centerRight,
-            ),
-            _paddedCell(
-              fechaRealizadoFormateada,
-              cellTextStyle,
-              alignment: pw.Alignment.center,
-            ),
-            _paddedCell(
-              pagosDetallados,
-              cellTextStyle,
-              alignment: pw.Alignment.centerRight,
-            ),
-            // --- CAMBIO: Celdas de datos actualizadas ---
-            _paddedCell(
-              '${currencyFormat.format(pago.saldoFavorOriginalGenerado ?? 0.0)}',
-              cellTextStyle,
-              alignment: pw.Alignment.centerRight,
-            ),
-            _paddedCell(
-              '${currencyFormat.format(pago.favorUtilizado ?? 0.0)}',
-              cellTextStyle,
-              alignment: pw.Alignment.centerRight,
-            ), // <-- NUEVA CELDA
-            _paddedCell(
-              '${currencyFormat.format(saldoContra)}',
-              cellTextStyle,
-              alignment: pw.Alignment.centerRight,
-            ),
-            _paddedCell(
-              '${currencyFormat.format(moratoriosGenerados)}',
-              cellTextStyle,
-              alignment: pw.Alignment.centerRight,
-            ),
-            _paddedCell(
-              '${currencyFormat.format(moratoriosPagados)}',
-              cellTextStyle,
-              alignment: pw.Alignment.centerRight,
-            ),
-            _paddedCell(
-              tipoPagoDisplay,
-              cellTextStyle,
-              alignment: pw.Alignment.center,
-            ),
-            _paddedCell(
-              pago.estado,
-              cellTextStyle,
-              alignment: pw.Alignment.center,
-            ),
+            _paddedCell(fechaRealizadoFormateada, cellTextStyle, alignment: pw.Alignment.center),
+            _paddedCell(pagosDetallados, cellTextStyle, alignment: pw.Alignment.centerRight),
+            _paddedCell('${currencyFormat.format(pago.saldoFavorOriginalGenerado ?? 0.0)}', cellTextStyle, alignment: pw.Alignment.centerRight),
+            _paddedCell('${currencyFormat.format(pago.favorUtilizado ?? 0.0)}', cellTextStyle, alignment: pw.Alignment.centerRight),
+            
+            // --- NUEVAS COLUMNAS DE SALDOS ---
+            _paddedCell('${currencyFormat.format(saldoContra)}', cellTextStyle, alignment: pw.Alignment.centerRight),
+            _paddedCell('${currencyFormat.format(saldoContraCombinado)}', pw.TextStyle(fontSize: 6,), alignment: pw.Alignment.centerRight),
+            
+            _paddedCell('${currencyFormat.format(moratoriosGenerados)}', cellTextStyle, alignment: pw.Alignment.centerRight),
+            _paddedCell('${currencyFormat.format(moratoriosPagados)}', cellTextStyle, alignment: pw.Alignment.centerRight),
+            _paddedCell(tipoPagoDisplay, cellTextStyle, alignment: pw.Alignment.center),
+            _paddedCell(pago.estado, cellTextStyle, alignment: pw.Alignment.center),
           ],
         ),
       );
     }
 
-    // Fila de totales
-    // BORRAR/COMENTAR la TableRow de "TOTALES" dentro de tableRows
-    // tableRows.add(pw.TableRow(... TOTALES ...)); // <- quitar
-
-    // ... después de haber construido tableRows y antes del return:
+    // Configuración de anchos para 13 columnas ajustado para A4
     final columnWeights = <double>[
-      0.5, // 0: Sem.
-      1.0, // 1: F. Programada
-      0.9, // 2: Monto Ficha
-      1.0, // 3: F. Realizado
-      1.0, // 4: Pagos
-      0.8, // 5: S. Favor Generado
-      0.8, // 6: S. Favor Utilizado
-      0.8, // 7: S. En Contra
-      0.8, // 8: Morat. Generados
-      0.8, // 9: Morat. Pagados
-      0.8, // 10: Tipo Pago
-      0.7, // 11: Estado
+      0.4, // 0: Sem.
+      0.9, // 1: F. Programada
+      0.8, // 2: Monto Ficha
+      0.9, // 3: F. Realizado
+      0.9, // 4: Pagos
+      0.7, // 5: S. Favor Gen
+      0.7, // 6: S. Favor Util
+      0.7, // 7: S. Contra (Cap)
+      0.7, // 8: Contra + Mora
+      0.7, // 9: Morat. Gen
+      0.7, // 10: Morat. Pag
+      0.7, // 11: Tipo Pago
+      0.7, // 12: Estado
     ];
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        // tu tabla con todas las filas de datos (sin la fila de totales)
         pw.Table(
           border: pw.TableBorder.all(color: borderColor, width: 0.5),
           children: tableRows,
           columnWidths: {
-            0: pw.FlexColumnWidth(0.5),
-            1: pw.FlexColumnWidth(1.0),
-            2: pw.FlexColumnWidth(0.9),
-            3: pw.FlexColumnWidth(1.0),
-            4: pw.FlexColumnWidth(1.0),
-            5: pw.FlexColumnWidth(0.8),
-            6: pw.FlexColumnWidth(0.8),
-            7: pw.FlexColumnWidth(0.8),
-            8: pw.FlexColumnWidth(0.8),
-            9: pw.FlexColumnWidth(0.8),
-            10: pw.FlexColumnWidth(0.8),
+            0: pw.FlexColumnWidth(0.4),
+            1: pw.FlexColumnWidth(0.9),
+            2: pw.FlexColumnWidth(0.8),
+            3: pw.FlexColumnWidth(0.9),
+            4: pw.FlexColumnWidth(0.9),
+            5: pw.FlexColumnWidth(0.7),
+            6: pw.FlexColumnWidth(0.7),
+            7: pw.FlexColumnWidth(0.7),
+            8: pw.FlexColumnWidth(0.7),
+            9: pw.FlexColumnWidth(0.7),
+            10: pw.FlexColumnWidth(0.7),
             11: pw.FlexColumnWidth(0.7),
+            12: pw.FlexColumnWidth(0.7),
           },
         ),
 
-        // --- Fila de totales simulada ---
+        // --- Fila de totales dinámica ---
         pw.LayoutBuilder(
           builder: (context, constraints) {
             final tableWidth = constraints!.maxWidth;
             final totalWeight = columnWeights.fold(0.0, (a, b) => a + b);
             final pixelWidths =
-                columnWeights
-                    .map((w) => (w / totalWeight) * tableWidth)
-                    .toList();
+                columnWeights.map((w) => (w / totalWeight) * tableWidth).toList();
 
-            // helper para crear una celda (bordes y padding)
             pw.Widget buildCell(
               String text,
               double w, {
               pw.Alignment align = pw.Alignment.center,
               bool drawTop = true,
+              pw.TextStyle? style,
             }) {
               return pw.Container(
                 width: w,
@@ -1535,30 +1454,24 @@ class PDFResumenCredito {
                 decoration: pw.BoxDecoration(
                   border: pw.Border(
                     left: pw.BorderSide(color: borderColor, width: 0.5),
-                    top:
-                        drawTop
-                            ? pw.BorderSide(color: borderColor, width: 0.5)
-                            : pw.BorderSide.none,
+                    top: drawTop ? pw.BorderSide(color: borderColor, width: 0.5) : pw.BorderSide.none,
                     bottom: pw.BorderSide(color: borderColor, width: 0.5),
                     right: pw.BorderSide(color: borderColor, width: 0.5),
                   ),
-                  color: headerColor, // mismo color de totales
+                  color: headerColor,
                 ),
                 child: pw.Text(
                   text,
-                  style: headerTextStyle,
+                  style: style ?? headerTextStyle,
                   textAlign: pw.TextAlign.center,
                 ),
               );
             }
 
-            // Primera celda "TOTALES" ocupa la suma del ancho de las dos primeras columnas:
             final mergedFirstWidth = pixelWidths[0] + pixelWidths[1];
-
-            // Ahora construimos la fila: primero la celda fusionada, luego las demás
             final List<pw.Widget> children = [];
 
-            // Celda fusionada (ocupa 2 col)
+            // Celda fusionada (ocupa "SEM." y "F. PROGRAMADA")
             children.add(
               pw.Container(
                 width: mergedFirstWidth,
@@ -1567,10 +1480,7 @@ class PDFResumenCredito {
                 decoration: pw.BoxDecoration(
                   border: pw.Border(
                     left: pw.BorderSide(color: borderColor, width: 0.5),
-                    top:
-                        pw
-                            .BorderSide
-                            .none, // si la tabla ya tiene borde inferior, evita doble línea
+                    top: pw.BorderSide.none,
                     bottom: pw.BorderSide(color: borderColor, width: 0.5),
                     right: pw.BorderSide(color: borderColor, width: 0.5),
                   ),
@@ -1580,22 +1490,22 @@ class PDFResumenCredito {
               ),
             );
 
-            // puesto 2 en adelante usamos los totales que tenías calculados
+            // Valores de la columna 2 hasta la 12
             final otherValues = <String>[
-              '${currencyFormat.format(totalCuotas)}', // col 2
+              '${currencyFormat.format(totalCuotas)}', // col 2 (Monto Ficha)
               '-', // col 3 (F. Realizado)
-              '${currencyFormat.format(totalAbonos)}',
-              '${currencyFormat.format(totalSaldoFavorGenerado)}',
-              '${currencyFormat.format(totalFavorUtilizado)}',
-              '${currencyFormat.format(totalSaldoContra)}',
-              '${currencyFormat.format(totalMoratoriosGenerados)}',
-              '${currencyFormat.format(totalMoratoriosPagados)}',
-              '-', // col 10 (Tipo Pago)
-              '-', // col 11 (Estado)
+              '${currencyFormat.format(totalAbonos)}', // col 4 (Pagos)
+              '${currencyFormat.format(totalSaldoFavorGenerado)}', // col 5 (S.Fav Gen)
+              '${currencyFormat.format(totalFavorUtilizado)}', // col 6 (S.Fav Uti)
+              '${currencyFormat.format(totalSaldoContra)}', // col 7 (S. Contra Cap)
+              '${currencyFormat.format(totalSaldoContraCombinado)}', // col 8 (Contra + Mora)
+              '${currencyFormat.format(totalMoratoriosGenerados)}', // col 9 (Morat. Gen)
+              '${currencyFormat.format(totalMoratoriosPagados)}', // col 10 (Morat. Pag)
+              '-', // col 11 (Tipo Pago)
+              '-', // col 12 (Estado)
             ];
 
-            // Note: otherValues corresponde a las columnas 2..11 (10 items)
-            for (int i = 2; i < 12; i++) {
+            for (int i = 2; i <= 12; i++) {
               final idx = i - 2;
               children.add(
                 buildCell(
@@ -1603,13 +1513,14 @@ class PDFResumenCredito {
                   pixelWidths[i],
                   align: pw.Alignment.centerRight,
                   drawTop: false,
+                  style: (i == 8 && totalSaldoContraCombinado > 0) ? pw.TextStyle( fontSize: 5.5, // Reducido un poco para que quepan las 13 columnas
+      fontWeight: pw.FontWeight.bold,
+      color: PdfColors.blueGrey900,) : null,
                 ),
               );
             }
 
             return pw.Container(
-              // Si quieres que no aparezca una línea doble entre la tabla y esta fila,
-              // ajusta el top/bottom de las decoraciones según necesites
               child: pw.Row(children: children),
             );
           },
