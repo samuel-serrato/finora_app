@@ -733,143 +733,111 @@ class _ReporteCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 24),
-                _SectionTitle(
-                  "Integrantes del Grupo (${credito.clientes.length})",
-                  colors,
-                ),
+                _SectionTitle("Integrantes del Grupo (${credito.clientes.length})", colors),
                 const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.withOpacity(0.2)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 8,
-                          horizontal: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colors.backgroundCardDark,
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(8),
-                          ),
-                        ),
-                        child: Row(
-                          children: const [
-                            Expanded(
-                              flex: 3,
-                              child: Text(
-                                "Nombre",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                "Cargo",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                "Capital",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                                textAlign: TextAlign.right,
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                "Total a Pagar",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                                textAlign: TextAlign.right,
-                              ),
-                            ),
-                          ],
-                        ),
+                
+                // --- LÓGICA DE TOTALES Y REDONDEO ---
+                Builder(
+                  builder: (context) {
+                    final int cantidadPagos = pagosInfo.total > 0 ? pagosInfo.total : credito.plazo;
+                    final double sumaCapital = credito.clientes.fold(0.0, (sum, c) => sum + c.capitalIndividual);
+                    final double sumaTotalExacto = credito.clientes.fold(0.0, (sum, c) => sum + c.total);
+                    final double totalRedondeado = credito.pagoCuota * cantidadPagos;
+                    
+                    // Si hay diferencia de más de 1 centavo, mostramos la fila de redondeo
+                    final bool mostrarRedondeado = (sumaTotalExacto - totalRedondeado).abs() > 0.01;
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      ...credito.clientes.map((cliente) {
-                        final isEven =
-                            credito.clientes.indexOf(cliente) % 2 == 0;
-                        return Container(
-                          color:
-                              isEven
-                                  ? Colors.transparent
-                                  : Colors.grey.withOpacity(0.05),
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 8,
-                            horizontal: 12,
+                      clipBehavior: Clip.antiAlias, // <-- Esto garantiza que las esquinas de abajo siempre queden redonditas
+                      child: Column(
+                        children: [
+                          // ENCABEZADO
+                          Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: colors.backgroundCardDark,
+                            ),
+                            child: Row(
+                              children: const [
+                                Expanded(flex: 3, child: Text("Nombre", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                Expanded(flex: 2, child: Text("Cargo", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                Expanded(flex: 2, child: Text("Capital", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12), textAlign: TextAlign.right)),
+                                Expanded(flex: 2, child: Text("Total a Pagar", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12), textAlign: TextAlign.right)),
+                              ],
+                            ),
                           ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  cliente.nombreCompleto,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: colors.textPrimary,
-                                  ),
-                                ),
+                          
+                          // LISTA DE INTEGRANTES
+                          ...credito.clientes.map((cliente) {
+                            final isEven = credito.clientes.indexOf(cliente) % 2 == 0;
+                            return Container(
+                              color: isEven ? Colors.transparent : Colors.grey.withOpacity(0.05),
+                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                              child: Row(
+                                children: [
+                                  Expanded(flex: 3, child: Text(cliente.nombreCompleto, style: TextStyle(fontSize: 12, color: colors.textPrimary))),
+                                  Expanded(flex: 2, child: Text(cliente.cargo.isEmpty ? 'Miembro' : cliente.cargo, style: TextStyle(fontSize: 11, color: colors.textSecondary))),
+                                  Expanded(flex: 2, child: Text(currencyFormat.format(cliente.capitalIndividual), style: TextStyle(fontSize: 12, color: colors.textPrimary), textAlign: TextAlign.right)),
+                                  Expanded(flex: 2, child: Text(currencyFormat.format(cliente.total), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colors.textPrimary), textAlign: TextAlign.right)),
+                                ],
                               ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  cliente.cargo.isEmpty
-                                      ? 'Miembro'
-                                      : cliente.cargo,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: colors.textSecondary,
-                                  ),
-                                ),
+                            );
+                          }).toList(),
+
+                          // 👇 FILA 1: TOTALES EXACTOS (SOLO SI HAY MÁS DE 1 INTEGRANTE) 👇
+                          if (credito.clientes.length > 1)
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: colors.brandPrimary.withOpacity(0.05),
+                                border: Border(top: BorderSide(color: Colors.grey.withOpacity(0.3))),
                               ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  currencyFormat.format(
-                                    cliente.capitalIndividual,
-                                  ),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: colors.textPrimary,
-                                  ),
-                                  textAlign: TextAlign.right,
-                                ),
+                              child: Row(
+                                children: [
+                                  Expanded(flex: 5, child: Text("Totales", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: colors.brandPrimary))),
+                                  Expanded(flex: 2, child: Text(currencyFormat.format(sumaCapital), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: colors.textPrimary), textAlign: TextAlign.right)),
+                                  Expanded(flex: 2, child: Text(currencyFormat.format(sumaTotalExacto), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: colors.brandPrimary), textAlign: TextAlign.right)),
+                                ],
                               ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  currencyFormat.format(cliente.total),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: colors.textPrimary,
-                                  ),
-                                  textAlign: TextAlign.right,
-                                ),
+                            ),
+
+                          // 👇 FILA 2: REDONDEADO (Cuota x Plazo) 👇
+                          if (mostrarRedondeado)
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.08), // Color azulito sutil
+                                border: Border(top: BorderSide(color: Colors.blue.withOpacity(0.1))), // Bordecito superior suave
                               ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ],
-                  ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 5, 
+                                    child: Text("Redondeado", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.blue[700]))
+                                  ),
+                                  Expanded(
+                                    flex: 2, 
+                                    child: Text("", textAlign: TextAlign.right) // El capital se deja vacío porque no cambia
+                                  ),
+                                  Expanded(
+                                    flex: 2, 
+                                    child: Text(
+                                      currencyFormat.format(totalRedondeado), 
+                                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.blue[700]), 
+                                      textAlign: TextAlign.right
+                                    )
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  }
                 ),
               ],
             ),

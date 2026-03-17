@@ -548,7 +548,7 @@ class PdfExporterCreditosActivos {
                   "Integrantes del Grupo (${credito.clientes.length})",
                 ),
                 pw.SizedBox(height: 6),
-                _buildMembersTable(credito.clientes),
+                _buildMembersTable(credito, pagosInfo.total),
               ],
             ),
           ),
@@ -698,7 +698,17 @@ class PdfExporterCreditosActivos {
     );
   }
 
-  pw.Widget _buildMembersTable(List<ClienteMontoInd> clientes) {
+  pw.Widget _buildMembersTable(ReporteCreditoActivo credito, int totalPagos) {
+    final clientes = credito.clientes;
+    
+    // --- LÓGICA DE TOTALES Y REDONDEO ---
+    final int cantidadPagos = totalPagos > 0 ? totalPagos : credito.plazo;
+    final double sumaCapital = clientes.fold(0.0, (sum, c) => sum + c.capitalIndividual);
+    final double sumaTotalExacto = clientes.fold(0.0, (sum, c) => sum + c.total);
+    final double totalRedondeado = credito.pagoCuota * cantidadPagos;
+    
+    final bool mostrarRedondeado = (sumaTotalExacto - totalRedondeado).abs() > 0.01;
+
     return pw.Container(
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: PdfColors.grey300, width: 0.5),
@@ -706,6 +716,7 @@ class PdfExporterCreditosActivos {
       ),
       child: pw.Column(
         children: [
+          // ENCABEZADOS
           pw.Container(
             padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 6),
             color: PdfColors.grey200,
@@ -730,7 +741,7 @@ class PdfExporterCreditosActivos {
                 pw.Expanded(
                   flex: 2,
                   child: pw.Text(
-                    "Total",
+                    "Total a Pagar",
                     style: _tableHeaderStyle(),
                     textAlign: pw.TextAlign.right,
                   ),
@@ -738,6 +749,8 @@ class PdfExporterCreditosActivos {
               ],
             ),
           ),
+          
+          // LISTA DE INTEGRANTES
           ...clientes.map((cliente) {
             final isEven = clientes.indexOf(cliente) % 2 == 0;
             return pw.Container(
@@ -797,6 +810,70 @@ class PdfExporterCreditosActivos {
               ),
             );
           }),
+
+          // 👇 FILA 1: TOTALES EXACTOS (SOLO SI HAY MÁS DE 1 INTEGRANTE) 👇
+          if (clientes.length > 1)
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+              decoration: pw.BoxDecoration(
+                color: PdfColor.fromInt(0xFFF0F4FF), // Equivalente a brandPrimary.withOpacity(0.05)
+                border: pw.Border(top: pw.BorderSide(color: PdfColors.grey300, width: 0.5)),
+              ),
+              child: pw.Row(
+                children: [
+                  pw.Expanded(
+                    flex: 5, // Flex 3 (Nombre) + Flex 2 (Cargo) = 5
+                    child: pw.Text("Totales", style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7, color: colorPrimary)),
+                  ),
+                  pw.Expanded(
+                    flex: 2,
+                    child: pw.Text(
+                      currencyFormat.format(sumaCapital), 
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7, color: colorTextPrimary), 
+                      textAlign: pw.TextAlign.right
+                    ),
+                  ),
+                  pw.Expanded(
+                    flex: 2,
+                    child: pw.Text(
+                      currencyFormat.format(sumaTotalExacto), 
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7, color: colorPrimary), 
+                      textAlign: pw.TextAlign.right
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // 👇 FILA 2: REDONDEADO (Cuota x Plazo) 👇
+          if (mostrarRedondeado)
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+              decoration: pw.BoxDecoration(
+                color: PdfColor.fromInt(0xFFE3F2FD), // Azul suave
+                border: pw.Border(top: pw.BorderSide(color: PdfColor.fromInt(0xFFBBDEFB), width: 0.5)),
+              ),
+              child: pw.Row(
+                children: [
+                  pw.Expanded(
+                    flex: 5, 
+                    child: pw.Text("Redondeado", style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7, color: PdfColors.blue700))
+                  ),
+                  pw.Expanded(
+                    flex: 2, 
+                    child: pw.Text("", textAlign: pw.TextAlign.right) // Espacio vacío para capital
+                  ),
+                  pw.Expanded(
+                    flex: 2, 
+                    child: pw.Text(
+                      currencyFormat.format(totalRedondeado), 
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7, color: PdfColors.blue700), 
+                      textAlign: pw.TextAlign.right
+                    )
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
