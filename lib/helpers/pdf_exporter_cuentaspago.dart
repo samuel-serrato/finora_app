@@ -124,7 +124,7 @@ class PDFCuentasPago {
                       pw.Image(pw.MemoryImage(moneyFacilLogoBytes),height: 40,fit: pw.BoxFit.contain,)
                     else
                       pw.SizedBox(height: 40),
-                    pw.Image(pw.MemoryImage(finoraLogoBytes),height: 40,fit: pw.BoxFit.contain,),
+                    pw.Image(pw.MemoryImage(finoraLogoBytes),height: 35,fit: pw.BoxFit.contain,),
                   ],
                 ),
                 pw.SizedBox(height: 15),

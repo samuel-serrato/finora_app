@@ -111,6 +111,7 @@ class _nClienteFormState extends State<nClienteForm>
     "Bancoppel",
     "Banco Azteca",
     "Inbursa",
+    'Spin by Oxxo'
   ];
   Map<String, int> tiposIngresoEgresoIds = {
     'Actividad economica': 1,

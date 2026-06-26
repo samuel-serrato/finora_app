@@ -19,6 +19,8 @@ import 'package:pdf/pdf.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/app_logger.dart';
+import 'package:finora_app/models/clientes.dart';
+import 'package:finora_app/services/cliente_service.dart';
 
 class PDFResumenCredito {
   static final format = NumberFormat("#,##0.00");
@@ -98,8 +100,9 @@ class PDFResumenCredito {
   // <-- CAMBIO 2: Se eliminó el parámetro 'String savePath'.
   static Future<Uint8List> generar(
     BuildContext context,
-    Credito credito,
-  ) async {
+    Credito credito, {
+    Cliente? clienteIndividual, // <-- nuevo
+  }) async {
     try {
       final currencyFormat = NumberFormat.currency(
         locale: 'es_MX',
@@ -149,6 +152,23 @@ class PDFResumenCredito {
           throw Exception("ID de crédito no disponible.");
         }
         pagosData = await _fetchPagosData(credito.idcredito!);
+        Cliente? clienteIndividual;
+        if (credito.tipo == 'Individual' &&
+            credito.clientesMontosInd.isNotEmpty) {
+          try {
+            final clienteService = ClienteService();
+            final resp = await clienteService.getCliente(
+              credito.clientesMontosInd.first.idclientes,
+            );
+            if (resp.success && resp.data != null) {
+              clienteIndividual = Cliente.fromJson(resp.data!);
+            }
+          } catch (e) {
+            AppLogger.log(
+              'Error obteniendo cliente individual para resumen: $e',
+            );
+          }
+        }
       } catch (e) {
         AppLogger.log("Error al obtener datos de pagos para el PDF: $e");
         errorPagos = e.toString();
@@ -179,7 +199,8 @@ class PDFResumenCredito {
                   credito,
                   sectionTitleStyle,
                   currencyFormat,
-                ), // Asumo que existen
+                  clienteIndividual,
+                ),
                 pw.SizedBox(height: 15),
                 _buildLoanInfo(
                   credito,
@@ -211,33 +232,33 @@ class PDFResumenCredito {
                     pw.SizedBox(height: 10),
                     _buildPagosSection(pagosData, currencyFormat),
                     pw.SizedBox(height: 15),
-                    
-                // ▼▼▼ MODIFICA ESTE BLOQUE ▼▼▼
-                
-                () {
-                  final List<dynamic> todasLasRenovaciones = pagosData
-                      .expand((pago) => pago.renovacionesPendientes)
-                      .toList();
 
-                  if (todasLasRenovaciones.isNotEmpty) {
-                    return pw.Column(
-                      children: [
-                        // <--- PASA LA LISTA DE CLIENTES DEL CRÉDITO AQUÍ
-                        _buildRenovacionesSection(
-                          todasLasRenovaciones, 
-                          credito.clientesMontosInd, // <--- PARÁMETRO AÑADIDO
-                          currencyFormat
-                        ),
-                        pw.SizedBox(height: 15),
-                      ]
-                    );
-                  }
-                  
-                  return pw.SizedBox.shrink();
-                }(),
-                
-                // ▲▲▲ FIN DE LA MODIFICACIÓN ▲▲▲
+                    // ▼▼▼ MODIFICA ESTE BLOQUE ▼▼▼
+                    () {
+                      final List<dynamic> todasLasRenovaciones =
+                          pagosData
+                              .expand((pago) => pago.renovacionesPendientes)
+                              .toList();
 
+                      if (todasLasRenovaciones.isNotEmpty) {
+                        return pw.Column(
+                          children: [
+                            // <--- PASA LA LISTA DE CLIENTES DEL CRÉDITO AQUÍ
+                            _buildRenovacionesSection(
+                              todasLasRenovaciones,
+                              credito
+                                  .clientesMontosInd, // <--- PARÁMETRO AÑADIDO
+                              currencyFormat,
+                            ),
+                            pw.SizedBox(height: 15),
+                          ],
+                        );
+                      }
+
+                      return pw.SizedBox.shrink();
+                    }(),
+
+                    // ▲▲▲ FIN DE LA MODIFICACIÓN ▲▲▲
                   ] else
                     pw.Padding(
                       padding: pw.EdgeInsets.symmetric(vertical: 10),
@@ -296,8 +317,8 @@ class PDFResumenCredito {
                 pw.Container(),
               pw.Image(
                 pw.MemoryImage(finora_appLogo),
-                width: 120,
-                height: 40,
+                width: 110,
+                height: 35,
                 fit: pw.BoxFit.contain,
               ),
             ],
@@ -358,9 +379,64 @@ class PDFResumenCredito {
     Credito credito,
     pw.TextStyle sectionTitleStyle,
     final currencyFormat,
+    Cliente? clienteIndividual,
   ) {
-    final format = NumberFormat("#,##0.00");
+    final esIndividual = credito.tipo == 'Individual';
 
+    if (esIndividual) {
+      final domicilio = clienteIndividual?.domicilio;
+      final direccion =
+          domicilio != null
+              ? '${domicilio.calle} ${domicilio.nExt}${domicilio.nInt != null && domicilio.nInt!.isNotEmpty ? " Int. ${domicilio.nInt}" : ""}, ${domicilio.colonia}, ${domicilio.municipio}, ${domicilio.estado}'
+              : 'No disponible';
+      final telefono =
+          clienteIndividual?.clienteInfo.telefono ?? 'No disponible';
+
+      return pw.Container(
+        padding: const pw.EdgeInsets.all(15),
+        decoration: pw.BoxDecoration(
+          color: PdfColor.fromHex('f2f7fa'),
+          borderRadius: pw.BorderRadius.circular(8),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text('INFORMACIÓN DEL CLIENTE', style: sectionTitleStyle),
+            pw.SizedBox(height: 10),
+            pw.Row(
+              children: [
+                _buildInfoColumn(
+                  'NOMBRE DEL CLIENTE',
+                  credito.nombreGrupo,
+                  flex: 1,
+                ),
+                _buildInfoColumn('CICLO', credito.detalles, flex: 3),
+              ],
+            ),
+            pw.SizedBox(height: 8),
+            pw.Row(
+              children: [
+                _buildInfoColumn('TELÉFONO', telefono, flex: 1),
+                _buildInfoColumn('ASESOR', credito.asesor, flex: 3),
+              ],
+            ),
+            pw.SizedBox(height: 8),
+            pw.Row(
+              children: [
+                _buildInfoColumn(
+                  'MONTO TOTAL',
+                  currencyFormat.format(credito.montoTotal),
+                  flex: 1,
+                ),
+                _buildInfoColumn('DIRECCIÓN', direccion, flex: 3),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Caso grupal — sin cambios
     return pw.Container(
       padding: const pw.EdgeInsets.all(15),
       decoration: pw.BoxDecoration(
@@ -403,7 +479,7 @@ class PDFResumenCredito {
               _buildInfoColumn('NOMBRE DEL ASESOR', credito.asesor, flex: 2),
               _buildInfoColumn(
                 'MONTO TOTAL',
-                '${currencyFormat.format(credito.montoTotal)}',
+                currencyFormat.format(credito.montoTotal),
                 flex: 2,
               ),
             ],
@@ -441,7 +517,8 @@ class PDFResumenCredito {
     String fechaFinFormateada,
     final currencyFormat,
   ) {
-    final format = NumberFormat("#,##0.00");
+    final esIndividual = credito.tipo == 'Individual';
+    final esQuincenal = credito.tipoPlazo == 'Quincenal';
 
     return pw.Container(
       padding: const pw.EdgeInsets.all(15),
@@ -456,13 +533,24 @@ class PDFResumenCredito {
           pw.SizedBox(height: 10),
           pw.Row(
             children: [
-              _buildInfoColumn('DÍA DE PAGO', credito.diaPago, flex: 1),
-              _buildInfoColumn('PLAZO', '${credito.plazo} SEMANAS', flex: 1),
+              if (!(esIndividual && esQuincenal))
+                _buildInfoColumn('DÍA DE PAGO', credito.diaPago, flex: 1),
               _buildInfoColumn(
-                'MONTO FICHA',
-                '${currencyFormat.format(credito.pagoCuota)}',
+                'PLAZO',
+                '${credito.plazo} ${_pluralizarPlazo(credito.tipoPlazo)}',
                 flex: 1,
               ),
+              _buildInfoColumn(
+                'MONTO FICHA',
+                currencyFormat.format(credito.pagoCuota),
+                flex: 1,
+              ),
+              if (esIndividual && esQuincenal)
+                _buildInfoColumn(
+                  'MONTO A RECUPERAR',
+                  currencyFormat.format(credito.montoMasInteres),
+                  flex: 1,
+                ),
             ],
           ),
           pw.SizedBox(height: 8),
@@ -470,13 +558,13 @@ class PDFResumenCredito {
             children: [
               _buildInfoColumn(
                 'MONTO DESEMBOLSADO',
-                '${currencyFormat.format(credito.montoDesembolsado)}',
+                currencyFormat.format(credito.montoDesembolsado),
                 flex: 1,
               ),
-              _buildInfoColumn('GARANTÍA', '${credito.garantia}', flex: 1),
+              _buildInfoColumn('GARANTÍA', credito.garantia, flex: 1),
               _buildInfoColumn(
                 'GARANTÍA MONTO',
-                '${currencyFormat.format(credito.montoGarantia)}',
+                currencyFormat.format(credito.montoGarantia),
                 flex: 1,
               ),
             ],
@@ -491,12 +579,12 @@ class PDFResumenCredito {
               ),
               _buildInfoColumn(
                 'TASA DE INTERÉS MENSUAL',
-                '${credito.ti_mensual}',
+                '${credito.ti_mensual}%',
                 flex: 1,
               ),
               _buildInfoColumn(
                 'INTERÉS TOTAL',
-                '${currencyFormat.format(credito.interesTotal)}',
+                currencyFormat.format(credito.interesTotal),
                 flex: 1,
               ),
             ],
@@ -514,16 +602,34 @@ class PDFResumenCredito {
                 fechaFinFormateada,
                 flex: 1,
               ),
-              _buildInfoColumn(
-                'MONTO A RECUPERAR',
-                '${currencyFormat.format(credito.montoMasInteres)}',
-                flex: 1,
-              ),
+              // Individual quincenal: ya se mostró arriba, aquí va vacío
+              if (esIndividual && esQuincenal)
+                _buildInfoColumn('', '', flex: 1)
+              else
+                _buildInfoColumn(
+                  'MONTO A RECUPERAR',
+                  currencyFormat.format(credito.montoMasInteres),
+                  flex: 1,
+                ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  static String _pluralizarPlazo(String tipoPlazo) {
+    final tipo = tipoPlazo.toUpperCase();
+    switch (tipo) {
+      case 'SEMANAL':
+        return 'SEMANAS';
+      case 'QUINCENAL':
+        return 'QUINCENAS';
+      case 'MENSUAL':
+        return 'MESES';
+      default:
+        return '${tipo}S';
+    }
   }
 
   // Método actualizado con el mismo estilo de ControlPagos (con parámetro flex)
@@ -1240,18 +1346,66 @@ class PDFResumenCredito {
         decoration: pw.BoxDecoration(color: headerColor),
         children: [
           _paddedCell('SEM.', headerTextStyle, alignment: pw.Alignment.center),
-          _paddedCell('F. PROGRAMADA', headerTextStyle, alignment: pw.Alignment.center),
-          _paddedCell('MONTO FICHA', headerTextStyle, alignment: pw.Alignment.centerRight),
-          _paddedCell('F. REALIZADO', headerTextStyle, alignment: pw.Alignment.center),
-          _paddedCell('PAGOS', headerTextStyle, alignment: pw.Alignment.centerRight),
-          _paddedCell('S. FAVOR\nGENERADO', headerTextStyle, alignment: pw.Alignment.centerRight),
-          _paddedCell('S. FAVOR\nUTILIZADO', headerTextStyle, alignment: pw.Alignment.centerRight),
-          _paddedCell('S. CONTRA\n(CAP/INT)', headerTextStyle, alignment: pw.Alignment.centerRight), // <-- Modificado
-          _paddedCell('CONTRA\n+ MORA', headerTextStyle, alignment: pw.Alignment.centerRight), // <-- NUEVA COLUMNA
-          _paddedCell('MORAT.\nGENERADOS', headerTextStyle, alignment: pw.Alignment.centerRight),
-          _paddedCell('MORAT.\nPAGADOS', headerTextStyle, alignment: pw.Alignment.centerRight),
-          _paddedCell('TIPO PAGO', headerTextStyle, alignment: pw.Alignment.center),
-          _paddedCell('ESTADO', headerTextStyle, alignment: pw.Alignment.center),
+          _paddedCell(
+            'F. PROGRAM.',
+            headerTextStyle,
+            alignment: pw.Alignment.center,
+          ),
+          _paddedCell(
+            'MONTO FICHA',
+            headerTextStyle,
+            alignment: pw.Alignment.centerRight,
+          ),
+          _paddedCell(
+            'F. REALIZADO',
+            headerTextStyle,
+            alignment: pw.Alignment.center,
+          ),
+          _paddedCell(
+            'PAGOS',
+            headerTextStyle,
+            alignment: pw.Alignment.centerRight,
+          ),
+          _paddedCell(
+            'S. FAVOR\nGENERADO',
+            headerTextStyle,
+            alignment: pw.Alignment.centerRight,
+          ),
+          _paddedCell(
+            'S. FAVOR\nUTILIZADO',
+            headerTextStyle,
+            alignment: pw.Alignment.centerRight,
+          ),
+          _paddedCell(
+            'S. CONTRA\n(CAP/INT)',
+            headerTextStyle,
+            alignment: pw.Alignment.centerRight,
+          ), // <-- Modificado
+          _paddedCell(
+            'CONTRA\n+ MORA',
+            headerTextStyle,
+            alignment: pw.Alignment.centerRight,
+          ), // <-- NUEVA COLUMNA
+          _paddedCell(
+            'MORAT.\nGENERADOS',
+            headerTextStyle,
+            alignment: pw.Alignment.centerRight,
+          ),
+          _paddedCell(
+            'MORAT.\nPAGADOS',
+            headerTextStyle,
+            alignment: pw.Alignment.centerRight,
+          ),
+          _paddedCell(
+            'TIPO PAGO',
+            headerTextStyle,
+            alignment: pw.Alignment.center,
+          ),
+          _paddedCell(
+            'ESTADO',
+            headerTextStyle,
+            alignment: pw.Alignment.center,
+          ),
         ],
       ),
     );
@@ -1333,17 +1487,18 @@ class PDFResumenCredito {
         moratoriosGenerados = pago.moratorios?.moratorios ?? 0.0;
         moratoriosPagados = pago.moratoriosPagados;
       }
-      double moratoriosPendientes = (moratoriosGenerados - moratoriosPagados).clamp(0.0, double.infinity);
+      double moratoriosPendientes = (moratoriosGenerados - moratoriosPagados)
+          .clamp(0.0, double.infinity);
 
       // --- CÁLCULO DE SALDOS EN CONTRA ---
       double saldoContra = 0.0;
       double saldoContraCombinado = 0.0;
-      
+
       if (pago.semana != 0) {
         // 1. Deuda pura de capital (excluyendo moratorios)
         double deudaCapital = pago.capitalMasInteres;
         double totalCubierto = totalAbonosPago + (pago.favorUtilizado ?? 0.0);
-        
+
         if (totalCubierto < deudaCapital) {
           saldoContra = deudaCapital - totalCubierto;
         }
@@ -1368,25 +1523,76 @@ class PDFResumenCredito {
         pw.TableRow(
           decoration: pw.BoxDecoration(color: bgColor),
           children: [
-            _paddedCell(pago.semana.toString(), cellTextStyle, alignment: pw.Alignment.center),
-            _paddedCell(fechaProgramadaFormateada, cellTextStyle, alignment: pw.Alignment.center),
             _paddedCell(
-              pago.semana == 0 ? 'N/A' : '${currencyFormat.format(pago.capitalMasInteres)}',
-              cellTextStyle, alignment: pw.Alignment.centerRight,
+              pago.semana.toString(),
+              cellTextStyle,
+              alignment: pw.Alignment.center,
             ),
-            _paddedCell(fechaRealizadoFormateada, cellTextStyle, alignment: pw.Alignment.center),
-            _paddedCell(pagosDetallados, cellTextStyle, alignment: pw.Alignment.centerRight),
-            _paddedCell('${currencyFormat.format(pago.saldoFavorOriginalGenerado ?? 0.0)}', cellTextStyle, alignment: pw.Alignment.centerRight),
-            _paddedCell('${currencyFormat.format(pago.favorUtilizado ?? 0.0)}', cellTextStyle, alignment: pw.Alignment.centerRight),
-            
+            _paddedCell(
+              fechaProgramadaFormateada,
+              cellTextStyle,
+              alignment: pw.Alignment.center,
+            ),
+            _paddedCell(
+              pago.semana == 0
+                  ? 'N/A'
+                  : '${currencyFormat.format(pago.capitalMasInteres)}',
+              cellTextStyle,
+              alignment: pw.Alignment.centerRight,
+            ),
+            _paddedCell(
+              fechaRealizadoFormateada,
+              cellTextStyle,
+              alignment: pw.Alignment.center,
+            ),
+            _paddedCell(
+              pagosDetallados,
+              cellTextStyle,
+              alignment: pw.Alignment.centerRight,
+            ),
+            _paddedCell(
+              '${currencyFormat.format(pago.saldoFavorOriginalGenerado ?? 0.0)}',
+              cellTextStyle,
+              alignment: pw.Alignment.centerRight,
+            ),
+            _paddedCell(
+              '${currencyFormat.format(pago.favorUtilizado ?? 0.0)}',
+              cellTextStyle,
+              alignment: pw.Alignment.centerRight,
+            ),
+
             // --- NUEVAS COLUMNAS DE SALDOS ---
-            _paddedCell('${currencyFormat.format(saldoContra)}', cellTextStyle, alignment: pw.Alignment.centerRight),
-            _paddedCell('${currencyFormat.format(saldoContraCombinado)}', pw.TextStyle(fontSize: 6,), alignment: pw.Alignment.centerRight),
-            
-            _paddedCell('${currencyFormat.format(moratoriosGenerados)}', cellTextStyle, alignment: pw.Alignment.centerRight),
-            _paddedCell('${currencyFormat.format(moratoriosPagados)}', cellTextStyle, alignment: pw.Alignment.centerRight),
-            _paddedCell(tipoPagoDisplay, cellTextStyle, alignment: pw.Alignment.center),
-            _paddedCell(pago.estado, cellTextStyle, alignment: pw.Alignment.center),
+            _paddedCell(
+              '${currencyFormat.format(saldoContra)}',
+              cellTextStyle,
+              alignment: pw.Alignment.centerRight,
+            ),
+            _paddedCell(
+              '${currencyFormat.format(saldoContraCombinado)}',
+              pw.TextStyle(fontSize: 6),
+              alignment: pw.Alignment.centerRight,
+            ),
+
+            _paddedCell(
+              '${currencyFormat.format(moratoriosGenerados)}',
+              cellTextStyle,
+              alignment: pw.Alignment.centerRight,
+            ),
+            _paddedCell(
+              '${currencyFormat.format(moratoriosPagados)}',
+              cellTextStyle,
+              alignment: pw.Alignment.centerRight,
+            ),
+            _paddedCell(
+              tipoPagoDisplay,
+              cellTextStyle,
+              alignment: pw.Alignment.center,
+            ),
+            _paddedCell(
+              pago.estado,
+              cellTextStyle,
+              alignment: pw.Alignment.center,
+            ),
           ],
         ),
       );
@@ -1438,7 +1644,9 @@ class PDFResumenCredito {
             final tableWidth = constraints!.maxWidth;
             final totalWeight = columnWeights.fold(0.0, (a, b) => a + b);
             final pixelWidths =
-                columnWeights.map((w) => (w / totalWeight) * tableWidth).toList();
+                columnWeights
+                    .map((w) => (w / totalWeight) * tableWidth)
+                    .toList();
 
             pw.Widget buildCell(
               String text,
@@ -1454,7 +1662,10 @@ class PDFResumenCredito {
                 decoration: pw.BoxDecoration(
                   border: pw.Border(
                     left: pw.BorderSide(color: borderColor, width: 0.5),
-                    top: drawTop ? pw.BorderSide(color: borderColor, width: 0.5) : pw.BorderSide.none,
+                    top:
+                        drawTop
+                            ? pw.BorderSide(color: borderColor, width: 0.5)
+                            : pw.BorderSide.none,
                     bottom: pw.BorderSide(color: borderColor, width: 0.5),
                     right: pw.BorderSide(color: borderColor, width: 0.5),
                   ),
@@ -1513,16 +1724,20 @@ class PDFResumenCredito {
                   pixelWidths[i],
                   align: pw.Alignment.centerRight,
                   drawTop: false,
-                  style: (i == 8 && totalSaldoContraCombinado > 0) ? pw.TextStyle( fontSize: 5.5, // Reducido un poco para que quepan las 13 columnas
-      fontWeight: pw.FontWeight.bold,
-      color: PdfColors.blueGrey900,) : null,
+                  style:
+                      (i == 8 && totalSaldoContraCombinado > 0)
+                          ? pw.TextStyle(
+                            fontSize:
+                                5.5, // Reducido un poco para que quepan las 13 columnas
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.blueGrey900,
+                          )
+                          : null,
                 ),
               );
             }
 
-            return pw.Container(
-              child: pw.Row(children: children),
-            );
+            return pw.Container(child: pw.Row(children: children));
           },
         ),
       ],
@@ -1549,10 +1764,6 @@ class PDFResumenCredito {
     // Implementa el footer según tu necesidad
     return pw.Container();
   }
-
-
-
-
 
   // ▼▼▼ PASO 1: AÑADE ESTA NUEVA FUNCIÓN COMPLETA ▼▼▼
   /// Construye la sección de clientes a renovar con adeudo para el siguiente crédito.
@@ -1625,10 +1836,13 @@ class PDFResumenCredito {
                 nombre = clienteEncontrado.nombreCompleto;
               } catch (e) {
                 // Si no se encuentra (muy raro), dejamos el mensaje por defecto.
-                AppLogger.log("PDF Renovación: No se encontró el cliente con ID ${renovacion.idclientes}");
+                AppLogger.log(
+                  "PDF Renovación: No se encontró el cliente con ID ${renovacion.idclientes}",
+                );
               }
-              
-              final double monto = (renovacion.descuento as num?)?.toDouble() ?? 0.0;
+
+              final double monto =
+                  (renovacion.descuento as num?)?.toDouble() ?? 0.0;
 
               return pw.TableRow(
                 decoration: pw.BoxDecoration(color: bgColor),

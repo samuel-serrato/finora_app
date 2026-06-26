@@ -766,8 +766,8 @@ class ExportHelperGeneral {
               ),
             pw.Image(
               pw.MemoryImage(finoraLogo),
-              width: 120,
-              height: 40,
+              width: 110,
+              height: 35,
               fit: pw.BoxFit.contain,
             ),
           ],

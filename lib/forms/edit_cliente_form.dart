@@ -11,7 +11,6 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../utils/app_logger.dart';
 
-
 class EditarClienteForm extends StatefulWidget {
   final String idCliente;
   final VoidCallback? onClienteEditado;
@@ -111,6 +110,7 @@ class _EditarClienteFormState extends State<EditarClienteForm>
     "Bancoppel",
     "Banco Azteca",
     "Inbursa",
+    'Spin by Oxxo',
   ];
   final List<String> tiposDomicilio = [
     'Propio',

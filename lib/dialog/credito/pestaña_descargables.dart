@@ -22,25 +22,28 @@ import 'package:finora_app/models/creditos.dart';
 import 'package:finora_app/providers/theme_provider.dart';
 import '../../utils/app_logger.dart';
 import 'package:finora_app/helpers/save_file.dart';
+// Agrega este import al inicio
+import 'package:finora_app/services/cliente_service.dart';
+import 'package:finora_app/models/clientes.dart';
 
 class PaginaDescargablesMobile extends StatefulWidget {
   final Credito credito;
 
-  const PaginaDescargablesMobile({
-    Key? key,
-    required this.credito,
-  }) : super(key: key);
+  const PaginaDescargablesMobile({Key? key, required this.credito})
+    : super(key: key);
 
   @override
-  State<PaginaDescargablesMobile> createState() => _PaginaDescargablesMobileState();
+  State<PaginaDescargablesMobile> createState() =>
+      _PaginaDescargablesMobileState();
 }
 
 class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
   String? _documentoDescargando;
   bool _isGenerating = false;
-  
+
   // 2. INSTANCIA DEL SERVICIO
-  final PagoService _pagoService = PagoService(); 
+  final PagoService _pagoService = PagoService();
+  final ClienteService _clienteService = ClienteService();
 
   /// Función para descargar documentos (DOCX) desde el servidor.
   Future<void> _descargarDocumento(String documento) async {
@@ -51,12 +54,16 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('tokenauth') ?? '';
       if (token.isEmpty) {
-        _mostrarError('Token no encontrado. Por favor, inicia sesión de nuevo.');
+        _mostrarError(
+          'Token no encontrado. Por favor, inicia sesión de nuevo.',
+        );
         return;
       }
 
       final response = await http.get(
-        Uri.parse('$baseUrl/api/v1/formato/${documento.toLowerCase()}/${widget.credito.tipo.toLowerCase()}/${widget.credito.folio.toUpperCase()}'),
+        Uri.parse(
+          '$baseUrl/api/v1/formato/${documento.toLowerCase()}/${widget.credito.tipo.toLowerCase()}/${widget.credito.folio.toUpperCase()}',
+        ),
         headers: {'tokenauth': token},
       );
 
@@ -66,7 +73,9 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
         final fileName = '${documento}_${widget.credito.folio}.docx';
         await saveFilePlatform(response.bodyBytes, fileName);
       } else {
-        _mostrarError('Error del servidor: ${response.statusCode}. Inténtalo de nuevo.');
+        _mostrarError(
+          'Error del servidor: ${response.statusCode}. Inténtalo de nuevo.',
+        );
       }
     } catch (e) {
       if (mounted) _mostrarError('Error de red: ${e.toString()}');
@@ -77,7 +86,7 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
     }
   }
 
-   /// Función GENÉRICA para generar PDFs simples (Resumen, Ficha)
+  /// Función GENÉRICA para generar PDFs simples (Resumen, Ficha)
   Future<void> _generarPdfSimple(
     String tipoDocumento,
     Future<Uint8List> Function(BuildContext, Credito) generador,
@@ -88,16 +97,17 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
 
     try {
       final Uint8List pdfBytes = await generador(context, widget.credito);
-      
+
       // 1. Obtener la fecha actual formateada (ej. 24-10-2023)
       final String fecha = DateFormat('dd-MM-yyyy').format(DateTime.now());
-      
+
       // 2. Construir el nombre base con la fecha
-      final String nombreBase = '${tipoDocumento}_${widget.credito.nombreGrupo}_$fecha';
-      
+      final String nombreBase =
+          '${tipoDocumento}_${widget.credito.nombreGrupo}_$fecha';
+
       // 3. Convertir todo a mayúsculas y concatenar la extensión en minúscula (recomendado)
       final String fileName = '${nombreBase.toUpperCase()}.pdf';
-      
+
       await saveFilePlatform(pdfBytes, fileName);
     } catch (e, s) {
       AppLogger.log('ERROR PDF SIMPLE: $e\n$s');
@@ -116,25 +126,34 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
     setState(() => _documentoDescargando = 'control_pagos');
 
     try {
-      // A. Descargar los pagos desde la API para tener las fechas correctas
-      final response = await _pagoService.getCalendarioPagos(widget.credito.idcredito);
-      
+      final response = await _pagoService.getCalendarioPagos(
+        widget.credito.idcredito,
+      );
       if (!response.success || response.data == null) {
         throw 'No se pudieron obtener los datos del calendario.';
       }
-
       final List<Pago> listaPagos = response.data!.pagos;
 
-      // B. Generar el PDF pasando la lista de pagos
+      // Si es individual, obtenemos datos del cliente
+      Cliente? clienteIndividual;
+      if (widget.credito.tipo == 'Individual' &&
+          widget.credito.clientesMontosInd.isNotEmpty) {
+        final idCliente = widget.credito.clientesMontosInd.first.idclientes;
+        final clienteResp = await _clienteService.getCliente(idCliente);
+        if (clienteResp.success && clienteResp.data != null) {
+          clienteIndividual = Cliente.fromJson(clienteResp.data!);
+        }
+      }
+
       final Uint8List pdfBytes = await PDFControlPagos.generar(
-        context, 
-        widget.credito, 
-        listaPagos // <--- Aquí pasamos la lista que acabamos de descargar
+        context,
+        widget.credito,
+        listaPagos,
+        clienteIndividual: clienteIndividual, // <-- nuevo parámetro opcional
       );
 
       final fileName = 'control_pagos_${widget.credito.folio}.pdf';
       await saveFilePlatform(pdfBytes, fileName);
-
     } catch (e) {
       AppLogger.log('ERROR PDF CONTROL PAGOS: $e');
       if (mounted) _mostrarError('Error: ${e.toString()}');
@@ -179,7 +198,7 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
             onTap: () => _descargarDocumento('pagare'),
           ),
           const SizedBox(height: 16),
-          
+
           // --- AQUÍ ESTÁ EL CAMBIO EN EL BOTÓN ---
           _buildBotonDescarga(
             titulo: 'Control de Pagos',
@@ -187,9 +206,9 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
             color: const Color(0xFFAA00FF),
             documento: 'control_pagos',
             // Ahora llamamos a la función específica
-            onTap: _descargarControlPagos, 
+            onTap: _descargarControlPagos,
           ),
-          
+
           const SizedBox(height: 16),
           _buildBotonDescarga(
             titulo: 'Ficha de Pago',
@@ -197,20 +216,58 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
             color: const Color(0xFFFF6D00),
             documento: 'ficha_pago',
             // Usamos la función simple para los que no cambiaron
-            onTap: () => _generarPdfSimple('ficha_pago', PDFCuentasPago.generar),
+            onTap:
+                () => _generarPdfSimple('ficha_pago', PDFCuentasPago.generar),
           ),
           const SizedBox(height: 16),
+          // En pestaña_descargables.dart, reemplaza el botón de resumen:
           _buildBotonDescarga(
             titulo: 'Resumen de Crédito',
             icono: Icons.picture_as_pdf_outlined,
             color: const Color(0xFF00BFA5),
             documento: 'resumen_credito',
-            onTap: () => _generarPdfSimple('resumen_credito', PDFResumenCredito.generar),
+            onTap: _descargarResumenCredito, // <-- función específica
           ),
         ],
       ),
     );
   }
+
+  Future<void> _descargarResumenCredito() async {
+  if (_isGenerating) return;
+  _isGenerating = true;
+  setState(() => _documentoDescargando = 'resumen_credito');
+
+  try {
+    Cliente? clienteIndividual;
+    if (widget.credito.tipo == 'Individual' &&
+        widget.credito.clientesMontosInd.isNotEmpty) {
+      final idCliente = widget.credito.clientesMontosInd.first.idclientes;
+      final resp = await _clienteService.getCliente(idCliente);
+      if (resp.success && resp.data != null) {
+        clienteIndividual = Cliente.fromJson(resp.data!);
+      }
+    }
+
+    final String fecha = DateFormat('dd-MM-yyyy').format(DateTime.now());
+    final String fileName =
+        'RESUMEN_CREDITO_${widget.credito.nombreGrupo}_$fecha.pdf'.toUpperCase();
+
+    final Uint8List pdfBytes = await PDFResumenCredito.generar(
+      context,
+      widget.credito,
+      clienteIndividual: clienteIndividual,
+    );
+
+    await saveFilePlatform(pdfBytes, fileName);
+  } catch (e) {
+    AppLogger.log('ERROR PDF RESUMEN: $e');
+    if (mounted) _mostrarError('Error: ${e.toString()}');
+  } finally {
+    if (mounted) setState(() => _documentoDescargando = null);
+    _isGenerating = false;
+  }
+}
 
   Widget _buildBotonDescarga({
     required String titulo,
@@ -235,12 +292,12 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
               color: Colors.black.withOpacity(0.05),
               blurRadius: 8,
               offset: const Offset(0, 4),
-            )
+            ),
           ],
         ),
-        clipBehavior: Clip.antiAlias, 
-        child: Material( 
-          color: Colors.transparent, 
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          color: Colors.transparent,
           child: InkWell(
             onTap: estaDescargando ? null : onTap,
             hoverColor: Color(0xFF2962FF).withOpacity(0.1),
@@ -265,10 +322,17 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
                     SizedBox(
                       width: 24,
                       height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2.5, color: color),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: color,
+                      ),
                     )
                   else
-                    Icon(Icons.download_for_offline_outlined, color: theme.textSecondary, size: 24),
+                    Icon(
+                      Icons.download_for_offline_outlined,
+                      color: theme.textSecondary,
+                      size: 24,
+                    ),
                 ],
               ),
             ),
