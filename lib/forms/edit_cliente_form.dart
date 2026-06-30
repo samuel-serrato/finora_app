@@ -296,47 +296,40 @@ class _EditarClienteFormState extends State<EditarClienteForm>
           }
         }
 
-        // --- 6. Poblar la lista 'referencias' (CORREGIDO) ---
+        // --- 6. Poblar la lista 'referencias' (CORREGIDO PARA AVAL) ---
         if (data.containsKey('referencias') && data['referencias'] is List) {
           referencias.clear();
           idreferenciasList.clear();
 
-          // Iteramos sobre cada objeto de referencia que viene de la API
           for (var apiRef in (data['referencias'] as List)) {
-            // 1. Creamos un nuevo mapa (`uiRef`) con las claves que la UI espera.
-            //    Esto "traduce" los datos de la API al formato de la UI.
             final Map<String, dynamic> uiRef = {
-              // Clave UI       <-- Clave API
+              // Esto evalúa si viene un 1 o un true, y guarda un booleano real (true/false)
+              'isAval': apiRef['isAval'] == 1 || apiRef['isAval'] == true,
               'nombresRef': apiRef['nombres'],
               'apellidoPRef': apiRef['apellidoP'],
               'apellidoMRef': apiRef['apellidoM'],
               'telefonoRef': apiRef['telefono'],
-              'parentescoRef':
-                  apiRef['parentescoRefProp'], // Ojo: la API usa 'parentescoRefProp'
-              'tiempoConocerRef':
-                  apiRef['tiempoCo']?.toString(), // La API usa 'tiempoCo'
-              'idreferencias': apiRef['idreferencias'], // Mantenemos el ID
+              'parentescoRef': apiRef['parentescoRefProp'],
+              'tiempoConocerRef': apiRef['tiempoCo']?.toString(),
+              'idreferencias': apiRef['idreferencias'],
+              // --- NUEVOS CAMPOS DEL AVAL ---
+              'curpRef': apiRef['curp'],
+              'rfcRef': apiRef['rfc'],
+              'claveElectorRef': apiRef['claveElector'],
             };
 
-            // 2. Manejamos el domicilio de la referencia, si es que existe.
             if (apiRef.containsKey('domicilio_ref') &&
                 apiRef['domicilio_ref'] is List &&
                 (apiRef['domicilio_ref'] as List).isNotEmpty) {
               final domicilioData = apiRef['domicilio_ref'][0];
 
-              // Verificamos si el domicilio tiene datos reales o es solo "No asignado"
               if (domicilioData['datos'] != 'No asignado' &&
                   domicilioData.length > 1) {
-                // Si hay datos, los agregamos al mapa `uiRef` con las claves correctas.
-                // Aquí también hacemos un mapeo, por si las claves del domicilio de la referencia
-                // son diferentes a las que espera el diálogo.
                 uiRef.addAll({
-                  // Clave UI                <-- Clave API del domicilio
                   'tipoDomicilioRef': domicilioData['tipo_domicilio'],
                   'calleRef': domicilioData['calle'],
                   'nombrePropietarioRef': domicilioData['nombre_propietario'],
-                  'parentescoPropRef':
-                      domicilioData['parentesco'], // Ojo a esta clave
+                  'parentescoPropRef': domicilioData['parentesco'],
                   'nExtRef': domicilioData['nExt']?.toString(),
                   'nIntRef': domicilioData['nInt']?.toString(),
                   'entreCalleRef': domicilioData['entreCalle'],
@@ -350,9 +343,7 @@ class _EditarClienteFormState extends State<EditarClienteForm>
               }
             }
 
-            // 3. Agregamos el mapa ya formateado (`uiRef`) a nuestra lista `referencias`.
             referencias.add(uiRef);
-            // Y guardamos el ID para futuras operaciones.
             idreferenciasList.add(apiRef['idreferencias']);
           }
         }
@@ -532,7 +523,7 @@ class _EditarClienteFormState extends State<EditarClienteForm>
         );
       }
 
-      // --- 6. ACTUALIZAR REFERENCIAS ---
+      // --- 6. ACTUALIZAR REFERENCIAS (CON AVAL) ---
       final List<Map<String, dynamic>> referenciasPayload = [];
       for (int i = 0; i < referencias.length; i++) {
         referenciasPayload.add({
@@ -544,6 +535,24 @@ class _EditarClienteFormState extends State<EditarClienteForm>
           "parentescoRefProp": referencias[i]['parentescoRef'],
           "telefono": referencias[i]['telefonoRef'],
           "tiempoCo": referencias[i]['tiempoConocerRef'],
+          // --- NUEVOS CAMPOS ENVIADOS AL SERVIDOR ---
+          "isAval": referencias[i]['isAval'] ?? false,
+          "curp": referencias[i]['curpRef'],
+          "rfc": referencias[i]['rfcRef'],
+          "claveElector": referencias[i]['claveElectorRef'],
+          // Datos del domicilio de la referencia/aval si aplican:
+          "tipo_domicilio": referencias[i]['tipoDomicilioRef'],
+          "calle": referencias[i]['calleRef'],
+          "nombre_propietario": referencias[i]['nombrePropietarioRef'],
+          "parentesco": referencias[i]['parentescoPropRef'],
+          "nExt": referencias[i]['nExtRef'],
+          "nInt": referencias[i]['nIntRef'],
+          "entreCalle": referencias[i]['entreCalleRef'],
+          "colonia": referencias[i]['coloniaRef'],
+          "cp": referencias[i]['cpRef'],
+          "estado": referencias[i]['estadoRef'],
+          "municipio": referencias[i]['municipioRef'],
+          "tiempoViviendo": referencias[i]['tiempoViviendoRef'],
         });
       }
       final referenciasResponse = await _clienteService.actualizarReferencias(
@@ -1448,7 +1457,7 @@ class _EditarClienteFormState extends State<EditarClienteForm>
                 referencias.isEmpty
                     ? const Center(
                       child: Text(
-                        'No hay referencias agregadas.',
+                        'No hay referencias ni avales agregados.',
                         style: TextStyle(color: Colors.grey),
                       ),
                     )
@@ -1457,6 +1466,8 @@ class _EditarClienteFormState extends State<EditarClienteForm>
                       itemCount: referencias.length,
                       itemBuilder: (context, index) {
                         final ref = referencias[index];
+                        final bool isAval =
+                            ref['isAval'] == true || ref['isAval'] == 1;
                         return Card(
                           color: colors.backgroundCard,
                           surfaceTintColor: colors.backgroundCard,
@@ -1465,8 +1476,39 @@ class _EditarClienteFormState extends State<EditarClienteForm>
                             horizontal: 8,
                           ),
                           child: ListTile(
-                            title: Text(
-                              '${ref['nombresRef'] ?? ''} ${ref['apellidoPRef'] ?? ''}',
+                            title: Row(
+                              children: [
+                                Text(
+                                  '${ref['nombresRef'] ?? ''} ${ref['apellidoPRef'] ?? ''}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Etiqueta visual para distinguir Aval de Referencia
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        isAval
+                                            ? Colors.purple.withOpacity(0.2)
+                                            : Colors.blue.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    isAval ? 'AVAL' : 'REFERENCIA',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color:
+                                          isAval ? Colors.purple : Colors.blue,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             subtitle: Text(
                               'Tel: ${ref['telefonoRef'] ?? 'N/A'} - Parentesco: ${ref['parentescoRef'] ?? 'N/A'}',
@@ -1504,16 +1546,44 @@ class _EditarClienteFormState extends State<EditarClienteForm>
           ),
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text('Añadir Referencia'),
-              onPressed: () => _mostrarDialogReferenciaMobile(),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
-                backgroundColor: colors.backgroundButton,
-                foregroundColor: colors.whiteWhite,
-                iconColor: colors.whiteWhite,
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text(
+                      'Añadir Referencia',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    onPressed:
+                        () => _mostrarDialogReferenciaMobile(isAvalForm: false),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      backgroundColor: colors.backgroundButton,
+                      foregroundColor: colors.whiteWhite,
+                      iconColor: colors.whiteWhite,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.verified_user),
+                    label: const Text(
+                      'Añadir Aval',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    onPressed:
+                        () => _mostrarDialogReferenciaMobile(isAvalForm: true),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      backgroundColor: Colors.purple,
+                      foregroundColor: Colors.white,
+                      iconColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1711,10 +1781,16 @@ class _EditarClienteFormState extends State<EditarClienteForm>
   void _mostrarDialogReferenciaMobile({
     int? index,
     Map<String, dynamic>? item,
+    bool isAvalForm = false, // <-- NUEVO PARÁMETRO
   }) {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final colors = themeProvider.colors;
     final formKey = GlobalKey<FormState>();
+
+    // Si estamos editando, detectamos si es un Aval o una Referencia
+    if (item != null && item.containsKey('isAval')) {
+      isAvalForm = item['isAval'];
+    }
 
     String? selectedParentesco = item?['parentescoRef'];
     final nombresRefController = TextEditingController(
@@ -1731,6 +1807,15 @@ class _EditarClienteFormState extends State<EditarClienteForm>
     );
     final tiempoConocerRefController = TextEditingController(
       text: item?['tiempoConocerRef'] ?? '',
+    );
+
+    // --- NUEVOS CONTROLADORES DE AVAL ---
+    final curpRefController = TextEditingController(
+      text: item?['curpRef'] ?? '',
+    );
+    final rfcRefController = TextEditingController(text: item?['rfcRef'] ?? '');
+    final claveElectorRefController = TextEditingController(
+      text: item?['claveElectorRef'] ?? '',
     );
 
     String? selectedTipoDomicilioRef = item?['tipoDomicilioRef'];
@@ -1765,6 +1850,12 @@ class _EditarClienteFormState extends State<EditarClienteForm>
     final tiempoViviendoRefController = TextEditingController(
       text: item?['tiempoViviendoRef'] ?? '',
     );
+
+    // Título dinámico
+    String dialogTitle =
+        index == null
+            ? (isAvalForm ? "Nuevo Aval" : "Nueva Referencia")
+            : (isAvalForm ? "Editar Aval" : "Editar Referencia");
 
     showModalBottomSheet(
       context: context,
@@ -1805,10 +1896,9 @@ class _EditarClienteFormState extends State<EditarClienteForm>
                           ),
                         ),
                       ),
+                      // REEMPLAZA POR:
                       Text(
-                        index == null
-                            ? "Nueva Referencia"
-                            : "Editar Referencia",
+                        dialogTitle,
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
                       const SizedBox(height: 16),
@@ -1885,6 +1975,7 @@ class _EditarClienteFormState extends State<EditarClienteForm>
                                               : null,
                                 ),
                                 const SizedBox(height: 16),
+                                // REEMPLAZA POR:
                                 _buildTextField(
                                   controller: tiempoConocerRefController,
                                   label: 'Tiempo de Conocer (años)',
@@ -1896,8 +1987,68 @@ class _EditarClienteFormState extends State<EditarClienteForm>
                                               ? 'Requerido'
                                               : null,
                                 ),
+
+                                // --- NUEVO: SECCIÓN CONDICIONAL DATOS OFICIALES AVAL ---
+                                if (isAvalForm) ...[
+                                  const SizedBox(height: 24),
+                                  _sectionTitle('Datos Oficiales del Aval'),
+                                  const SizedBox(height: 16),
+                                  _buildTextField(
+                                    controller: curpRefController,
+                                    label: 'CURP',
+                                    icon: Icons.account_box,
+                                    maxLength: 18,
+                                    validator:
+                                        (v) =>
+                                            (v == null || v.length != 18)
+                                                ? 'CURP de 18 caracteres'
+                                                : null,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: _buildTextField(
+                                          controller: rfcRefController,
+                                          label: 'RFC',
+                                          icon: Icons.assignment_ind,
+                                          maxLength: 13,
+                                          validator:
+                                              (v) =>
+                                                  (v == null ||
+                                                          (v.length != 12 &&
+                                                              v.length != 13))
+                                                      ? 'RFC inválido'
+                                                      : null,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: _buildTextField(
+                                          controller: claveElectorRefController,
+                                          label: 'Clave Elector',
+                                          icon: Icons.switch_account_rounded,
+                                          maxLength: 18,
+                                          validator:
+                                              (v) =>
+                                                  (v == null || v.length != 18)
+                                                      ? '18 caracteres'
+                                                      : null,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+
+                                // --- FIN DATOS OFICIALES AVAL ---
                                 const SizedBox(height: 24),
-                                _sectionTitle('Domicilio (Opcional)'),
+                                _sectionTitle(
+                                  isAvalForm
+                                      ? 'Domicilio (Requerido para Aval)'
+                                      : 'Domicilio (Opcional)',
+                                ),
                                 const SizedBox(height: 16),
                                 _buildDropdown(
                                   value: selectedTipoDomicilioRef,
@@ -2055,14 +2206,24 @@ class _EditarClienteFormState extends State<EditarClienteForm>
                             child: const Text('Cancelar'),
                           ),
                           const SizedBox(width: 8),
+                          // REEMPLAZA POR:
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: colors.brandPrimary,
+                              backgroundColor:
+                                  isAvalForm
+                                      ? Colors.purple
+                                      : colors.brandPrimary,
                               foregroundColor: Colors.white,
                             ),
                             onPressed: () {
+                              FocusScope.of(
+                                context,
+                              ).unfocus(); // Ocultar teclado
+
                               if (formKey.currentState!.validate()) {
                                 final nuevaReferencia = {
+                                  'isAval':
+                                      isAvalForm, // Guardamos si es Aval o no
                                   'nombresRef': nombresRefController.text,
                                   'apellidoPRef': apellidoPRefController.text,
                                   'apellidoMRef': apellidoMRefController.text,
@@ -2070,6 +2231,12 @@ class _EditarClienteFormState extends State<EditarClienteForm>
                                   'telefonoRef': telefonoRefController.text,
                                   'tiempoConocerRef':
                                       tiempoConocerRefController.text,
+                                  // --- DATOS EXTRAS ---
+                                  'curpRef': curpRefController.text,
+                                  'rfcRef': rfcRefController.text,
+                                  'claveElectorRef':
+                                      claveElectorRefController.text,
+                                  // ------------------
                                   'tipoDomicilioRef': selectedTipoDomicilioRef,
                                   'calleRef': calleRefController.text,
                                   'nombrePropietarioRef':
@@ -2086,6 +2253,7 @@ class _EditarClienteFormState extends State<EditarClienteForm>
                                   'tiempoViviendoRef':
                                       tiempoViviendoRefController.text,
                                 };
+
                                 setState(() {
                                   if (index == null) {
                                     referencias.add(nuevaReferencia);
@@ -2094,6 +2262,15 @@ class _EditarClienteFormState extends State<EditarClienteForm>
                                   }
                                 });
                                 Navigator.pop(context);
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Faltan campos obligatorios o tienen un formato incorrecto.',
+                                    ),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
                               }
                             },
                             child: const Text('Guardar'),

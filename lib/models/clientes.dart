@@ -10,52 +10,58 @@ import 'dart:convert';
 class Cliente {
   final String idCliente;
   final ClienteInfo clienteInfo;
-  final CuentaBanco? cuentaBanco; // Puede ser nulo
-  final Domicilio? domicilio; // <-- CAMBIO 1: Hacemos el domicilio nulable
-  final DatosAdicionales? datosAdicionales; // Puede ser nulo
+  final CuentaBanco? cuentaBanco;
+  final Domicilio? domicilio;
+  final DatosAdicionales? datosAdicionales;
   final List<IngresoEgreso> ingresosEgresos;
   final List<Referencia> referencias;
-  // <-- CAMBIO 1: Se añade el campo 'cargo'
   final String? cargo;
-  List<HistorialGrupo> historial; // <-- Cambia a `var` o `late final` y quítalo del constructor
+  List<HistorialGrupo> historial;
 
   Cliente({
     required this.idCliente,
     required this.clienteInfo,
     this.cuentaBanco,
-    this.domicilio, // <-- Puede ser nulo
+    this.domicilio,
     this.datosAdicionales,
     required this.ingresosEgresos,
     required this.referencias,
-    this.cargo, // <-- CAMBIO 2: Se añade al constructor
-    this.historial = const [], // <-- Inicialízalo como lista vacía
+    this.cargo,
+    this.historial = const [],
   });
 
   // ========================================================================
   // FACTORY CORREGIDO PARA COINCIDIR CON LA ESTRUCTURA REAL DE LA API
   // ========================================================================
   factory Cliente.fromJson(Map<String, dynamic> json) {
-    // Extraemos las listas anidadas primero para manejarlas de forma segura,
-    // usando '?? []' para evitar errores si las claves no existen.
     final List<dynamic> adicionalesList = json['adicionales'] ?? [];
     final List<dynamic> cuentaBancoList = json['cuentabanco'] ?? [];
-    // --- CAMBIO 2: LEEMOS LA LISTA DE DOMICILIOS ---
     final List<dynamic> domicilioList = json['domicilios'] ?? [];
     final List<dynamic> ingresosList = json['ingresos_egresos'] ?? [];
-    final List<dynamic> referenciasList = json['referencias'] ?? [];
+
+    // --- 'referencias' puede venir como array plano O como objeto {dateoi, referenciaDomicilio} ---
+    final dynamic referenciasRaw = json['referencias'];
+
+    List<dynamic> referenciasList = [];
+    
+
+    if (referenciasRaw is List) {
+      referenciasList = referenciasRaw;
+    } else if (referenciasRaw is Map<String, dynamic>) {
+      referenciasList = referenciasRaw['dateoi'] ?? [];
+ 
+    }
 
     return Cliente(
       idCliente: json['idclientes'] as String,
       clienteInfo: ClienteInfo.fromJson(json),
-
-      // <-- CAMBIO 3: Se lee el campo 'cargo' del JSON
       cargo: json['cargo'] as String?,
 
-      // --- CAMBIO 3: ASIGNAMOS EL PRIMER DOMICILIO DE LA LISTA (SI EXISTE) ---
       domicilio:
           domicilioList.isNotEmpty
               ? Domicilio.fromJson(domicilioList.first as Map<String, dynamic>)
-              : null, // Si no hay domicilios, será nulo
+              : null,
+
 
       datosAdicionales:
           adicionalesList.isNotEmpty
@@ -80,8 +86,6 @@ class Cliente {
           referenciasList
               .map((e) => Referencia.fromJson(e as Map<String, dynamic>))
               .toList(),
-
-    
     );
   }
 }
@@ -354,7 +358,7 @@ class IngresoEgreso {
   }
 }
 
-// 6. Modelo para Referencias (SIN CAMBIOS NECESARIOS)
+// 6. Modelo para Referencias
 class Referencia {
   // Datos Personales
   final String nombres;
@@ -363,6 +367,7 @@ class Referencia {
   final String parentesco;
   final String telefono;
   final String tiempoConocer;
+
   // Domicilio de la Referencia
   final String? tipoDomicilio;
   final String? nombrePropietario;
@@ -376,6 +381,12 @@ class Referencia {
   final String? estado;
   final String? municipio;
   final String? tiempoViviendo;
+
+  // --- NUEVOS CAMPOS PARA EL AVAL ---
+  final bool isAval;
+  final String? curp;
+  final String? rfc;
+  final String? claveElector;
 
   Referencia({
     required this.nombres,
@@ -396,33 +407,58 @@ class Referencia {
     this.estado,
     this.municipio,
     this.tiempoViviendo,
+    // --- NUEVOS CAMPOS PARA EL AVAL ---
+    this.isAval = false, // Valor por defecto
+    this.curp,
+    this.rfc,
+    this.claveElector,
   });
 
   factory Referencia.fromJson(Map<String, dynamic> json) {
+    // --- NUEVO: 'domicilio_ref' viene como array dentro de cada referencia ---
+    // Puede ser [{"datos": "No asignado"}] (sin domicilio real)
+    // o [{...datos completos del domicilio...}] (cuando sí está registrado, ej. avales)
+    final List<dynamic> domicilioRefList = json['domicilio_ref'] ?? [];
+    Map<String, dynamic>? domicilioRefData;
+
+    if (domicilioRefList.isNotEmpty) {
+      final first = domicilioRefList.first as Map<String, dynamic>;
+      // Si trae 'calle' es un domicilio real; si solo trae 'datos' es el placeholder
+      if (first.containsKey('calle')) {
+        domicilioRefData = first;
+      }
+    }
+
     return Referencia(
       nombres: json['nombres'] ?? '',
       apellidoP: json['apellidoP'] ?? '',
       apellidoM: json['apellidoM'],
-      parentesco:
-          json['parentesco'] ??
-          json['parentescoRefProp'] ??
-          '', // Añado fallback
+      parentesco: json['parentesco'] ?? json['parentescoRefProp'] ?? '',
       telefono: json['telefono'] ?? '',
       tiempoConocer:
-          json['tiempoConocer'] ??
-          (json['tiempoCo'] ?? '').toString(), // Añado fallback
-      tipoDomicilio: json['tipo_domicilio'],
-      nombrePropietario: json['nombre_propietario'],
+          json['tiempoConocer'] ?? (json['tiempoCo'] ?? '').toString(),
+      tipoDomicilio:
+          domicilioRefData?['tipo_domicilio'] ?? json['tipo_domicilio'],
+      nombrePropietario:
+          domicilioRefData?['nombre_propietario'] ?? json['nombre_propietario'],
       parentescoRefProp: json['parentescoRefProp'],
-      calle: json['calle'],
-      nExt: json['nExt'],
-      nInt: json['nInt'],
-      entreCalle: json['entreCalle'],
-      colonia: json['colonia'],
-      cp: json['cp'],
-      estado: json['estado'],
-      municipio: json['municipio'],
-      tiempoViviendo: json['tiempoViviendo'],
+      calle: domicilioRefData?['calle'] ?? json['calle'],
+      nExt: domicilioRefData?['nExt'] ?? json['nExt'],
+      nInt: domicilioRefData?['nInt'] ?? json['nInt'],
+      entreCalle: domicilioRefData?['entreCalle'] ?? json['entreCalle'],
+      colonia: domicilioRefData?['colonia'] ?? json['colonia'],
+      cp: domicilioRefData?['cp'] ?? json['cp'],
+      estado: domicilioRefData?['estado'] ?? json['estado'],
+      municipio: domicilioRefData?['municipio'] ?? json['municipio'],
+      tiempoViviendo:
+          domicilioRefData?['tiempoViviendo'] ?? json['tiempoViviendo'],
+      isAval:
+          json['isAval'] == true ||
+          json['isAval'] == 1 ||
+          json['isAval'] == '1',
+      curp: json['curp'],
+      rfc: json['rfc'],
+      claveElector: json['claveElector'],
     );
   }
 
@@ -446,6 +482,11 @@ class Referencia {
       "estado": estado,
       "municipio": municipio,
       "tiempoViviendo": tiempoViviendo,
+      // --- NUEVOS CAMPOS PARA EL AVAL ---
+      "isAval": isAval,
+      "curp": curp,
+      "rfc": rfc,
+      "claveElector": claveElector,
     };
   }
 }

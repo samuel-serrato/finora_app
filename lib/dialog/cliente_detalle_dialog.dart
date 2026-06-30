@@ -865,13 +865,14 @@ class _ClienteDetalleDialogState extends State<ClienteDetalleDialog>
   }
 
   Widget _buildReferenciasTab(colors, bool isDarkMode) {
-    final datosAdicionales = _cliente!.datosAdicionales;
-    final referencias = _cliente!.referencias;
+  final datosAdicionales = _cliente!.datosAdicionales;
+  final referencias = _cliente!.referencias;
+  
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-      child: Column(
-        children: [
+  return SingleChildScrollView(
+    padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+    child: Column(
+      children: [
           _buildInfoSection(
             "Datos Adicionales",
             [
@@ -899,20 +900,18 @@ class _ClienteDetalleDialogState extends State<ClienteDetalleDialog>
             emptyIcon: Icons.description_outlined,
           ),
           const SizedBox(height: 16),
-          _buildInfoSection(
-            "Referencias",
-            referencias
-                .map((ref) => _buildReferenciaCard(ref, colors))
-                .toList(),
-            colors,
-            isDarkMode,
-            emptyMessage: "No se registraron referencias.",
-            emptyIcon: Icons.people_outline,
-          ),
-        ],
-      ),
-    );
-  }
+            _buildInfoSection(
+          "Referencias y Avales",
+          referencias.map((ref) => _buildReferenciaCard(ref, colors)).toList(),
+          colors,
+          isDarkMode,
+          emptyMessage: "No se registraron referencias ni avales.",
+          emptyIcon: Icons.people_outline,
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildInfoSection(
     String title,
@@ -1073,50 +1072,173 @@ class _ClienteDetalleDialogState extends State<ClienteDetalleDialog>
   }
 
   Widget _buildReferenciaCard(Referencia referencia, colors) {
-    final fullName =
-        '${referencia.nombres} ${referencia.apellidoP} ${referencia.apellidoM ?? ''}'
-            .trim();
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colors.backgroundCardDark,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _displayValue(fullName),
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
-              color: colors.textPrimary,
+  final fullName =
+      '${referencia.nombres} ${referencia.apellidoP} ${referencia.apellidoM ?? ''}'
+          .trim();
+  
+  final bool isAval = referencia.isAval;
+
+  // Verificamos si la referencia o aval tiene un domicilio asignado real
+  final bool hasDomicilio = referencia.calle != null && 
+      referencia.calle!.trim().isNotEmpty && 
+      referencia.calle != "No asignado" && 
+      referencia.calle != "Propio"; // Opcional por seguridad
+
+  return Container(
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: colors.backgroundCardDark,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // --- FILA PARA EL NOMBRE Y LA ETIQUETA (BADGE) ---
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _displayValue(fullName),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: colors.textPrimary,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: isAval ? Colors.purple.withOpacity(0.15) : Colors.blue.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isAval ? Colors.purple.withOpacity(0.5) : Colors.blue.withOpacity(0.5),
+                ),
+              ),
+              child: Text(
+                isAval ? 'AVAL' : 'REFERENCIA',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: isAval ? Colors.purple : Colors.blue,
+                ),
+              ),
+            ),
+          ],
+        ),
+        
+        const Divider(height: 20),
+        
+        // --- DATOS GENERALES ---
+        _buildCardRow(
+          'Parentesco',
+          _displayValue(referencia.parentesco),
+          Icons.group_rounded,
+          colors,
+        ),
+        _buildCardRow(
+          'Teléfono',
+          _displayValue(referencia.telefono),
+          Icons.phone_rounded,
+          colors,
+        ),
+        _buildCardRow(
+          'Tiempo de Conocerlo',
+          '${_displayValue(referencia.tiempoConocer, defaultValue: "0")} años',
+          Icons.timer_rounded,
+          colors,
+        ),
+
+        // --- DATOS EXTRA (Solo aplica para Aval) ---
+        if (isAval) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 4),
+            child: Text(
+              'Datos Oficiales (Aval)',
+              style: TextStyle(
+                fontSize: 12, 
+                fontWeight: FontWeight.bold, 
+                color: colors.textSecondary,
+              ),
             ),
           ),
-          const Divider(height: 20),
           _buildCardRow(
-            'Parentesco',
-            _displayValue(referencia.parentesco),
-            Icons.group_rounded,
+            'CURP',
+            _displayValue(referencia.curp),
+            Icons.account_box,
             colors,
           ),
           _buildCardRow(
-            'Teléfono',
-            _displayValue(referencia.telefono),
-            Icons.phone_rounded,
+            'RFC',
+            _displayValue(referencia.rfc),
+            Icons.assignment_ind,
             colors,
           ),
           _buildCardRow(
-            'Tiempo de Conocerlo',
-            '${_displayValue(referencia.tiempoConocer, defaultValue: "0")} años',
-            Icons.timer_rounded,
+            'Clave Elector',
+            _displayValue(referencia.claveElector),
+            Icons.switch_account_rounded,
             colors,
           ),
         ],
-      ),
-    );
-  }
+
+        // --- NUEVO: DOMICILIO (Si está registrado) ---
+        if (hasDomicilio) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 4),
+            child: Text(
+              'Domicilio de la Persona',
+              style: TextStyle(
+                fontSize: 12, 
+                fontWeight: FontWeight.bold, 
+                color: colors.textSecondary,
+              ),
+            ),
+          ),
+          _buildCardRow(
+            'Tipo de Domicilio',
+            _displayValue(referencia.tipoDomicilio),
+            Icons.home_rounded,
+            colors,
+          ),
+          _buildCardRow(
+            'Dirección',
+            '${_displayValue(referencia.calle)} #${_displayValue(referencia.nExt)}, Int. ${_displayValue(referencia.nInt, defaultValue: "S/N")}',
+            Icons.location_on_rounded,
+            colors,
+          ),
+          if (referencia.entreCalle != null && referencia.entreCalle!.trim().isNotEmpty && referencia.entreCalle != "No asignado")
+            _buildCardRow(
+              'Entre Calle',
+              referencia.entreCalle!,
+              Icons.signpost_rounded,
+              colors,
+            ),
+          _buildCardRow(
+            'Colonia y CP',
+            '${_displayValue(referencia.colonia)}, C.P. ${_displayValue(referencia.cp)}',
+            Icons.location_city_rounded,
+            colors,
+          ),
+          _buildCardRow(
+            'Municipio/Estado',
+            '${_displayValue(referencia.municipio)}, ${_displayValue(referencia.estado)}',
+            Icons.map_rounded,
+            colors,
+          ),
+          if (referencia.tiempoViviendo != null && referencia.tiempoViviendo!.trim().isNotEmpty && referencia.tiempoViviendo != "No asignado")
+            _buildCardRow(
+              'Tiempo Viviendo',
+              '${referencia.tiempoViviendo!} años',
+              Icons.timelapse_rounded,
+              colors,
+            ),
+        ],
+      ],
+    ),
+  );
+}
 
   Widget _buildCardRow(String label, String value, IconData icon, colors) {
     return Padding(

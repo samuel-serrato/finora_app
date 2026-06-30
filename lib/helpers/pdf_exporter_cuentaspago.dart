@@ -13,19 +13,19 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-// Assuming these are defined elsewhere, adjust paths as needed
 import 'package:finora_app/providers/user_data_provider.dart';
 import 'package:finora_app/ip.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // For baseUrl
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/app_logger.dart';
 
-
 class PDFCuentasPago {
-  static const PdfColor primaryColor = PdfColor.fromInt(0xFF5162F6);
-  static const PdfColor accentColor = PdfColor.fromInt(0xFF8BC34A);
-  static const PdfColor lightGrey = PdfColor.fromInt(0xFFF5F5F5);
-  static const PdfColor mediumGrey = PdfColor.fromInt(0xFFE0E0E0);
-  static const PdfColor darkGrey = PdfColor.fromInt(0xFF757575);
+  // --- Paleta unificada con PDFControlPagos ---
+  static final PdfColor primaryColor = PdfColors.indigo700;
+  static final PdfColor accentColor = PdfColors.teal500;
+  static final PdfColor lightGrey = PdfColors.grey200;
+  static final PdfColor mediumGrey = PdfColors.grey400;
+  static final PdfColor darkGrey = PdfColors.grey800;
+  static final PdfColor infoBoxBg = PdfColor.fromHex('f2f7fa');
 
   static Future<Uint8List> _loadAsset(String path) async {
     final ByteData data = await rootBundle.load(path);
@@ -44,16 +44,12 @@ class PDFCuentasPago {
     }
     return null;
   }
-  
-  // =======================================================================
-  // APLIQUEMOS LOS CAMBIOS AQUÍ
-  // =======================================================================
-  // <-- CAMBIO 1: La función ahora devuelve 'Future<Uint8List>'.
-  // <-- CAMBIO 2: Se eliminó el parámetro 'String savePath'.
+
   static Future<Uint8List> generar(
     BuildContext context,
-    Credito credito,
-  ) async {
+    Credito credito, {
+    List<String>? numerosCuentaSeleccionados,
+  }) async {
     try {
       final userData = Provider.of<UserDataProvider>(context, listen: false);
       final prefs = await SharedPreferences.getInstance();
@@ -62,7 +58,9 @@ class PDFCuentasPago {
       List<CuentaBancaria> cuentasBancarias = [];
       try {
         final response = await http.get(
-          Uri.parse('$baseUrl/api/v1/financiera/cuentasbanco/${userData.idnegocio}'),
+          Uri.parse(
+            '$baseUrl/api/v1/financiera/cuentasbanco/${userData.idnegocio}',
+          ),
           headers: {'tokenauth': token},
         );
         if (response.statusCode == 200) {
@@ -72,6 +70,16 @@ class PDFCuentasPago {
         }
       } catch (e) {
         AppLogger.log('Error obteniendo cuentas: $e');
+      }
+
+      if (numerosCuentaSeleccionados != null) {
+        cuentasBancarias =
+            cuentasBancarias
+                .where(
+                  (cuenta) =>
+                      numerosCuentaSeleccionados.contains(cuenta.numeroCuenta),
+                )
+                .toList();
       }
 
       List<Uint8List?> cuentaLogos = [];
@@ -87,94 +95,186 @@ class PDFCuentasPago {
       final inputFormat = DateFormat('yyyy/MM/dd');
       final outputFormat = DateFormat('dd MMMM yyyy', 'es_ES');
       final DateTime fechaInicio = inputFormat.parse(dateParts[0].trim());
-      final DateTime fechaFin = inputFormat.parse(dateParts[1].trim());
+      final DateTime DateTimefechaFin = inputFormat.parse(dateParts[1].trim());
       final String fechaInicioFormateada = outputFormat.format(fechaInicio);
-      final String fechaFinFormateada = outputFormat.format(fechaFin);
+      final String fechaFinFormateada = outputFormat.format(DateTimefechaFin);
 
       await initializeDateFormatting('es_ES', null);
 
-      final logoColorInfo = userData.imagenes.where((img) => img.tipoImagen == 'logoColor').firstOrNull;
-      final moneyFacilLogoUrl = logoColorInfo != null ? '$baseUrl/imagenes/subidas/${logoColorInfo.rutaImagen}' : null;
+      final logoColorInfo =
+          userData.imagenes
+              .where((img) => img.tipoImagen == 'logoColor')
+              .firstOrNull;
+      final moneyFacilLogoUrl =
+          logoColorInfo != null
+              ? '$baseUrl/imagenes/subidas/${logoColorInfo.rutaImagen}'
+              : null;
       final moneyFacilLogoBytes = await _loadNetworkImage(moneyFacilLogoUrl);
       final finoraLogoBytes = await _loadAsset('assets/finora.png');
 
-      final currencyFormat = NumberFormat.currency(locale: 'es_MX', symbol: '\$');
+      final currencyFormat = NumberFormat.currency(
+        locale: 'es_MX',
+        symbol: '\$',
+      );
       final pdf = pw.Document();
 
-      // ... (Toda la lógica de creación de estilos y del build del PDF se mantiene igual)
-      // ... (No he pegado toda la UI para no hacer esto demasiado largo, pero no cambia)
+      // --- Estilos alineados a PDFControlPagos ---
+      final titleStyle = pw.TextStyle(
+        fontSize: 16,
+        fontWeight: pw.FontWeight.bold,
+        color: PdfColor.fromHex('#5162F6'),
+      );
+      final sectionTitleStyle = pw.TextStyle(
+        fontSize: 10,
+        fontWeight: pw.FontWeight.bold,
+        color: darkGrey,
+      );
+      final labelStyle = pw.TextStyle(fontSize: 7, color: darkGrey);
+      final dataStyle = pw.TextStyle(
+        fontSize: 8,
+        fontWeight: pw.FontWeight.bold,
+        color: PdfColors.black,
+      );
 
-      final titleStyle = pw.TextStyle(fontSize: 16,fontWeight: pw.FontWeight.bold,color: primaryColor);
-      final headerStyle = pw.TextStyle(fontSize: 12,fontWeight: pw.FontWeight.bold,color: PdfColors.white,);
-      final labelStyle = pw.TextStyle(fontSize: 9, color: darkGrey);
-      final dataStyle = pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.black,);
+      // --- Determinación de tipo de crédito basada en su modelo ---
+      final bool esIndividual = credito.tipo.toLowerCase() == 'individual';
+      final String etiquetaNombre =
+          esIndividual ? 'NOMBRE DEL CLIENTE' : 'NOMBRE DEL GRUPO';
+
+      // Si el nombre del cliente se almacena en 'nombreGrupo' para créditos individuales:
+      final String valorNombre = credito.nombreGrupo;
+
+      // NOTA: Si necesita extraer el nombre desde la lista 'clientesMontosInd',
+      // puede descomentar y adaptar la siguiente línea según las propiedades de su clase ClienteMonto:
+      // final String valorNombre = esIndividual && credito.clientesMontosInd.isNotEmpty
+      //     ? (credito.clientesMontosInd.first.nombre ?? credito.nombreGrupo)
+      //     : credito.nombreGrupo;
 
       pdf.addPage(
         pw.Page(
-          pageFormat: PdfPageFormat.letter.copyWith(marginTop: 20, marginBottom: 20, marginLeft: 30, marginRight: 30,),
+          pageFormat: PdfPageFormat.letter.copyWith(
+            marginTop: 20,
+            marginBottom: 20,
+            marginLeft: 30,
+            marginRight: 30,
+          ),
           build: (pw.Context pdfContext) {
             return pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                // Header, Título, Info General, Cuentas... todo igual que lo tenías
-                 pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    if (moneyFacilLogoBytes != null)
-                      pw.Image(pw.MemoryImage(moneyFacilLogoBytes),height: 40,fit: pw.BoxFit.contain,)
-                    else
-                      pw.SizedBox(height: 40),
-                    pw.Image(pw.MemoryImage(finoraLogoBytes),height: 35,fit: pw.BoxFit.contain,),
-                  ],
-                ),
-                pw.SizedBox(height: 15),
-                 pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Ficha De Pago ${credito.tipoPlazo}', style: titleStyle),
-                    pw.Text('Generado: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}', style: const pw.TextStyle(fontSize: 8),),
-                  ],
-                ),
-                pw.SizedBox(height: 20),
+                // --- Header igual a PDFControlPagos ---
                 pw.Container(
-                  decoration: pw.BoxDecoration(color: lightGrey,borderRadius: pw.BorderRadius.circular(8),border: pw.Border.all(color: mediumGrey, width: 0.5),),
-                  padding: const pw.EdgeInsets.all(12,),
+                  padding: const pw.EdgeInsets.only(bottom: 10),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border(
+                      bottom: pw.BorderSide(color: mediumGrey, width: 0.5),
+                    ),
+                  ),
                   child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                     children: [
-                      pw.Container(
-                        width: double.infinity,
-                        padding: const pw.EdgeInsets.symmetric(horizontal: 12,vertical: 10,),
-                        decoration: pw.BoxDecoration(color: accentColor,borderRadius: pw.BorderRadius.circular(4),),
-                        child: pw.Text('Información General',style: headerStyle,textAlign: pw.TextAlign.center,),
-                      ),
-                      pw.SizedBox(height: 16,),
                       pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Expanded(child: _buildInfoItem('Nombre del Grupo',credito.nombreGrupo,labelStyle,dataStyle,),),
-                          pw.SizedBox(width: 20),
-                          pw.Expanded(child: _buildInfoItem('Pago ${credito.tipoPlazo}',currencyFormat.format(credito.pagoCuota ?? 0.0),labelStyle,dataStyle,),),
+                          if (moneyFacilLogoBytes != null)
+                            pw.Image(
+                              pw.MemoryImage(moneyFacilLogoBytes),
+                              height: 40,
+                              fit: pw.BoxFit.contain,
+                            )
+                          else
+                            pw.SizedBox(height: 40),
+                          pw.Image(
+                            pw.MemoryImage(finoraLogoBytes),
+                            height: 35,
+                            fit: pw.BoxFit.contain,
+                          ),
                         ],
                       ),
-                      pw.SizedBox(height: 16),
+                      pw.SizedBox(height: 20),
                       pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Expanded(child: _buildInfoItem('Fecha de Inicio',fechaInicioFormateada,labelStyle,dataStyle,),),
-                          pw.SizedBox(width: 20),
-                          pw.Expanded(child: _buildInfoItem('Fecha de Término',fechaFinFormateada,labelStyle,dataStyle,),),
+                          pw.Text(
+                            'Ficha De Pago ${credito.tipoPlazo}',
+                            style: titleStyle,
+                          ),
+                          pw.Text(
+                            'Generado: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
+                            style: const pw.TextStyle(fontSize: 8),
+                          ),
                         ],
                       ),
                     ],
                   ),
                 ),
-                pw.SizedBox(height: 20),
+                pw.SizedBox(height: 15),
+
+                // --- Información General (estilo caja, sin header de color) ---
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(15),
+                  decoration: pw.BoxDecoration(
+                    color: infoBoxBg,
+                    borderRadius: pw.BorderRadius.circular(8),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('INFORMACIÓN GENERAL', style: sectionTitleStyle),
+                      pw.SizedBox(height: 10),
+                      pw.Row(
+                        children: [
+                          _buildInfoColumn(
+                            etiquetaNombre,
+                            valorNombre,
+                            flex: 1,
+                          ),
+                          _buildInfoColumn(
+                            'PAGO ${credito.tipoPlazo.toUpperCase()}',
+                            currencyFormat.format(credito.pagoCuota ?? 0.0),
+                            flex: 1,
+                          ),
+                        ],
+                      ),
+                      pw.SizedBox(height: 8),
+                      pw.Row(
+                        children: [
+                          _buildInfoColumn(
+                            'FECHA DE INICIO',
+                            fechaInicioFormateada,
+                            flex: 1,
+                          ),
+                          _buildInfoColumn(
+                            'FECHA DE TÉRMINO',
+                            fechaFinFormateada,
+                            flex: 1,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(height: 15),
+
                 if (cuentasBancarias.isNotEmpty)
-                  _buildCuentasSection(cuentasBancarias,cuentaLogos,headerStyle,labelStyle,dataStyle,),
+                  _buildCuentasSection(
+                    cuentasBancarias,
+                    cuentaLogos,
+                    sectionTitleStyle,
+                    labelStyle,
+                    dataStyle,
+                  ),
                 pw.SizedBox(height: 20),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.center,
                   children: [
-                    pw.Text('Para cualquier duda o aclaración, comuníquese con su asesor financiero',style: pw.TextStyle(fontSize: 8,color: darkGrey,fontStyle: pw.FontStyle.italic,),),
+                    pw.Text(
+                      'Para cualquier duda o aclaración, comuníquese con su asesor financiero',
+                      style: pw.TextStyle(
+                        fontSize: 8,
+                        color: darkGrey,
+                        fontStyle: pw.FontStyle.italic,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -183,10 +283,7 @@ class PDFCuentasPago {
         ),
       );
 
-      // <-- CAMBIO 3: Eliminamos toda la lógica de guardado y depuración
-      // y la reemplazamos con esta única línea.
       return await pdf.save();
-
     } on FormatException catch (e) {
       AppLogger.log("Error de formato al generar PDF: ${e.message}");
       throw 'Error al formatear datos para el PDF: ${e.message}';
@@ -196,62 +293,46 @@ class PDFCuentasPago {
     }
   }
 
-  static pw.Widget _buildInfoItem(String title,String value,pw.TextStyle labelStyle,pw.TextStyle dataStyle,) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Text(title, style: labelStyle),
-        pw.SizedBox(height: 6),
-        pw.Container(
-          width: double.infinity,
-          padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: pw.BoxDecoration(color: PdfColors.white,borderRadius: pw.BorderRadius.circular(4),border: pw.Border.all(color: mediumGrey, width: 0.5),),
-          child: pw.Text(value,style: dataStyle,textAlign: pw.TextAlign.center,),
-        ),
-      ],
+  // Reemplaza a _buildInfoItem, ahora con el mismo patrón que PDFControlPagos
+  static pw.Widget _buildInfoColumn(
+    String label,
+    String value, {
+    int flex = 1,
+  }) {
+    return pw.Expanded(
+      flex: flex,
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(label, style: pw.TextStyle(fontSize: 7, color: darkGrey)),
+          pw.SizedBox(height: 2),
+          pw.Text(
+            value.toUpperCase(),
+            style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+          ),
+        ],
+      ),
     );
   }
 
   static pw.Widget _buildCuentasSection(
     List<CuentaBancaria> cuentas,
     List<Uint8List?> logos,
-    pw.TextStyle headerStyle,
+    pw.TextStyle sectionTitleStyle,
     pw.TextStyle labelStyle,
     pw.TextStyle dataStyle,
   ) {
     return pw.Container(
       decoration: pw.BoxDecoration(
-        color: lightGrey,
+        color: infoBoxBg,
         borderRadius: pw.BorderRadius.circular(8),
-        border: pw.Border.all(color: mediumGrey, width: 0.5),
-        /* boxShadow: [
-          pw.BoxShadow(
-            color: PdfColors.grey300,
-            offset: const PdfPoint(0, 2),
-            blurRadius: 3,
-          ),
-        ], */
       ),
-      margin: const pw.EdgeInsets.only(bottom: 15),
-      padding: const pw.EdgeInsets.all(12),
+      padding: const pw.EdgeInsets.all(15),
       child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Container(
-            width: double.infinity,
-            padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: pw.BoxDecoration(
-              color: primaryColor,
-              borderRadius: pw.BorderRadius.circular(4),
-            ),
-            child: pw.Text(
-              'Cuentas Bancarias Disponibles',
-              style: headerStyle,
-              textAlign: pw.TextAlign.center,
-            ),
-          ),
+          pw.Text('CUENTAS BANCARIAS DISPONIBLES', style: sectionTitleStyle),
           pw.SizedBox(height: 10),
-          // Generar filas de 2 tarjetas
           ...List.generate((cuentas.length / 2).ceil(), (rowIndex) {
             final startIdx = rowIndex * 2;
             return pw.Padding(
@@ -259,7 +340,6 @@ class PDFCuentasPago {
               child: pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  // Primera tarjeta en la fila
                   pw.Expanded(
                     child: _buildCuentaCard(
                       cuentas[startIdx],
@@ -268,8 +348,7 @@ class PDFCuentasPago {
                       dataStyle,
                     ),
                   ),
-                  pw.SizedBox(width: 10), // Espacio entre tarjetas
-                  // Segunda tarjeta en la fila (si existe)
+                  pw.SizedBox(width: 10),
                   if (startIdx + 1 < cuentas.length)
                     pw.Expanded(
                       child: _buildCuentaCard(
@@ -280,9 +359,7 @@ class PDFCuentasPago {
                       ),
                     )
                   else
-                    pw.Expanded(
-                      child: pw.Container(),
-                    ), // Espacio vacío para mantener la simetría
+                    pw.Expanded(child: pw.Container()),
                 ],
               ),
             );
@@ -293,10 +370,7 @@ class PDFCuentasPago {
   }
 
   static String _formatCardNumber(String number) {
-    // Elimina cualquier espacio existente
     final cleanNumber = number.replaceAll(' ', '');
-
-    // Agrega un espacio cada 4 caracteres
     final buffer = StringBuffer();
     for (int i = 0; i < cleanNumber.length; i++) {
       if (i > 0 && i % 4 == 0) {
@@ -304,7 +378,6 @@ class PDFCuentasPago {
       }
       buffer.write(cleanNumber[i]);
     }
-
     return buffer.toString();
   }
 
@@ -314,38 +387,21 @@ class PDFCuentasPago {
     pw.TextStyle labelStyle,
     pw.TextStyle dataStyle,
   ) {
-    final formattedDate = DateFormat('dd/MM/yyyy').format(cuenta.fCreacion);
-
     return pw.Container(
       decoration: pw.BoxDecoration(
         color: PdfColors.white,
         borderRadius: pw.BorderRadius.circular(8),
         border: pw.Border.all(color: mediumGrey, width: 0.5),
-        boxShadow: [
-          pw.BoxShadow(
-            color: PdfColors.grey200,
-            offset: const PdfPoint(2, 2),
-            blurRadius: 3,
-          ),
-        ],
       ),
       padding: const pw.EdgeInsets.all(12),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          // Nuevo encabezado con logo y texto juntos
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
               pw.Text('Institución Financiera:', style: labelStyle),
               pw.SizedBox(width: 10),
-              /*   pw.Expanded(
-                child: pw.Text(
-                  cuenta.nombreBanco,
-                  style: dataStyle,
-                  maxLines: 1,
-                ),
-              ), */
               pw.Container(
                 width: 50,
                 height: 30,
@@ -357,7 +413,6 @@ class PDFCuentasPago {
             ],
           ),
           pw.Divider(color: mediumGrey, height: 15),
-
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
@@ -374,9 +429,6 @@ class PDFCuentasPago {
                 labelStyle,
                 dataStyle,
               ),
-              pw.SizedBox(height: 5),
-              // Como lo indicaste, he dejado comentada la línea de fecha de creación
-              // _buildCardItem('Creación:', formattedDate, labelStyle, dataStyle),
             ],
           ),
         ],

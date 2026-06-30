@@ -10,7 +10,6 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../utils/app_logger.dart';
 
-
 // 1. Se cambió el nombre del Widget para mayor claridad.
 class nClienteForm extends StatefulWidget {
   final VoidCallback? onClienteAgregado;
@@ -111,7 +110,7 @@ class _nClienteFormState extends State<nClienteForm>
     "Bancoppel",
     "Banco Azteca",
     "Inbursa",
-    'Spin by Oxxo'
+    'Spin by Oxxo',
   ];
   Map<String, int> tiposIngresoEgresoIds = {
     'Actividad economica': 1,
@@ -303,6 +302,11 @@ class _nClienteFormState extends State<nClienteForm>
                   estado: ref['estadoRef'],
                   municipio: ref['municipioRef'],
                   tiempoViviendo: ref['tiempoViviendoRef'],
+                  // --- NUEVOS CAMPOS AGREGADOS AQUÍ ---
+                  isAval: ref['isAval'] ?? false,
+                  curp: ref['curpRef'],
+                  rfc: ref['rfcRef'],
+                  claveElector: ref['claveElectorRef'],
                 ),
               )
               .toList();
@@ -355,7 +359,9 @@ class _nClienteFormState extends State<nClienteForm>
       }
 
       // --- PASO 3: Éxito total ---
-      AppLogger.log("🎉 Cliente y todos sus datos asociados creados exitosamente.");
+      AppLogger.log(
+        "🎉 Cliente y todos sus datos asociados creados exitosamente.",
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -475,7 +481,7 @@ class _nClienteFormState extends State<nClienteForm>
                         Tab(text: 'Personal'),
                         Tab(text: 'Cuenta'),
                         Tab(text: 'Ingresos'),
-                        Tab(text: 'Referencias'),
+                        Tab(text: 'Ref. / Aval'), // <--- CAMBIO AQUÍ
                       ],
                     ),
                   ),
@@ -1381,7 +1387,7 @@ class _nClienteFormState extends State<nClienteForm>
                 referencias.isEmpty
                     ? const Center(
                       child: Text(
-                        'No hay referencias agregadas.',
+                        'No hay referencias ni avales agregados.',
                         style: TextStyle(color: Colors.grey),
                       ),
                     )
@@ -1390,6 +1396,9 @@ class _nClienteFormState extends State<nClienteForm>
                       itemCount: referencias.length,
                       itemBuilder: (context, index) {
                         final ref = referencias[index];
+                        final bool isAval =
+                            ref['isAval'] ?? false; // Verifica si es aval
+
                         return Card(
                           color: colors.backgroundCard,
                           surfaceTintColor: colors.backgroundCard,
@@ -1398,8 +1407,39 @@ class _nClienteFormState extends State<nClienteForm>
                             horizontal: 8,
                           ),
                           child: ListTile(
-                            title: Text(
-                              '${ref['nombresRef'] ?? ''} ${ref['apellidoPRef'] ?? ''}',
+                            title: Row(
+                              children: [
+                                Text(
+                                  '${ref['nombresRef'] ?? ''} ${ref['apellidoPRef'] ?? ''}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Etiqueta visual para distinguir Aval de Referencia
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        isAval
+                                            ? Colors.purple.withOpacity(0.2)
+                                            : Colors.blue.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    isAval ? 'AVAL' : 'REFERENCIA',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color:
+                                          isAval ? Colors.purple : Colors.blue,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             subtitle: Text(
                               'Tel: ${ref['telefonoRef'] ?? 'N/A'} - Parentesco: ${ref['parentescoRef'] ?? 'N/A'}',
@@ -1437,16 +1477,45 @@ class _nClienteFormState extends State<nClienteForm>
           ),
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text('Añadir Referencia'),
-              onPressed: () => _mostrarDialogReferenciaMobile(),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
-                backgroundColor: colors.backgroundButton,
-                foregroundColor: colors.whiteWhite,
-                iconColor: colors.whiteWhite,
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text(
+                      'Añadir Referencia',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    onPressed:
+                        () => _mostrarDialogReferenciaMobile(isAvalForm: false),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      backgroundColor: colors.backgroundButton,
+                      foregroundColor: colors.whiteWhite,
+                      iconColor: colors.whiteWhite,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.verified_user),
+                    label: const Text(
+                      'Añadir Aval',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    onPressed:
+                        () => _mostrarDialogReferenciaMobile(isAvalForm: true),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      backgroundColor:
+                          Colors.purple, // Color distinto para resaltar
+                      foregroundColor: Colors.white,
+                      iconColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1644,10 +1713,16 @@ class _nClienteFormState extends State<nClienteForm>
   void _mostrarDialogReferenciaMobile({
     int? index,
     Map<String, dynamic>? item,
+    bool isAvalForm = false, // <--- NUEVO PARÁMETRO
   }) {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final colors = themeProvider.colors;
     final formKey = GlobalKey<FormState>();
+
+    // Si estamos editando, respetamos el tipo que ya tenía (Aval o Referencia)
+    if (item != null && item.containsKey('isAval')) {
+      isAvalForm = item['isAval'];
+    }
 
     String? selectedParentesco = item?['parentescoRef'];
     final nombresRefController = TextEditingController(
@@ -1664,6 +1739,15 @@ class _nClienteFormState extends State<nClienteForm>
     );
     final tiempoConocerRefController = TextEditingController(
       text: item?['tiempoConocerRef'] ?? '',
+    );
+
+    // --- NUEVOS CONTROLADORES PARA EL AVAL ---
+    final curpRefController = TextEditingController(
+      text: item?['curpRef'] ?? '',
+    );
+    final rfcRefController = TextEditingController(text: item?['rfcRef'] ?? '');
+    final claveElectorRefController = TextEditingController(
+      text: item?['claveElectorRef'] ?? '',
     );
 
     String? selectedTipoDomicilioRef = item?['tipoDomicilioRef'];
@@ -1699,6 +1783,12 @@ class _nClienteFormState extends State<nClienteForm>
       text: item?['tiempoViviendoRef'] ?? '',
     );
 
+    // Título dinámico
+    String dialogTitle =
+        index == null
+            ? (isAvalForm ? "Nuevo Aval" : "Nueva Referencia")
+            : (isAvalForm ? "Editar Aval" : "Editar Referencia");
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1707,7 +1797,6 @@ class _nClienteFormState extends State<nClienteForm>
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter dialogSetState) {
             return SizedBox(
-              //height: MediaQuery.of(context).size.height * 0.91,
               child: Card(
                 margin: EdgeInsets.zero,
                 color: colors.backgroundPrimary,
@@ -1739,9 +1828,7 @@ class _nClienteFormState extends State<nClienteForm>
                         ),
                       ),
                       Text(
-                        index == null
-                            ? "Nueva Referencia"
-                            : "Editar Referencia",
+                        dialogTitle,
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
                       const SizedBox(height: 16),
@@ -1755,6 +1842,8 @@ class _nClienteFormState extends State<nClienteForm>
                               children: [
                                 _sectionTitle('Información de la Persona'),
                                 const SizedBox(height: 16),
+
+                                // 1. Nombres (Ancho completo)
                                 _buildTextField(
                                   controller: nombresRefController,
                                   label: 'Nombres',
@@ -1766,58 +1855,84 @@ class _nClienteFormState extends State<nClienteForm>
                                               : null,
                                 ),
                                 const SizedBox(height: 16),
-                                _buildTextField(
-                                  controller: apellidoPRefController,
-                                  label: 'Apellido Paterno',
-                                  icon: Icons.person_outline,
-                                  validator:
-                                      (v) =>
-                                          (v == null || v.isEmpty)
-                                              ? 'Requerido'
-                                              : null,
-                                ),
-                                const SizedBox(height: 16),
-                                _buildTextField(
-                                  controller: apellidoMRefController,
-                                  label: 'Apellido Materno',
-                                  icon: Icons.person_outline,
-                                ),
-                                const SizedBox(height: 16),
-                                _buildDropdown(
-                                  value: selectedParentesco,
-                                  hint: 'Parentesco',
-                                  items: [
-                                    'Padre',
-                                    'Madre',
-                                    'Hermano/a',
-                                    'Amigo/a',
-                                    'Vecino',
-                                    'Otro',
-                                  ],
-                                  onChanged:
-                                      (v) => dialogSetState(
-                                        () => selectedParentesco = v,
+
+                                // 2. Apellidos en un Row (Mitad y Mitad)
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: _buildTextField(
+                                        controller: apellidoPRefController,
+                                        label: 'Ap. Paterno',
+                                        icon: Icons.person_outline,
+                                        validator:
+                                            (v) =>
+                                                (v == null || v.isEmpty)
+                                                    ? 'Requerido'
+                                                    : null,
                                       ),
-                                  validator:
-                                      (v) => v == null ? 'Requerido' : null,
-                                ),
-                                const SizedBox(height: 16),
-                                _buildTextField(
-                                  controller: telefonoRefController,
-                                  label: 'Teléfono',
-                                  icon: Icons.phone,
-                                  keyboardType: TextInputType.phone,
-                                  maxLength: 10,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: _buildTextField(
+                                        controller: apellidoMRefController,
+                                        label: 'Ap. Materno',
+                                        icon: Icons.person_outline,
+                                      ),
+                                    ),
                                   ],
-                                  validator:
-                                      (v) =>
-                                          (v == null || v.length != 10)
-                                              ? 'Teléfono de 10 dígitos'
-                                              : null,
                                 ),
                                 const SizedBox(height: 16),
+
+                                // 3. Parentesco y Teléfono en un Row
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: _buildDropdown(
+                                        value: selectedParentesco,
+                                        hint: 'Parentesco',
+                                        items: [
+                                          'Padre',
+                                          'Madre',
+                                          'Hermano/a',
+                                          'Amigo/a',
+                                          'Vecino',
+                                          'Otro',
+                                        ],
+                                        onChanged:
+                                            (v) => dialogSetState(
+                                              () => selectedParentesco = v,
+                                            ),
+                                        validator:
+                                            (v) =>
+                                                v == null ? 'Requerido' : null,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: _buildTextField(
+                                        controller: telefonoRefController,
+                                        label: 'Teléfono',
+                                        icon: Icons.phone,
+                                        keyboardType: TextInputType.phone,
+                                        maxLength: 10,
+                                        inputFormatters: [
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
+                                        ],
+                                        validator:
+                                            (v) =>
+                                                (v == null || v.length != 10)
+                                                    ? '10 dígitos'
+                                                    : null,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+
+                                // 4. Tiempo de conocer (Ancho completo)
                                 _buildTextField(
                                   controller: tiempoConocerRefController,
                                   label: 'Tiempo de Conocer (años)',
@@ -1829,9 +1944,77 @@ class _nClienteFormState extends State<nClienteForm>
                                               ? 'Requerido'
                                               : null,
                                 ),
+
+                                // --- SECCIÓN CONDICIONAL: DATOS OFICIALES DEL AVAL ---
+                                if (isAvalForm) ...[
+                                  const SizedBox(height: 24),
+                                  _sectionTitle('Datos Oficiales del Aval'),
+                                  const SizedBox(height: 16),
+
+                                  // 5. CURP (Ancho completo, ocupa más espacio)
+                                  _buildTextField(
+                                    controller: curpRefController,
+                                    label: 'CURP',
+                                    icon: Icons.account_box,
+                                    maxLength: 18,
+                                    validator:
+                                        (v) =>
+                                            (v == null || v.length != 18)
+                                                ? 'CURP de 18 caracteres'
+                                                : null,
+                                  ),
+                                  const SizedBox(height: 16),
+
+                                  // 6. RFC y Clave de Elector en un Row
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: _buildTextField(
+                                          controller: rfcRefController,
+                                          label: 'RFC',
+                                          icon: Icons.assignment_ind,
+                                          maxLength: 13,
+                                          validator:
+                                              (v) =>
+                                                  (v == null ||
+                                                          (v.length != 12 &&
+                                                              v.length != 13))
+                                                      ? 'RFC inválido'
+                                                      : null,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: _buildTextField(
+                                          controller: claveElectorRefController,
+                                          label: 'Clave Elector',
+                                          icon: Icons.switch_account_rounded,
+                                          maxLength: 18,
+                                          validator:
+                                              (v) =>
+                                                  (v == null || v.length != 18)
+                                                      ? '18 caracteres'
+                                                      : null,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+
+                                // --- FIN DATOS EXTRA ---
                                 const SizedBox(height: 24),
-                                _sectionTitle('Domicilio (Opcional)'),
+
+                                // --- TÍTULO DINÁMICO ---
+                                _sectionTitle(
+                                  isAvalForm
+                                      ? 'Domicilio (Requerido para Aval)'
+                                      : 'Domicilio (Opcional)',
+                                ),
                                 const SizedBox(height: 16),
+
+                                // 1. Tipo de Domicilio
                                 _buildDropdown(
                                   value: selectedTipoDomicilioRef,
                                   hint: 'Tipo Domicilio',
@@ -1840,14 +2023,31 @@ class _nClienteFormState extends State<nClienteForm>
                                       (v) => dialogSetState(
                                         () => selectedTipoDomicilioRef = v,
                                       ),
+                                  // Si es Aval, es OBLIGATORIO elegir un tipo
+                                  validator:
+                                      (v) =>
+                                          (isAvalForm && v == null)
+                                              ? 'Selecciona un tipo'
+                                              : null,
                                 ),
+
+                                // Mostrar los campos si se seleccionó un tipo
                                 if (selectedTipoDomicilioRef != null) ...[
                                   const SizedBox(height: 16),
                                   _buildTextField(
                                     controller: calleRefController,
                                     label: 'Calle',
                                     icon: Icons.location_on,
+                                    // Validar si es Aval
+                                    validator:
+                                        (v) =>
+                                            (isAvalForm &&
+                                                    (v == null || v.isEmpty))
+                                                ? 'Requerido'
+                                                : null,
                                   ),
+
+                                  // Datos del Propietario (Si no es propio)
                                   if (selectedTipoDomicilioRef != 'Propio') ...[
                                     const SizedBox(height: 16),
                                     _buildTextField(
@@ -1855,16 +2055,33 @@ class _nClienteFormState extends State<nClienteForm>
                                           nombrePropietarioRefController,
                                       label: 'Nombre del Propietario',
                                       icon: Icons.person,
+                                      validator:
+                                          (v) =>
+                                              (isAvalForm &&
+                                                      (v == null || v.isEmpty))
+                                                  ? 'Requerido'
+                                                  : null,
                                     ),
                                     const SizedBox(height: 16),
                                     _buildTextField(
                                       controller: parentescoRefPropController,
                                       label: 'Parentesco con propietario',
                                       icon: Icons.family_restroom,
+                                      validator:
+                                          (v) =>
+                                              (isAvalForm &&
+                                                      (v == null || v.isEmpty))
+                                                  ? 'Requerido'
+                                                  : null,
                                     ),
                                   ],
+
                                   const SizedBox(height: 16),
+
+                                  // 2. Números en un Row
                                   Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
                                         child: _buildTextField(
@@ -1876,6 +2093,13 @@ class _nClienteFormState extends State<nClienteForm>
                                             FilteringTextInputFormatter
                                                 .digitsOnly,
                                           ],
+                                          validator:
+                                              (v) =>
+                                                  (isAvalForm &&
+                                                          (v == null ||
+                                                              v.isEmpty))
+                                                      ? 'Req.'
+                                                      : null,
                                         ),
                                       ),
                                       const SizedBox(width: 10),
@@ -1894,26 +2118,39 @@ class _nClienteFormState extends State<nClienteForm>
                                     ],
                                   ),
                                   const SizedBox(height: 16),
+
+                                  // 3. Entre Calles
                                   _buildTextField(
                                     controller: entreCalleRefController,
                                     label: 'Entre Calle',
                                     icon: Icons.location_on,
                                   ),
                                   const SizedBox(height: 16),
+
+                                  // 4. Colonia y Código Postal en un Row
                                   Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
                                         child: _buildTextField(
                                           controller: coloniaRefController,
                                           label: 'Colonia',
                                           icon: Icons.location_city,
+                                          validator:
+                                              (v) =>
+                                                  (isAvalForm &&
+                                                          (v == null ||
+                                                              v.isEmpty))
+                                                      ? 'Requerido'
+                                                      : null,
                                         ),
                                       ),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: _buildTextField(
                                           controller: cpRefController,
-                                          label: 'Código Postal',
+                                          label: 'C.P.',
                                           icon: Icons.mail,
                                           keyboardType: TextInputType.number,
                                           maxLength: 5,
@@ -1922,11 +2159,14 @@ class _nClienteFormState extends State<nClienteForm>
                                                 .digitsOnly,
                                           ],
                                           validator: (value) {
+                                            if (isAvalForm &&
+                                                (value == null ||
+                                                    value.isEmpty))
+                                              return 'Req.';
                                             if (value != null &&
                                                 value.isNotEmpty &&
-                                                value.length != 5) {
-                                              return 'Debe tener 5 dígitos';
-                                            }
+                                                value.length != 5)
+                                              return '5 dígitos';
                                             return null;
                                           },
                                         ),
@@ -1934,7 +2174,11 @@ class _nClienteFormState extends State<nClienteForm>
                                     ],
                                   ),
                                   const SizedBox(height: 16),
+
+                                  // 5. Estado y Municipio en un Row
                                   Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Expanded(
                                         child: _buildDropdown(
@@ -1947,11 +2191,17 @@ class _nClienteFormState extends State<nClienteForm>
                                           hint: 'Estado',
                                           items: ['Guerrero'],
                                           onChanged: (value) {
-                                            dialogSetState(() {
-                                              estadoRefController.text =
-                                                  value ?? '';
-                                            });
+                                            dialogSetState(
+                                              () =>
+                                                  estadoRefController.text =
+                                                      value ?? '',
+                                            );
                                           },
+                                          validator:
+                                              (v) =>
+                                                  (isAvalForm && v == null)
+                                                      ? 'Req.'
+                                                      : null,
                                         ),
                                       ),
                                       const SizedBox(width: 10),
@@ -1960,15 +2210,31 @@ class _nClienteFormState extends State<nClienteForm>
                                           controller: municipioRefController,
                                           label: 'Municipio',
                                           icon: Icons.map,
+                                          validator:
+                                              (v) =>
+                                                  (isAvalForm &&
+                                                          (v == null ||
+                                                              v.isEmpty))
+                                                      ? 'Requerido'
+                                                      : null,
                                         ),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 16),
+
+                                  // 6. Tiempo Viviendo
                                   _buildTextField(
                                     controller: tiempoViviendoRefController,
-                                    label: 'Tiempo Viviendo',
+                                    label: 'Tiempo Viviendo (años)',
                                     icon: Icons.timelapse,
+                                    keyboardType: TextInputType.number,
+                                    validator:
+                                        (v) =>
+                                            (isAvalForm &&
+                                                    (v == null || v.isEmpty))
+                                                ? 'Requerido'
+                                                : null,
                                   ),
                                 ],
                               ],
@@ -1990,12 +2256,20 @@ class _nClienteFormState extends State<nClienteForm>
                           const SizedBox(width: 8),
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: colors.brandPrimary,
+                              backgroundColor:
+                                  isAvalForm
+                                      ? Colors.purple
+                                      : colors.brandPrimary,
                               foregroundColor: Colors.white,
                             ),
                             onPressed: () {
+                              // 1. Ocultamos el teclado para que el usuario pueda ver los errores si los hay
+                              FocusScope.of(context).unfocus();
+
+                              // 2. Validamos el formulario
                               if (formKey.currentState!.validate()) {
                                 final nuevaReferencia = {
+                                  'isAval': isAvalForm,
                                   'nombresRef': nombresRefController.text,
                                   'apellidoPRef': apellidoPRefController.text,
                                   'apellidoMRef': apellidoMRefController.text,
@@ -2003,6 +2277,12 @@ class _nClienteFormState extends State<nClienteForm>
                                   'telefonoRef': telefonoRefController.text,
                                   'tiempoConocerRef':
                                       tiempoConocerRefController.text,
+                                  // --- DATOS EXTRAS ---
+                                  'curpRef': curpRefController.text,
+                                  'rfcRef': rfcRefController.text,
+                                  'claveElectorRef':
+                                      claveElectorRefController.text,
+                                  // ------------------
                                   'tipoDomicilioRef': selectedTipoDomicilioRef,
                                   'calleRef': calleRefController.text,
                                   'nombrePropietarioRef':
@@ -2019,6 +2299,7 @@ class _nClienteFormState extends State<nClienteForm>
                                   'tiempoViviendoRef':
                                       tiempoViviendoRefController.text,
                                 };
+
                                 setState(() {
                                   if (index == null) {
                                     referencias.add(nuevaReferencia);
@@ -2027,6 +2308,17 @@ class _nClienteFormState extends State<nClienteForm>
                                   }
                                 });
                                 Navigator.pop(context);
+                              } else {
+                                // 3. SI FALLA LA VALIDACIÓN, AVISAMOS AL USUARIO
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Faltan campos obligatorios o tienen un formato incorrecto (Ej. Clave de Elector).',
+                                    ),
+                                    backgroundColor: Colors.red,
+                                    duration: Duration(seconds: 3),
+                                  ),
+                                );
                               }
                             },
                             child: const Text('Guardar'),
@@ -2209,7 +2501,10 @@ class _nClienteFormState extends State<nClienteForm>
       ),
       child: DropdownButtonFormField<String>(
         value: value,
-        hint: Text(hint, style: TextStyle(color: colors.textSecondary, fontSize: 14)),
+        hint: Text(
+          hint,
+          style: TextStyle(color: colors.textSecondary, fontSize: 14),
+        ),
         items:
             items
                 .map(

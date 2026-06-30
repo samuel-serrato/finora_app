@@ -3,6 +3,7 @@
 import 'dart:typed_data';
 import 'dart:io';
 // 1. IMPORTS NUEVOS NECESARIOS
+import 'package:finora_app/providers/user_data_provider.dart';
 import 'package:finora_app/services/pago_service.dart'; // <--- Para bajar los pagos
 import 'package:finora_app/models/pago.dart'; // <--- Modelo Pago
 import 'package:finora_app/models/calendario_response.dart'; // <--- Respuesta API
@@ -25,6 +26,9 @@ import 'package:finora_app/helpers/save_file.dart';
 // Agrega este import al inicio
 import 'package:finora_app/services/cliente_service.dart';
 import 'package:finora_app/models/clientes.dart';
+import 'package:finora_app/models/cuenta_bancaria.dart';
+import 'package:finora_app/ip.dart';
+import 'dart:convert';
 
 class PaginaDescargablesMobile extends StatefulWidget {
   final Credito credito;
@@ -44,6 +48,10 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
   // 2. INSTANCIA DEL SERVICIO
   final PagoService _pagoService = PagoService();
   final ClienteService _clienteService = ClienteService();
+
+  List<CuentaBancaria> _cuentasDisponibles = [];
+  List<String> _numerosCuentaSeleccionados = [];
+  bool _cargandoCuentas = false;
 
   /// Función para descargar documentos (DOCX) desde el servidor.
   Future<void> _descargarDocumento(String documento) async {
@@ -163,6 +171,169 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
     }
   }
 
+  Future<void> _abrirSelectorCuentas() async {
+    setState(() => _cargandoCuentas = true);
+
+    try {
+      final userData = Provider.of<UserDataProvider>(context, listen: false);
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('tokenauth') ?? '';
+
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/api/v1/financiera/cuentasbanco/${userData.idnegocio}',
+        ),
+        headers: {'tokenauth': token},
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        _cuentasDisponibles =
+            data.map((item) => CuentaBancaria.fromJson(item)).toList();
+
+        // Si nunca se ha seleccionado nada, por defecto se marcan todas
+        if (_numerosCuentaSeleccionados.isEmpty) {
+          _numerosCuentaSeleccionados =
+              _cuentasDisponibles.map((c) => c.numeroCuenta).toList();
+        }
+      } else {
+        _mostrarError('No se pudieron cargar las cuentas bancarias.');
+        return;
+      }
+    } catch (e) {
+      _mostrarError('Error de red al obtener cuentas: ${e.toString()}');
+      return;
+    } finally {
+      if (mounted) setState(() => _cargandoCuentas = false);
+    }
+
+    if (!mounted) return;
+    _mostrarBottomSheetCuentas();
+  }
+
+  void _mostrarBottomSheetCuentas() {
+    final theme = Provider.of<ThemeProvider>(context, listen: false).colors;
+    // Selección temporal mientras el usuario interactúa con el bottom sheet
+    List<String> seleccionTemporal = List.from(_numerosCuentaSeleccionados);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: theme.backgroundCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Text(
+                        'Cuentas a incluir en la Ficha de Pago',
+                        style: TextStyle(
+                          color: theme.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_cuentasDisponibles.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                        child: Text(
+                          'No hay cuentas bancarias disponibles.',
+                          style: TextStyle(color: theme.textSecondary),
+                        ),
+                      )
+                    else
+                      Flexible(
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _cuentasDisponibles.length,
+                          itemBuilder: (context, index) {
+                            final cuenta = _cuentasDisponibles[index];
+                            final seleccionada = seleccionTemporal.contains(
+                              cuenta.numeroCuenta,
+                            );
+
+                            return CheckboxListTile(
+                              value: seleccionada,
+                              activeColor: const Color(0xFFAA00FF),
+                              title: Text(
+                                cuenta.nombreCuenta,
+                                style: TextStyle(
+                                  color: theme.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                cuenta.numeroCuenta,
+                                style: TextStyle(color: theme.textSecondary),
+                              ),
+                              onChanged: (checked) {
+                                setModalState(() {
+                                  if (checked == true) {
+                                    seleccionTemporal.add(cuenta.numeroCuenta);
+                                  } else {
+                                    seleccionTemporal.remove(
+                                      cuenta.numeroCuenta,
+                                    );
+                                  }
+                                });
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFAA00FF),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _numerosCuentaSeleccionados = seleccionTemporal;
+                            });
+                            Navigator.pop(context);
+                          },
+                          child: const Text(
+                            'Aplicar',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _mostrarError(String mensaje) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -215,9 +386,30 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
             icono: Icons.receipt_long_outlined,
             color: const Color(0xFFFF6D00),
             documento: 'ficha_pago',
-            // Usamos la función simple para los que no cambiaron
             onTap:
-                () => _generarPdfSimple('ficha_pago', PDFCuentasPago.generar),
+                () => _generarPdfSimple(
+                  'ficha_pago',
+                  (ctx, credito) => PDFCuentasPago.generar(
+                    ctx,
+                    credito,
+                    numerosCuentaSeleccionados:
+                        _numerosCuentaSeleccionados.isEmpty
+                            ? null
+                            : _numerosCuentaSeleccionados,
+                  ),
+                ),
+            iconoExtra:
+                _cargandoCuentas
+                    ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : IconButton(
+                      icon: const Icon(Icons.filter_list),
+                      tooltip: 'Seleccionar cuentas a mostrar',
+                      onPressed: _abrirSelectorCuentas,
+                    ),
           ),
           const SizedBox(height: 16),
           // En pestaña_descargables.dart, reemplaza el botón de resumen:
@@ -234,40 +426,41 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
   }
 
   Future<void> _descargarResumenCredito() async {
-  if (_isGenerating) return;
-  _isGenerating = true;
-  setState(() => _documentoDescargando = 'resumen_credito');
+    if (_isGenerating) return;
+    _isGenerating = true;
+    setState(() => _documentoDescargando = 'resumen_credito');
 
-  try {
-    Cliente? clienteIndividual;
-    if (widget.credito.tipo == 'Individual' &&
-        widget.credito.clientesMontosInd.isNotEmpty) {
-      final idCliente = widget.credito.clientesMontosInd.first.idclientes;
-      final resp = await _clienteService.getCliente(idCliente);
-      if (resp.success && resp.data != null) {
-        clienteIndividual = Cliente.fromJson(resp.data!);
+    try {
+      Cliente? clienteIndividual;
+      if (widget.credito.tipo == 'Individual' &&
+          widget.credito.clientesMontosInd.isNotEmpty) {
+        final idCliente = widget.credito.clientesMontosInd.first.idclientes;
+        final resp = await _clienteService.getCliente(idCliente);
+        if (resp.success && resp.data != null) {
+          clienteIndividual = Cliente.fromJson(resp.data!);
+        }
       }
+
+      final String fecha = DateFormat('dd-MM-yyyy').format(DateTime.now());
+      final String fileName =
+          'RESUMEN_CREDITO_${widget.credito.nombreGrupo}_$fecha.pdf'
+              .toUpperCase();
+
+      final Uint8List pdfBytes = await PDFResumenCredito.generar(
+        context,
+        widget.credito,
+        clienteIndividual: clienteIndividual,
+      );
+
+      await saveFilePlatform(pdfBytes, fileName);
+    } catch (e) {
+      AppLogger.log('ERROR PDF RESUMEN: $e');
+      if (mounted) _mostrarError('Error: ${e.toString()}');
+    } finally {
+      if (mounted) setState(() => _documentoDescargando = null);
+      _isGenerating = false;
     }
-
-    final String fecha = DateFormat('dd-MM-yyyy').format(DateTime.now());
-    final String fileName =
-        'RESUMEN_CREDITO_${widget.credito.nombreGrupo}_$fecha.pdf'.toUpperCase();
-
-    final Uint8List pdfBytes = await PDFResumenCredito.generar(
-      context,
-      widget.credito,
-      clienteIndividual: clienteIndividual,
-    );
-
-    await saveFilePlatform(pdfBytes, fileName);
-  } catch (e) {
-    AppLogger.log('ERROR PDF RESUMEN: $e');
-    if (mounted) _mostrarError('Error: ${e.toString()}');
-  } finally {
-    if (mounted) setState(() => _documentoDescargando = null);
-    _isGenerating = false;
   }
-}
 
   Widget _buildBotonDescarga({
     required String titulo,
@@ -275,6 +468,7 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
     required Color color,
     required String documento,
     required VoidCallback onTap,
+    Widget? iconoExtra,
   }) {
     final theme = Provider.of<ThemeProvider>(context).colors;
     final estaDescargando = _documentoDescargando == documento;
@@ -318,6 +512,10 @@ class _PaginaDescargablesMobileState extends State<PaginaDescargablesMobile> {
                       ),
                     ),
                   ),
+                  if (iconoExtra != null) ...[
+                    iconoExtra,
+                    const SizedBox(width: 8),
+                  ],
                   if (estaDescargando)
                     SizedBox(
                       width: 24,
